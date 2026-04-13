@@ -1,0 +1,67 @@
+# Residual HIV Transfusion Transmission Risk Estimation Tool
+# Copyright (C) 2025  Vitalant and Eduard Grebe Consulting
+# Author: Eduard Grebe <egrebe@vitalant.org> <eduard@grebe.consulting>
+#
+# Docker Compose configuration for local development and testing
+
+services:
+  residualrisk:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # Uncomment to build for specific platform
+      # platforms:
+      #   - linux/amd64
+      #   - linux/arm64
+    image: ghcr.io/vitalant-research-institute/residualrisk:latest
+    container_name: residualrisk_app
+    ports:
+      - "127.0.0.1:8501:8501"
+    environment:
+      # Streamlit configuration
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+      # Optional: Customize these
+      - STREAMLIT_SERVER_MAX_UPLOAD_SIZE=200
+      - STREAMLIT_SERVER_ENABLE_CORS=false
+      - STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=true
+    # volumes:
+      # Optional: Mount local code for development (uncomment for hot reload)
+      # - ./app.py:/app/app.py:ro
+      # - ./residualrisk.py:/app/residualrisk.py:ro
+      # - ./residualrisk_go.py:/app/residualrisk_go.py:ro
+
+      # Optional: Persistent storage for downloaded results
+      # - ./data:/app/data
+
+      # Optional: Custom Streamlit config
+      # - ./.streamlit:/app/.streamlit:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Resource limits (adjust based on your needs)
+    # By default, container has access to ALL host CPUs for maximum performance
+    # Uncomment to limit resources if needed:
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '16'        # Max CPUs (comment out for unlimited)
+    #       memory: 16G       # Max memory
+    #     reservations:
+    #       cpus: '4'         # Minimum guaranteed CPUs
+    #       memory: 4G        # Minimum guaranteed memory
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    # Read-only root filesystem (with exceptions for temp files)
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /home/appuser/.streamlit
+

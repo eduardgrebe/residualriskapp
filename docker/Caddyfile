@@ -1,0 +1,31 @@
+# Residual Risk Estimator - Caddy reverse proxy reference configuration
+#
+# This is a REFERENCE configuration for an external Caddy reverse proxy.
+# SSL termination is handled here, NOT inside the Docker container.
+#
+# The Docker container binds only to 127.0.0.1:8501, so only the host
+# (and this reverse proxy) can reach it.
+#
+# Replace residualrisk.yourdomain.com with your actual domain name.
+#
+# Caddy automatically obtains and renews SSL certificates via ACME
+# (Let's Encrypt or ZeroSSL) when a domain name is used as the site address.
+#
+# Usage:
+#   caddy run --config Caddyfile
+#   caddy start --config Caddyfile    # runs in the background
+
+residualrisk.yourdomain.com {
+    # Proxy all requests to the Streamlit container.
+    # Caddy automatically:
+    #   - Obtains and renews SSL certificates
+    #   - Redirects HTTP → HTTPS
+    #   - Handles WebSocket upgrades (required for Streamlit)
+    reverse_proxy 127.0.0.1:8501 {
+        transport http {
+            # Simulations can take several minutes — keep connections open
+            read_timeout  5m
+            write_timeout 5m
+        }
+    }
+}

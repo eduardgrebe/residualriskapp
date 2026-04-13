@@ -1,0 +1,56 @@
+# Server configuration (not part of the app)
+robots.txt
+
+# Mac cruft
+.DS_Store
+
+# Office cruft
+~$*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Streamlit (ignore personal credentials/cache, but track production config)
+.streamlit/
+!app/.streamlit/
+!app/.streamlit/config.toml
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Go binaries (if they end up in root)
+riskdays_go
+
+# Testing
+#_testing_/
+#testing/

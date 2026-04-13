@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments (will be created fresh in container)
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Documentation
+README.md
+*.md
+docs/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Go build artifacts (will be built fresh in container)
+go/bin/
+go/coverage.out
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+
+# Streamlit cache (but keep .streamlit/config.toml)
+.streamlit/cache/
+
+# Temporary files
+*.log
+*.tmp
+tmp/
+temp/

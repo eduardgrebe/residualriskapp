@@ -1,0 +1,26 @@
+[project]
+name = "residualrisk"
+version = "0.1.4"
+description =  "Residual risk estimation tool"
+readme = "README.md"
+requires-python = ">=3.14.4, <3.15"
+dependencies = [
+    "streamlit>=1.56.0",
+    "pandas>=3.0.2",
+    "numpy>=2.4.4",
+    "scipy>=1.17.1",
+    "pyarrow>=23.0.1",
+    "matplotlib>=3.10.8",
+    "seaborn>=0.13.2",
+    "plotly>=6.7.0",
+    "watchdog>=6.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "ruff>=0.15.10",
+]
+vulnerable_dependencies = [
+    "tornado>=6.5.5",
+]
