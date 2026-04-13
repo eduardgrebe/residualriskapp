@@ -220,7 +220,7 @@ with sim_param_container:
     n_sims = col2.select_slider(
         "Select number of simulations",
         options=[1000, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1000000],
-        value=100000,
+        value=25000,
         help="Placeholder help text",
     )
 
@@ -229,7 +229,7 @@ with sim_param_container:
             "Select number of CPU cores to use",
             min_value=1,
             max_value=n_cpu,
-            value=n_cpu - 1,
+            value=n_cpu,
             step=1,
             help="Placeholder help text",
         )

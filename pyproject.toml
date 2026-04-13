@@ -1,9 +1,9 @@
 [project]
 name = "residualrisk"
-version = "0.1.4"
+version = "0.1.5"
 description =  "Residual risk estimation tool"
 readme = "README.md"
-requires-python = ">=3.14.4, <3.15"
+requires-python = "==3.14.*"
 dependencies = [
     "streamlit>=1.56.0",
     "pandas>=3.0.2",
