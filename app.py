@@ -29,6 +29,7 @@ import scipy.stats as stats
 import streamlit as st
 
 import residualrisk as rr
+import residualrisk_prep as rrprep  # TODO: Will be used for PrEP functionality
 
 APP_VERSION = "0.9.1"
 
@@ -103,18 +104,30 @@ def convert_for_download(df, file_format="csv"):
         return None
 
 
-def plot_histogram(data, x="iwp", colour=None, histnorm=None):
+def plot_histogram(
+    data, x="iwp", 
+    title="Distribution of RDEs", 
+    colour=None, 
+    histnorm=None,
+    log_x=False
+):
     fig = px.histogram(
         data,
         x=x,
         color=colour,
+        log_x=log_x,
         histnorm=histnorm,
         barmode="overlay",
-        labels={"iwp": "risk day equivalents (RDEs)"},
-        title="Distribution of RDEs",
+        labels={
+            "iwp": "risk day equivalents (RDEs)",
+            "k": "exponential transmissibility parameter (k)",
+        },
+        title=title,
     )
     return fig
 
+if "prep" not in st.session_state:
+    st.session_state["prep"] = False
 
 header_container = st.container()
 
@@ -122,6 +135,7 @@ header_container.write("""
 # Residual HIV-TT Risk Estimator
 Tool for estimating the residual risk of HIV transfusion transmission with NAT screening.
 """)
+
 
 if "samp" not in st.session_state:
     (
@@ -134,17 +148,13 @@ if "samp" not in st.session_state:
 
 rde_method = st.selectbox(
     "RDE estimation method",
-    options=["Lookback data", "Mechanistic model", "Mechanistic model with PrEP (coming soon)"],
+    options=["Lookback data", "Mechanistic model", "Mechanistic model with PrEP"],
     index=1,
     help="Risk day quivalents (RDEs) are equivalent to the infectious window "
     "period (IWP). Lookback data: estimates the IWP directly from "
     "lookback investigation data. Mechanistic model: simulates the "
     "IWP from viral dynamics and assay parameters. ",
 )
-
-if rde_method == "Mechanistic model with PrEP (coming soon)":
-    st.info("The PrEP model is not yet available. Please select another method.")
-    st.stop()
 
 st.sidebar.write("Number of CPU cores: ", n_cpu)
 
@@ -188,8 +198,120 @@ if rde_method == "Lookback data":
     lookback_param_container = st.expander(
         "Lookback data parameters", expanded=True, icon=":material/menu_open:"
     )
+if rde_method == "Mechanistic model with PrEP":
+    prep_param_container = st.expander(
+        "PrEP parameters",
+        expanded=True,
+        icon=":material/menu_open:",
+    )
+    with prep_param_container:
+        col1, col2 = st.columns(2)
+
+        eclipse = col1.number_input(
+            "Eclipse period (days)",
+            min_value=1,
+            max_value=30,
+            value=7,
+            step=1,
+        )
+        eclipse_range = col1.slider(
+            "Eclipse period range (days)",
+            min_value=1,
+            max_value=20,
+            value=(4, 10),
+            step=1,
+        )
+        vl_setpoint_oral = col1.number_input(
+            "oPrEP viral load setpoint (c/mL)",
+            min_value=1,
+            max_value=5000,
+            value=340,
+            step=10,
+        )
+        vl_setpoint_range_oral = col1.slider(
+            "oPrEP viral load setpoint range (c/mL)",
+            min_value=1,
+            max_value=5000,
+            value=(10, 2270),
+            step=10,
+        )
+        vl_setpoint_inj = col1.number_input(
+            "iPrEP viral load setpoint (c/mL)",
+            min_value=1,
+            max_value=5000,
+            value=30,
+            step=10,
+        )
+        vl_setpoint_range_inj = col1.slider(
+            "iPrEP viral load setpoint range (c/mL)",
+            min_value=1,
+            max_value=5000,
+            value=(10, 2500),
+            step=10,
+        )
+
+        seroconversion_min_oral = col2.number_input(
+            "oPrEP time to seroconversion min (days)",
+            min_value=0,
+            max_value=500,
+            value=29,
+            step=1,
+        )
+        seroconversion_max_oral = col2.number_input(
+            "oPrEP time to seroconversion max (days)",
+            min_value=0,
+            max_value=500,
+            value=250,
+            step=1,
+        )
+        seroconversion_weibull_alpha_oral = col2.number_input(
+            "oPrEP time to seroconversion Weibul shape (α)",
+            min_value=0.0,
+            max_value=500.0,
+            value=50.49434,
+            step=0.001,
+        )
+        seroconversion_weibull_beta_oral = col2.number_input(
+            "oPrEP time to seroconversion Weibul scale (β)",
+            min_value=0.0,
+            max_value=500.0,
+            value=1.15062,
+            step=0.001,
+        )
+
+        seroconversion_min_inj = col2.number_input(
+            "iPrEP time to seroconversion min (days)",
+            min_value=0,
+            max_value=500,
+            value=42,
+            step=1,
+        )
+        seroconversion_max_inj = col2.number_input(
+            "iPrEP time to seroconversion max (days)",
+            min_value=0,
+            max_value=500,
+            value=250,
+            step=1,
+        )
+        seroconversion_weibull_alpha_inj = col2.number_input(
+            "iPrEP time to seroconversion Weibul shape (α)",
+            min_value=0.0,
+            max_value=500.0,
+            value=90.88988,
+            step=0.001,
+        )
+        seroconversion_weibull_beta_inj = col2.number_input(
+            "iPrEP time to seroconversion Weibul scale (β)",
+            min_value=0.0,
+            max_value=500.0,
+            value=3.048339,
+            step=0.001,
+        )
+
 incidence_param_container = st.expander(
-    "Incidence parameters", expanded=True, icon=":material/menu_open:"
+    "Incidence parameters", 
+    expanded=True, 
+    icon=":material/menu_open:",
 )
 
 output_container = st.container()
@@ -228,7 +350,7 @@ with sim_param_container:
     n_sims = col2.select_slider(
         "Select number of simulations",
         options=[1000, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1000000],
-        value=25000,
+        value=100000,
         help="Placeholder help text",
     )
 
@@ -237,7 +359,7 @@ with sim_param_container:
             "Select number of CPU cores to use",
             min_value=1,
             max_value=n_cpu,
-            value=n_cpu,
+            value=n_cpu - 1,
             step=1,
             help="Placeholder help text",
         )
@@ -533,7 +655,6 @@ if st.sidebar.button(button_label):
             except ValueError as e:
                 st.sidebar.error(f"Error: {e}")
 
-
 # Show plot in app
 output_container.write("""
 ### Outputs
@@ -542,7 +663,6 @@ output_container.write("""
 # Debug only
 # print(rr.mode_rounded(st.session_state["k_human"], precision = 5))
 # print(rr.mode_rounded(st.session_state["k_animal"], precision = 5))
-
 
 if st.session_state["sims_run"]:
     download_format = st.sidebar.selectbox(
@@ -556,11 +676,13 @@ if st.session_state["sims_run"]:
     )
     if "sim_df" in st.session_state and st.session_state["sim_df"] is not None:
         res_dl = convert_for_download(
-            st.session_state["sim_df"], file_format=download_format
+            st.session_state["sim_df"], 
+            file_format=download_format,
         )
     else:
         res_dl = convert_for_download(
-            st.session_state["samp"], file_format=download_format
+            st.session_state["samp"], 
+            file_format=download_format,
         )
     st.sidebar.download_button(
         label="Download simulations",
