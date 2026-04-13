@@ -96,6 +96,8 @@ RUN chmod +x ./go/bin/riskdays_go
 
 # Copy application code
 COPY --chown=appuser:appuser *.py ./
+COPY --chown=appuser:appuser pages/ ./pages/
+COPY --chown=appuser:appuser docs/ ./docs/
 COPY --chown=appuser:appuser static/ ./static/
 COPY --chown=appuser:appuser LICENSE ./
 
