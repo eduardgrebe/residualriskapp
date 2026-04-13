@@ -37,9 +37,8 @@ venv.bak/
 .ipynb_checkpoints
 
 # Streamlit (ignore personal credentials/cache, but track production config)
-.streamlit/
-!app/.streamlit/
-!app/.streamlit/config.toml
+.streamlit/*
+!.streamlit/config.toml
 
 # IDEs
 .vscode/

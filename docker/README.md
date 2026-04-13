@@ -334,7 +334,20 @@ residualrisk.yourdomain.com {
 }
 ```
 
-Save as `Caddyfile` and run:
+**If running Caddy as a systemd service** (recommended for Linux production deployments), copy the Caddyfile to your Caddy configuration directory and reload the service:
+
+```bash
+sudo cp docker/Caddyfile /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+```
+
+If Caddy is not yet running:
+
+```bash
+sudo systemctl enable --now caddy
+```
+
+**If running Caddy manually**, save as `Caddyfile` and run:
 
 ```bash
 caddy run --config Caddyfile
