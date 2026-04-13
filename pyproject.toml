@@ -1,6 +1,6 @@
 [project]
 name = "residualrisk"
-version = "0.1.5"
+version = "0.1.6"
 description =  "Residual risk estimation tool"
 readme = "README.md"
 requires-python = "==3.14.*"
