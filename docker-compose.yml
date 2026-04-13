@@ -4,6 +4,8 @@
 #
 # Docker Compose configuration for local development and testing
 
+name: residualrisk
+
 services:
   residualrisk:
     build:
