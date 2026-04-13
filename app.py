@@ -165,6 +165,13 @@ if rde_method == "Mechanistic model":
         help="Placeholder help text",
     )
     use_go_acceleration = implementation == "Go"
+    if use_go_acceleration:
+        from residualrisk_go import find_go_binary
+        if find_go_binary() is None:
+            st.sidebar.warning(
+                "Go binary not found. Simulations will fall back to the Python "
+                "implementation, which is significantly slower."
+            )
 
 sim_param_container = st.expander(
     "Simulation settings", expanded=True, icon=":material/menu_open:"
