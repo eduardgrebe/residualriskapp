@@ -959,7 +959,6 @@ wheels = [
 
 [[package]]
 name = "residualrisk"
-version = "0.9.0"
 source = { editable = "." }
 dependencies = [
     { name = "ipykernel" },
