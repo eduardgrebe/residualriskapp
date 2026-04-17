@@ -203,17 +203,46 @@ cd go && make test
 
 ## Git Workflow
 
-### Remote Access Limitation
+### Signing and Remote Access Limitation
 
-**Agents do not have access to the SSH key** required to interact with the remote. Agents **cannot** execute git commands that communicate with the remote, including `git fetch`, `git pull`, `git push`. For any task involving remote interaction, provide the user with the exact commands to run. For example:
+**Agents must never run `git commit`, `git fetch`, `git pull`, `git push`, or any other git operation that requires SSH keys for commit signing or remote authentication.** The user has commit signing configured (GPG/SSH) and agents do not have access to those keys.
+
+For any git operation that creates commits or touches the remote, provide the user with the exact commands to run. For example:
 
 ```bash
-git fetch origin main
-git rebase origin/main
-git push --force-with-lease origin <branch-name>
+git add -A
+git commit -m "your message"
+git push origin <branch-name>
+git tag -a vX.Y.Z -m "message" && git push origin vX.Y.Z
 ```
 
-Agents **can** safely run local-only git commands (`git status`, `git log`, `git diff`, `git add`, `git commit`, local `git rebase`).
+Agents **can** safely run read-only local git commands: `git status`, `git log`, `git diff`, `git branch`, `git show`.
+
+## Versioning
+
+This project uses **two independent version numbers** that can evolve separately:
+
+| Version | Location | Tracks | Bump when |
+|---|---|---|---|
+| **Library version** | `residualrisk/__init__.py` → `__version__` | `residualrisk` Python package API | Calculation logic or public API changes |
+| **App version** | `app.py` → `APP_VERSION` | Streamlit web application | UI, UX, or app-level changes |
+
+`pyproject.toml` reads its version dynamically from `residualrisk/__init__.py` via hatchling, so the installable package version always matches the library version. **Do not add a hardcoded `version =` field to `[project]` in `pyproject.toml`.**
+
+Both versions are displayed together in the app sidebar (`App vX.Y.Z · Library vX.Y.Z`).
+
+**Git tags** track the **app version** — that's what users interact with.
+
+### Releasing a new version
+
+1. Decide which version(s) to bump (app, library, or both).
+2. Edit `residualrisk/__init__.py` and/or `app.py` as needed.
+3. Commit the change.
+4. Tag the commit with the new app version and push:
+   ```bash
+   git tag -a vX.Y.Z -m "Release vX.Y.Z"
+   git push origin vX.Y.Z
+   ```
 
 ## Common Tasks
 

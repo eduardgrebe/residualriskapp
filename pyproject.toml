@@ -1,6 +1,6 @@
 [project]
 name = "residualrisk"
-version = "0.9.0"
+dynamic = ["version"]
 description =  "Residual risk estimation tool"
 readme = "README.md"
 requires-python = "==3.14.*"
@@ -20,6 +20,9 @@ dependencies = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "residualrisk/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["residualrisk"]

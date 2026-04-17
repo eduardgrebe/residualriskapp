@@ -18,7 +18,7 @@ from .core import (
 )
 from ._go import find_go_binary
 
-__version__ = "0.1.6"
+__version__ = "0.9.0"
 
 __all__ = [
     "risk_days_bs",

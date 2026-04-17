@@ -30,6 +30,8 @@ import streamlit as st
 
 import residualrisk as rr
 
+APP_VERSION = "0.9.0"
+
 # Set default values
 # this keeps resetting to this value, so I am going to get rid of it
 # seed = 126887
@@ -662,3 +664,8 @@ else:
             output_container.write(
                 f"RR PE: 1 transmission in {rr_onein_pe:,.0f} transfusions ({sig_level:.0f}% {interval_label}: {rr_onein_cri[1]:,.0f} to {rr_onein_cri[0]:,.0f})"
             )
+
+st.sidebar.divider()
+st.sidebar.caption(
+    f"App v{APP_VERSION} · Library v{rr.__version__}"
+)
