@@ -83,7 +83,11 @@ The webapp defaults to the Go implementation. Without the binary, it falls back 
 
 1. **Install Go** 1.26.0 or later from https://go.dev/dl/
 
-2. **Build the Go binary**:
+2. **Build the Go binary** (from the repo root):
+   ```bash
+   bash scripts/build_go.sh
+   ```
+   Or directly:
    ```bash
    cd go
    make deps    # Download Go dependencies
@@ -92,10 +96,10 @@ The webapp defaults to the Go implementation. Without the binary, it falls back 
 
 3. **Verify the build**:
    ```bash
-   ./go/bin/riskdays_go --help
+   ls -lh go/bin/riskdays_go
    ```
 
-The Python code automatically detects the binary at `go/bin/riskdays_go` and uses it by default.
+The Python code automatically detects the binary at `<repo>/go/bin/riskdays_go`. To point at a binary installed elsewhere, set `RESIDUALRISK_GO_BINARY=/absolute/path/to/riskdays_go`.
 
 ### Docker Deployment (Recommended for Production)
 
@@ -178,34 +182,53 @@ See `go/README.md` for detailed documentation of the JSON schema and parameters.
 
 ### Python API
 
+`residualrisk` is a proper installable package. Install it into the environment of any downstream analysis with `uv pip install -e /path/to/residualriskapp` (editable) or pin to a git tag/SHA for reproducibility.
+
 ```python
 import residualrisk as rr
 
-# Basic usage with default parameters
-result = rr.risk_days_bs(
-    k=0.5,
-    doubling_time=0.85,
-    doubling_time_norm_sd=0.066,
+# Bootstrap risk-day equivalents (IWP)
+rd_pe, rd_cri, rd_range, rdests = rr.risk_days_bs(
+    k=0.013,
+    doubling_time=20.5 / 24,
+    doubling_time_norm_sd=1.33 / 24,
     lod50=2.73,
     lod50_sd=0.193,
-    lod95_lod50_ratio=4.51,
+    lod95_lod50_ratio=12.33 / 2.73,
     volume_transfused=20,
-    volume_transfused_min=15,
-    volume_transfused_max=30,
+    volume_transfused_range=(15, 30),
     pool_size=16,
     retests=1,
-    n_bs=10000
+    k_posterior_sample=k_samples,    # numpy array of posterior draws
+    n_bs=10000,
+    use_go=True,                      # use Go acceleration (10-50x faster)
 )
+print(f"RDEs point estimate: {rd_pe:.2f} days")
+print(f"95% CrI: [{rd_cri[0]:.2f}, {rd_cri[1]:.2f}]")
 
-# Use Go acceleration for faster computation
-result = rr.risk_days_bs(
-    # ... parameters ...
-    use_go=True,
-    threads=7
+# Combine RDEs with incidence to get residual risk
+rr_pe, rr_cri, rr_sd = rr.residual_risk_rd(
+    iwp_pe=rd_pe,
+    iwp_bs=rdests,
+    incidence=2.5 / 1e5,              # per person-year
+    incidence_norm_sd=0.5 / 1e5,
+    per=1e6,                          # report per 1 million transfusions
 )
+print(f"Residual risk: {rr_pe:.3f} per million (95% CrI {rr_cri[0]:.3f}–{rr_cri[1]:.3f})")
 
-print(f"Point estimate: {result['point_estimate']:.2f} days")
-print(f"95% CI: [{result['ci'][0]:.2f}, {result['ci'][1]:.2f}]")
+# Record provenance alongside outputs
+print(f"residualrisk version: {rr.__version__}")
+```
+
+**Public API surface** (see `residualrisk/__init__.py`): `risk_days_bs`, `iwp_from_lookback_data`, `residual_risk_rd`, `get_cpu_core_count`, `mode_rounded`, `find_go_binary`, `__version__`.
+
+### R integration (reticulate)
+
+```r
+library(reticulate)
+use_virtualenv("/path/to/residualriskapp/.venv", required = TRUE)
+rr <- import("residualrisk")
+bs <- rr$risk_days_bs(...)           # returns a Python tuple; index with [[1]], [[2]], ...
 ```
 
 ## Dependencies
@@ -261,11 +284,11 @@ The model estimates the **infectious window period (IWP)**: the time interval du
 
 ```
 residualriskapp/
-├── app.py                   # Streamlit web application
-├── main.py                  # Command-line entry point (placeholder)
-├── residualrisk.py          # Core Python implementation
-├── residualrisk_go.py       # Go wrapper and integration
-├── residualrisk_prep.py     # PrEP model (incomplete)
+├── app.py                   # Streamlit web application (imports the residualrisk package)
+├── residualrisk/            # Installable Python package (core calculation engine)
+│   ├── __init__.py          # Public API surface
+│   ├── core.py              # Core calculation engine (bootstrap, integration, IWP)
+│   └── _go.py               # Wrapper around the Go binary
 ├── static/                  # Pre-computed posterior distributions (Parquet)
 │   ├── k_param_human.parquet
 │   ├── k_param_animal.parquet
@@ -274,9 +297,11 @@ residualriskapp/
 │   ├── main.go
 │   ├── riskdays/            # Core Go package
 │   └── README.md            # Go-specific documentation
-├── tests/                   # Python test suite
+├── scripts/
+│   └── build_go.sh          # One-command Go binary build
+├── tests/                   # Python test suite (targets `residualrisk.core`)
 ├── docker/                  # Docker build and deployment scripts
-├── pyproject.toml           # Python project configuration
+├── pyproject.toml           # Python project configuration (hatchling build backend)
 └── .venv/                   # Virtual environment (created by uv sync)
 ```
 
@@ -335,7 +360,7 @@ cd go
 make test
 ```
 
-The Python test suite covers the core calculation functions in `residualrisk.py`. Tests that exercise the bootstrap simulation (both Python and Go implementations) require the Go binary to be built first — see "Building the Go Implementation" above.
+The Python test suite covers the core calculation functions in `residualrisk/core.py`. It imports via `from residualrisk import core as rr` so the package must be installed in the environment first — `uv sync` (or `uv pip install -e .`) handles this. Tests that exercise the bootstrap simulation (both Python and Go implementations) require the Go binary to be built first — see "Building the Go Implementation" above.
 
 ### Adding Dependencies
 

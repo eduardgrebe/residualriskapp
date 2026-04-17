@@ -628,7 +628,7 @@ wheels = [
 [[package]]
 name = "residualrisk"
 version = "0.1.6"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "matplotlib" },
     { name = "numpy" },

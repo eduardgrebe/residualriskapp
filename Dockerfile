@@ -83,19 +83,20 @@ RUN useradd -m -u 1000 -s /bin/bash appuser && \
 # Set working directory
 WORKDIR ${APP_HOME}
 
-# Copy Python dependency files
-COPY --chown=appuser:appuser pyproject.toml uv.lock ./
+# Copy project metadata (enables dependency-layer caching)
+# README.md is referenced by pyproject.toml's `readme` field.
+COPY --chown=appuser:appuser pyproject.toml uv.lock README.md ./
 
-# Install Python dependencies using uv
-# This creates a virtual environment at .venv
-RUN uv sync --frozen
+# Install Python dependencies only (skip the project itself — source not here yet)
+RUN uv sync --frozen --no-install-project
 
 # Copy compiled Go binary from builder stage
 COPY --from=go-builder --chown=appuser:appuser /build/riskdays_go ./go/bin/riskdays_go
 RUN chmod +x ./go/bin/riskdays_go
 
-# Copy application code
-COPY --chown=appuser:appuser *.py ./
+# Copy application code and the residualrisk package
+COPY --chown=appuser:appuser app.py ./
+COPY --chown=appuser:appuser residualrisk/ ./residualrisk/
 COPY --chown=appuser:appuser pages/ ./pages/
 COPY --chown=appuser:appuser docs/ ./docs/
 COPY --chown=appuser:appuser static/ ./static/
@@ -103,6 +104,9 @@ COPY --chown=appuser:appuser LICENSE ./
 
 # Copy Streamlit configuration (optional - will use defaults if not present)
 COPY --chown=appuser:appuser .streamlit/ ./.streamlit/
+
+# Install the residualrisk package now that source is present
+RUN uv sync --frozen
 
 # Switch to non-root user
 USER appuser

@@ -20,10 +20,10 @@ residualriskapp/
 ├── AGENTS.md              # This file — canonical project instructions for agents
 ├── LICENSE                # GNU AGPL v3.0
 ├── app.py                 # Streamlit web application (entry point)
-├── residualrisk.py        # Core calculation engine
-├── residualrisk_go.py     # Python wrapper for Go binary
-├── residualrisk_prep.py   # PrEP model (incomplete, not yet wired into app)
-├── main.py                # CLI entry point (placeholder)
+├── residualrisk/          # Installable Python package (core calculation engine)
+│   ├── __init__.py        # Public API surface (re-exports from core and _go)
+│   ├── core.py            # Calculation engine (formerly residualrisk.py)
+│   └── _go.py             # Go binary wrapper (formerly residualrisk_go.py)
 ├── go/                    # High-performance Go reimplementation (10-50x faster)
 │   ├── main.go            # CLI interface with JSON I/O
 │   └── riskdays/          # Core Go package
@@ -34,13 +34,26 @@ residualriskapp/
 │       ├── helpers.go     # Utility functions
 │       ├── random.go      # Random sampling
 │       └── riskdays_test.go
+├── scripts/
+│   └── build_go.sh        # One-command wrapper for `make -C go build`
 ├── static/                # Pre-computed Bayesian posterior distributions (Parquet)
 ├── tests/                 # Python test suite
 ├── docker/                # Docker build and deployment scripts
 ├── .streamlit/            # Streamlit configuration
-├── pyproject.toml         # Python project config (managed by uv)
+├── pyproject.toml         # Python project config (managed by uv, hatchling build backend)
 └── uv.lock                # Locked dependency versions (do not edit manually)
 ```
+
+### Public Python API
+
+`residualrisk` is a proper installable package. `uv sync` (or `uv pip install -e .`) installs it into `.venv` so `import residualrisk` resolves from anywhere. The public surface — defined in `residualrisk/__init__.py` — is:
+
+- `risk_days_bs`, `iwp_from_lookback_data`, `residual_risk_rd` — top-level estimation functions
+- `get_cpu_core_count`, `mode_rounded` — utility helpers used by the UI
+- `find_go_binary` — locator for the Go binary (honors `$RESIDUALRISK_GO_BINARY` env var)
+- `__version__` — package version
+
+Downstream analyses (e.g. R scripts via `reticulate`) should call these rather than reaching into `residualrisk.core` or `residualrisk._go`. Test code may import `residualrisk.core` directly to exercise private `_`-prefixed functions.
 
 ## Core Application Files
 
@@ -49,21 +62,19 @@ residualriskapp/
   - Supports three RDE estimation methods: Mechanistic model, Lookback data, Mechanistic model with PrEP
   - Real-time calculation and result visualization
   - Entry point: `streamlit run app.py`
+  - Imports via the public API: `import residualrisk as rr`
 
-- **`residualrisk.py`** — Main calculation engine
+- **`residualrisk/core.py`** — Main calculation engine
   - Viral concentration dynamics
   - Infectivity probability calculations
   - Bootstrap simulation methods
-  - Integration with Go acceleration via `residualrisk_go.py`
+  - Integration with Go acceleration via `residualrisk/_go.py`
 
-- **`residualrisk_go.py`** — Go binary wrapper
+- **`residualrisk/_go.py`** — Go binary wrapper
   - JSON-based communication with Go binary
   - Automatic fallback to Python if Go binary unavailable
   - Progress monitoring
-
-- **`residualrisk_prep.py`** — PrEP model (incomplete)
-  - PrEP viral dynamics and Monte Carlo simulation
-  - Not yet invoked by the webapp (UI stubs exist in `app.py`)
+  - `find_go_binary()` search order: `$RESIDUALRISK_GO_BINARY` env var → `<repo>/go/bin/riskdays_go` → `/usr/local/bin/riskdays_go` → `$PATH`
 
 ## Technical Architecture
 
@@ -115,10 +126,10 @@ Pre-computed posterior parameter distributions in Parquet format:
 
 ## PrEP Model Status
 
-- `residualrisk_prep.py` contains a Python PrEP breakthrough risk model — **not yet wired into the webapp**
-- `app.py` has parameter UI stubs for PrEP inputs under the "Mechanistic model with PrEP" dropdown
+- `app.py` has UI stubs for the "Mechanistic model with PrEP" dropdown (currently shows a "not yet available" message and halts)
+- No PrEP model source is present in the repo at this time; the prior `residualrisk_prep.py` was removed during the package restructure
 - Go implementation of PrEP model **does not exist yet**
-- Plan: release initial version without PrEP, then add it alongside a manuscript
+- Plan: release initial version without PrEP, then add a PrEP module (likely at `residualrisk/prep.py`) alongside a manuscript
 
 ## Development Workflow
 
@@ -143,18 +154,22 @@ streamlit run app.py    # → http://localhost:8501
 The webapp defaults to the Go binary. Without it, it falls back to Python (10-50x slower, impractical for normal use).
 
 ```bash
+bash scripts/build_go.sh          # one-command wrapper (idempotent)
+
+# Or directly:
 cd go
 make deps      # Download dependencies
 make build     # Build binary to go/bin/riskdays_go
 make test      # Run Go tests
 ```
 
-The Python code automatically detects the binary at `go/bin/riskdays_go`.
+The Python code auto-detects the binary at `<repo>/go/bin/riskdays_go`. Override with `RESIDUALRISK_GO_BINARY=/absolute/path/to/riskdays_go` when running from a different install layout.
 
 ### Testing
 
 ```bash
-# Python
+# Python — tests import `from residualrisk import core as rr`
+# and require the package to be installed (uv sync does this).
 pytest tests/
 
 # Go
@@ -204,15 +219,16 @@ Agents **can** safely run local-only git commands (`git status`, `git log`, `git
 
 ### Adding a New Parameter
 
-1. Update calculation functions in `residualrisk.py`
-2. Add UI controls in `app.py`
-3. Update Go implementation in `go/riskdays/` if needed
-4. Update JSON schema in `go/riskdays/models.go`
-5. Document in this file and in `README.md`
+1. Update calculation functions in `residualrisk/core.py`
+2. If it belongs on the public API, re-export it from `residualrisk/__init__.py` and add to `__all__`
+3. Add UI controls in `app.py`
+4. Update Go implementation in `go/riskdays/` if needed
+5. Update JSON schema in `go/riskdays/models.go` and wire it through `residualrisk/_go.py`
+6. Document in this file and in `README.md`
 
 ### Modifying the Model
 
-1. Update mathematical functions in `residualrisk.py`
+1. Update mathematical functions in `residualrisk/core.py`
 2. Verify numerical stability with test cases
 3. Update Go implementation for consistency
 4. Document methodology changes

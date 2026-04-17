@@ -404,7 +404,7 @@ def risk_days_bs(
     """
     if use_go:
         try:
-            from residualrisk_go import risk_days_bs_go
+            from ._go import risk_days_bs_go
 
             return risk_days_bs_go(
                 k,
