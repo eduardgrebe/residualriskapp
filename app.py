@@ -29,7 +29,7 @@ import scipy.stats as stats
 import streamlit as st
 
 import residualrisk as rr
-import residualrisk_prep as rrprep  # TODO: Will be used for PrEP functionality
+import residualrisk.prep as rrprep
 
 APP_VERSION = "1.1.0.dev0"
 
