@@ -22,9 +22,11 @@ import statistics
 from residualrisk import (
     get_cpu_core_count,
     mode_rounded,
+)
+from residualrisk.core import (
     _prob_infectious_copies,
     _prob_pos_init,
-    _prob_neg_retest
+    _prob_neg_retest,
 )
 
 def _sin_varied(t,a,b,offset):
