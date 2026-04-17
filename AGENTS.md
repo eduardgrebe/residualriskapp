@@ -220,25 +220,32 @@ Agents **can** safely run read-only local git commands: `git status`, `git log`,
 
 ## Versioning
 
-This project uses **two independent version numbers** that can evolve separately:
+This project uses **three independent version numbers** that can evolve separately:
 
 | Version | Location | Tracks | Bump when |
 |---|---|---|---|
-| **Library version** | `residualrisk/__init__.py` → `__version__` | `residualrisk` Python package API | Calculation logic or public API changes |
 | **App version** | `app.py` → `APP_VERSION` | Streamlit web application | UI, UX, or app-level changes |
+| **Library version** | `residualrisk/__init__.py` → `__version__` | `residualrisk` Python package API | Calculation logic or public API changes |
+| **Go version** | `go/riskdays/version.go` → `Version` | Go binary (`riskdays_go`) | Go implementation changes |
 
 `pyproject.toml` reads its version dynamically from `residualrisk/__init__.py` via hatchling, so the installable package version always matches the library version. **Do not add a hardcoded `version =` field to `[project]` in `pyproject.toml`.**
 
-Both versions are displayed together in the app sidebar (`App vX.Y.Z · Library vX.Y.Z`).
+The Go version is the single source of truth for the binary: it is embedded in the JSON output (`"version"` field) and printed by `riskdays_go --version`.
+
+Both Python versions are displayed together in the app sidebar (`App vX.Y.Z · Library vX.Y.Z`).
 
 **Git tags** track the **app version** — that's what users interact with.
 
 ### Releasing a new version
 
-1. Decide which version(s) to bump (app, library, or both).
-2. Edit `residualrisk/__init__.py` and/or `app.py` as needed.
-3. Commit the change.
-4. Tag the commit with the new app version and push:
+1. Decide which version(s) to bump (app, library, Go, or any combination).
+2. Edit the relevant file(s):
+   - App: `app.py` → `APP_VERSION`
+   - Library: `residualrisk/__init__.py` → `__version__`
+   - Go: `go/riskdays/version.go` → `Version`
+3. Rebuild the Go binary if the Go version changed: `bash scripts/build_go.sh`
+4. Commit the change.
+5. Tag the commit with the new app version and push:
    ```bash
    git tag -a vX.Y.Z -m "Release vX.Y.Z"
    git push origin vX.Y.Z

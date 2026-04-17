@@ -55,7 +55,8 @@ type RiskDaysInput struct {
 
 // RiskDaysOutput represents the output of the risk days calculation
 type RiskDaysOutput struct {
-	PointEstimate     float64   `json:"point_estimate"`
+	Version           string     `json:"version"`
+	PointEstimate     float64    `json:"point_estimate"`
 	CredibleInterval  [2]float64 `json:"credible_interval"` // [lower, upper]
 	Range             [2]float64 `json:"range"`             // [min, max]
 	Simulations       []float64  `json:"simulations"`

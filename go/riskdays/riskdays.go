@@ -175,6 +175,7 @@ func RiskDaysBS(input RiskDaysInput, progressCallback ProgressCallback) (*RiskDa
 
 	// Return results
 	return &RiskDaysOutput{
+		Version:          Version,
 		PointEstimate:    rdPE,
 		CredibleInterval: rdCrI,
 		Range:            rdRange,
