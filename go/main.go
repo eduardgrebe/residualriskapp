@@ -34,7 +34,8 @@ Usage:
   riskdays_go                Read parameters from stdin (JSON)
 
 Options:
-  -h, --help    Show this help message and exit
+  -h, --help       Show this help message and exit
+  -v, --version    Print version and exit
 
 The tool accepts a JSON object with simulation parameters and writes results
 to stdout as JSON. Progress updates are written to stderr.
@@ -57,6 +58,10 @@ func main() {
 		arg := os.Args[1]
 		if arg == "--help" || arg == "-h" {
 			fmt.Print(helpText)
+			os.Exit(0)
+		}
+		if arg == "--version" || arg == "-v" {
+			fmt.Println(riskdays.Version)
 			os.Exit(0)
 		}
 		// Read from file if provided as argument

@@ -29,16 +29,11 @@ Run from the app/ directory:
 """
 
 import math
-import sys
-from pathlib import Path
 
 import numpy as np
 import pytest
 
-# Ensure app/ is on the path when tests are run from within the tests/ dir
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-import residualrisk as rr
+from residualrisk import core as rr
 
 # ---------------------------------------------------------------------------
 # Shared parameter fixtures

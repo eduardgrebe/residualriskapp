@@ -109,7 +109,7 @@ Errors (stderr):
 
 ## Python Integration
 
-The webapp calls the Go binary via `app/residualrisk_go.py`. The `use_go=True` flag is set by default in the Streamlit interface. The Python implementation remains available as a fallback.
+The webapp calls the Go binary via `residualrisk/_go.py` (part of the `residualrisk` package). The `use_go=True` flag is set by default in the Streamlit interface. The Python implementation remains available as a fallback.
 
 ```python
 from residualrisk import risk_days_bs
@@ -120,6 +120,8 @@ result = risk_days_bs(k, doubling_time, ..., use_go=True)
 # Fallback: pure Python (slow — avoid for n_bs > 1000)
 result = risk_days_bs(k, doubling_time, ..., use_go=False)
 ```
+
+The binary is located by `residualrisk.find_go_binary()`, which searches (in order): the `RESIDUALRISK_GO_BINARY` env var, `<repo>/go/bin/riskdays_go`, `/usr/local/bin/riskdays_go`, then `$PATH`.
 
 ## Parameters
 

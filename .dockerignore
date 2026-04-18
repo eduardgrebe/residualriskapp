@@ -36,9 +36,11 @@ Dockerfile
 docker-compose.yml
 
 # Documentation
-README.md
+# Exclude markdown docs from the image, EXCEPT:
+#  - README.md: referenced by pyproject.toml's `readme` field (needed at install time)
+#  - docs/:     rendered by pages/1_Documentation.py at runtime
 *.md
-docs/
+!README.md
 
 # CI/CD
 .github/

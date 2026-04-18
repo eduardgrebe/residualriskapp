@@ -32,8 +32,7 @@ services:
     # volumes:
       # Optional: Mount local code for development (uncomment for hot reload)
       # - ./app.py:/app/app.py:ro
-      # - ./residualrisk.py:/app/residualrisk.py:ro
-      # - ./residualrisk_go.py:/app/residualrisk_go.py:ro
+      # - ./residualrisk:/app/residualrisk:ro
 
       # Optional: Persistent storage for downloaded results
       # - ./data:/app/data

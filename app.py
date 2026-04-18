@@ -29,7 +29,9 @@ import scipy.stats as stats
 import streamlit as st
 
 import residualrisk as rr
-import residualrisk_prep as rrprep  # TODO: Will be used for PrEP functionality
+import residualrisk.prep as rrprep
+
+APP_VERSION = "1.1.0.dev0"
 
 # Set default values
 # this keeps resetting to this value, so I am going to get rid of it
@@ -176,8 +178,7 @@ if rde_method == "Mechanistic model":
     )
     use_go_acceleration = implementation == "Go"
     if use_go_acceleration:
-        from residualrisk_go import find_go_binary
-        if find_go_binary() is None:
+        if rr.find_go_binary() is None:
             st.sidebar.warning(
                 "Go binary not found. Simulations will fall back to the Python "
                 "implementation, which is significantly slower."
@@ -785,3 +786,8 @@ else:
             output_container.write(
                 f"RR PE: 1 transmission in {rr_onein_pe:,.0f} transfusions ({sig_level:.0f}% {interval_label}: {rr_onein_cri[1]:,.0f} to {rr_onein_cri[0]:,.0f})"
             )
+
+st.sidebar.divider()
+st.sidebar.caption(
+    f"App v{APP_VERSION} · Library v{rr.__version__}"
+)

@@ -34,16 +34,23 @@ def find_go_binary():
     Find the riskdays_go Go binary.
 
     Searches in order:
-    1. go/bin/riskdays_go (relative to this file)
-    2. /usr/local/bin/riskdays_go
-    3. riskdays_go in PATH
+    1. $RESIDUALRISK_GO_BINARY env var (explicit override)
+    2. go/bin/riskdays_go (repo root, relative to this package)
+    3. /usr/local/bin/riskdays_go
+    4. riskdays_go in PATH
 
     Returns:
         Path to binary or None if not found
     """
-    # Try relative path from app directory
-    script_dir = Path(__file__).parent
-    relative_binary = script_dir / "go" / "bin" / "riskdays_go"
+    import os
+
+    env_override = os.environ.get("RESIDUALRISK_GO_BINARY")
+    if env_override and Path(env_override).exists():
+        return env_override
+
+    # Package lives at <repo>/residualrisk/_go.py; binary at <repo>/go/bin/
+    repo_root = Path(__file__).parent.parent
+    relative_binary = repo_root / "go" / "bin" / "riskdays_go"
     if relative_binary.exists():
         return str(relative_binary)
 
