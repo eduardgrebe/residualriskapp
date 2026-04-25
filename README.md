@@ -257,6 +257,11 @@ The model estimates the **infectious window period (IWP)**: the time interval du
 1. **Viral Growth**: Concentration increases exponentially: C(t) = C₀ × 2^(t/doubling_time)
 2. **Detection Probability**: Based on LOD characteristics and pooling/retesting protocol
 3. **Infectivity Probability**: P(infection) = 1 - exp(-k × n_copies), where n_copies depends on viral load and transfusion volume
+
+The choice of input distribution for *k* is discussed in detail in the companion
+analysis repository. See [`residualrisk_analysis/exploration/K_PARAM_INPUTDIST.md`](../residualrisk_analysis/exploration/K_PARAM_INPUTDIST.md)
+for a systematic comparison of candidate distributions (inverse gamma, lognormal,
+log-logistic, lognormal mixture) and recommendations with full justification.
 4. **Bootstrap Simulation**: Samples parameter uncertainty to generate IWP distribution
 5. **Risk Estimation**: Point estimate and credible intervals from bootstrap distribution
 

@@ -124,6 +124,33 @@ Pre-computed posterior parameter distributions in Parquet format:
 
 **Do not modify these files** — they are large pre-computed Bayesian posteriors (up to 8MB). Regeneration requires rerunning the upstream Bayesian analyses.
 
+### Input Distribution for *k* — See Companion Analysis Repo
+
+The choice of input parameter distribution for *k* (as opposed to using a raw
+posterior sample directly) is documented in the companion analysis repository
+`residualrisk_analysis`, which lives alongside this repo on the same host at
+`../residualrisk_analysis/`. The relevant document is:
+
+**`residualrisk_analysis/exploration/K_PARAM_INPUTDIST.md`**
+
+It covers:
+- Detailed characterisation of the human and animal posteriors
+- Systematic evaluation of candidate parametric distributions (lognormal,
+  inverse gamma, log-logistic, Burr XII, lognormal mixture)
+- Quantile tables, survival function comparisons, and six diagnostic figures
+- Two formal recommendations with scipy parameterisations and scientific
+  justification:
+  - **Recommendation A**: Inverse Gamma(α=2, β=0.002019) — smooth unimodal,
+    power-law tail, mode at human posterior mode (0.000673)
+  - **Recommendation B**: 90% LN(human) + 10% LN(animal) mixture — best
+    preserves human posterior bulk while giving explicit 10% weight to the
+    animal-derived transmissibility range
+- Guidance on sensitivity analysis
+
+Agents modifying the *k* parameter handling, adding new posterior files to
+`static/`, or implementing a custom input distribution for *k* should consult
+this document first.
+
 ## PrEP Model Status
 
 - `app.py` has UI stubs for the "Mechanistic model with PrEP" dropdown (currently shows a "not yet available" message and halts)
