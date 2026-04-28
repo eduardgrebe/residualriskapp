@@ -30,7 +30,7 @@ packages = ["residualrisk"]
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
-    "ruff>=0.15.10",
+    "ruff>=0.15.12",
 ]
 vulnerable_dependencies = [
     "tornado>=6.5.5",
