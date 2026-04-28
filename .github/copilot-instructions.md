@@ -1,3 +1,5 @@
-# GitHub Copilot Instructions for residualrisk
+# Copilot Instructions
 
-> **Read `AGENTS.md` at the repository root before making any changes.** It is the canonical source of project instructions, architecture notes, parameter documentation, and common task workflows.
+Always read `~/dev/AGENTS.md` first — it contains generic instructions for all coding agents in this environment that always apply.
+
+If `AGENTS.md` exists in the root of this repository, read and follow it as well — it contains project-specific instructions.
