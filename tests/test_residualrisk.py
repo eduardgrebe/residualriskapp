@@ -42,9 +42,9 @@ from residualrisk import core as rr
 # Default parameter values matching app.py UI defaults
 DEFAULTS = dict(
     C0=0.00025,
-    doubling_time=20.5 / 24,        # hours → days
+    doubling_time=20.5 / 24,  # hours → days
     doubling_time_norm_sd=1.33 / 24,
-    volume_transfused=20,            # mL
+    volume_transfused=20,  # mL
     volume_transfused_range=(15, 30),
     copies_per_virion=2,
     pool_size=16,
@@ -59,11 +59,13 @@ DEFAULTS["lod95_lod50_ratio"] = DEFAULTS["lod95"] / DEFAULTS["lod50"]
 
 # A small synthetic k posterior: 1000 draws centred around realistic values
 _RNG = np.random.default_rng(seed=0)
-K_POSTERIOR = np.concatenate([
-    _RNG.exponential(scale=0.003, size=333),
-    _RNG.exponential(scale=0.008, size=334),
-    _RNG.exponential(scale=0.020, size=333),
-])
+K_POSTERIOR = np.concatenate(
+    [
+        _RNG.exponential(scale=0.003, size=333),
+        _RNG.exponential(scale=0.008, size=334),
+        _RNG.exponential(scale=0.020, size=333),
+    ]
+)
 
 # Bootstrap settings used in all bootstrap tests
 BS_KWARGS = dict(
@@ -88,17 +90,24 @@ BS_KWARGS = dict(
 # _concentration
 # ---------------------------------------------------------------------------
 
+
 class TestConcentration:
     def test_at_t0_equals_C0(self):
-        assert rr._concentration(DEFAULTS["C0"], DEFAULTS["doubling_time"], 0) == pytest.approx(DEFAULTS["C0"])
+        assert rr._concentration(
+            DEFAULTS["C0"], DEFAULTS["doubling_time"], 0
+        ) == pytest.approx(DEFAULTS["C0"])
 
     def test_at_one_doubling_time_doubles(self):
         dt = DEFAULTS["doubling_time"]
-        assert rr._concentration(DEFAULTS["C0"], dt, dt) == pytest.approx(2 * DEFAULTS["C0"])
+        assert rr._concentration(DEFAULTS["C0"], dt, dt) == pytest.approx(
+            2 * DEFAULTS["C0"]
+        )
 
     def test_at_two_doubling_times_quadruples(self):
         dt = DEFAULTS["doubling_time"]
-        assert rr._concentration(DEFAULTS["C0"], dt, 2 * dt) == pytest.approx(4 * DEFAULTS["C0"])
+        assert rr._concentration(DEFAULTS["C0"], dt, 2 * dt) == pytest.approx(
+            4 * DEFAULTS["C0"]
+        )
 
     def test_increases_with_t(self):
         dt = DEFAULTS["doubling_time"]
@@ -111,6 +120,7 @@ class TestConcentration:
 # _prob_infectious_copies
 # ---------------------------------------------------------------------------
 
+
 class TestProbInfectiousCopies:
     def test_zero_copies_gives_zero(self):
         assert rr._prob_infectious_copies(0, 0.013) == pytest.approx(0.0)
@@ -118,10 +128,14 @@ class TestProbInfectiousCopies:
     def test_standard_single_hit_formula(self):
         # 1 - exp(-k * n) for n=100, k=0.01 → 1 - exp(-1) ≈ 0.6321
         expected = 1.0 - math.exp(-0.01 * 100)
-        assert rr._prob_infectious_copies(100, 0.01) == pytest.approx(expected, rel=1e-9)
+        assert rr._prob_infectious_copies(100, 0.01) == pytest.approx(
+            expected, rel=1e-9
+        )
 
     def test_large_copies_approaches_one(self):
-        assert rr._prob_infectious_copies(1_000_000, 0.013) == pytest.approx(1.0, abs=1e-6)
+        assert rr._prob_infectious_copies(1_000_000, 0.013) == pytest.approx(
+            1.0, abs=1e-6
+        )
 
     def test_result_bounded_between_zero_and_one(self):
         for n in [0, 1, 10, 100, 1000]:
@@ -141,6 +155,7 @@ class TestProbInfectiousCopies:
 # _prob_infectious_copies_wc (worst-case, threshold model)
 # ---------------------------------------------------------------------------
 
+
 class TestProbInfectiousCopiesWC:
     def test_below_threshold_is_zero(self):
         assert rr._prob_infectious_copies_wc(0) == 0.0
@@ -156,6 +171,7 @@ class TestProbInfectiousCopiesWC:
 # ---------------------------------------------------------------------------
 # _prob_pos_init
 # ---------------------------------------------------------------------------
+
 
 class TestProbPosInit:
     def test_at_pool_lod50_gives_half(self):
@@ -176,32 +192,56 @@ class TestProbPosInit:
         lod50 = DEFAULTS["lod50"]
         concentrations = [lod50, 10 * lod50, 100 * lod50, 1000 * lod50]
         probs = [
-            rr._prob_pos_init(C, DEFAULTS["doubling_time"], DEFAULTS["pool_size"],
-                              lod50, DEFAULTS["lod95_lod50_ratio"], DEFAULTS["z"])
+            rr._prob_pos_init(
+                C,
+                DEFAULTS["doubling_time"],
+                DEFAULTS["pool_size"],
+                lod50,
+                DEFAULTS["lod95_lod50_ratio"],
+                DEFAULTS["z"],
+            )
             for C in concentrations
         ]
         assert all(a < b for a, b in zip(probs, probs[1:]))
 
     def test_invalid_pool_size_raises(self):
         with pytest.raises(Exception):
-            rr._prob_pos_init(10.0, DEFAULTS["doubling_time"], 0,
-                              DEFAULTS["lod50"], DEFAULTS["lod95_lod50_ratio"], DEFAULTS["z"])
+            rr._prob_pos_init(
+                10.0,
+                DEFAULTS["doubling_time"],
+                0,
+                DEFAULTS["lod50"],
+                DEFAULTS["lod95_lod50_ratio"],
+                DEFAULTS["z"],
+            )
 
     def test_non_integer_pool_size_raises(self):
         with pytest.raises(Exception):
-            rr._prob_pos_init(10.0, DEFAULTS["doubling_time"], 1.5,
-                              DEFAULTS["lod50"], DEFAULTS["lod95_lod50_ratio"], DEFAULTS["z"])
+            rr._prob_pos_init(
+                10.0,
+                DEFAULTS["doubling_time"],
+                1.5,
+                DEFAULTS["lod50"],
+                DEFAULTS["lod95_lod50_ratio"],
+                DEFAULTS["z"],
+            )
 
 
 # ---------------------------------------------------------------------------
 # _prob_neg_retest
 # ---------------------------------------------------------------------------
 
+
 class TestProbNegRetest:
     def test_zero_retests_returns_zero(self):
         result = rr._prob_neg_retest(
-            100.0, DEFAULTS["doubling_time"], DEFAULTS["pool_size"],
-            DEFAULTS["lod50"], DEFAULTS["lod95_lod50_ratio"], 0, DEFAULTS["z"],
+            100.0,
+            DEFAULTS["doubling_time"],
+            DEFAULTS["pool_size"],
+            DEFAULTS["lod50"],
+            DEFAULTS["lod95_lod50_ratio"],
+            0,
+            DEFAULTS["z"],
         )
         assert result == 0
 
@@ -209,17 +249,33 @@ class TestProbNegRetest:
         # At very high viral load the retest should almost certainly detect,
         # so the probability of a negative retest should be near zero.
         result = rr._prob_neg_retest(
-            1e8, DEFAULTS["doubling_time"], DEFAULTS["pool_size"],
-            DEFAULTS["lod50"], DEFAULTS["lod95_lod50_ratio"], 1, DEFAULTS["z"],
+            1e8,
+            DEFAULTS["doubling_time"],
+            DEFAULTS["pool_size"],
+            DEFAULTS["lod50"],
+            DEFAULTS["lod95_lod50_ratio"],
+            1,
+            DEFAULTS["z"],
         )
         assert result == pytest.approx(0.0, abs=1e-6)
 
     def test_decreases_with_concentration(self):
         # Higher concentration → more likely to detect → lower prob of neg retest
-        concentrations = [DEFAULTS["lod50"], 10 * DEFAULTS["lod50"], 1000 * DEFAULTS["lod50"]]
+        concentrations = [
+            DEFAULTS["lod50"],
+            10 * DEFAULTS["lod50"],
+            1000 * DEFAULTS["lod50"],
+        ]
         probs = [
-            rr._prob_neg_retest(C, DEFAULTS["doubling_time"], DEFAULTS["pool_size"],
-                                DEFAULTS["lod50"], DEFAULTS["lod95_lod50_ratio"], 1, DEFAULTS["z"])
+            rr._prob_neg_retest(
+                C,
+                DEFAULTS["doubling_time"],
+                DEFAULTS["pool_size"],
+                DEFAULTS["lod50"],
+                DEFAULTS["lod95_lod50_ratio"],
+                1,
+                DEFAULTS["z"],
+            )
             for C in concentrations
         ]
         assert all(a > b for a, b in zip(probs, probs[1:]))
@@ -227,14 +283,20 @@ class TestProbNegRetest:
     def test_invalid_retests_raises(self):
         with pytest.raises(Exception):
             rr._prob_neg_retest(
-                10.0, DEFAULTS["doubling_time"], DEFAULTS["pool_size"],
-                DEFAULTS["lod50"], DEFAULTS["lod95_lod50_ratio"], -1, DEFAULTS["z"],
+                10.0,
+                DEFAULTS["doubling_time"],
+                DEFAULTS["pool_size"],
+                DEFAULTS["lod50"],
+                DEFAULTS["lod95_lod50_ratio"],
+                -1,
+                DEFAULTS["z"],
             )
 
 
 # ---------------------------------------------------------------------------
 # _prob_nondetection
 # ---------------------------------------------------------------------------
+
 
 class TestProbNondetection:
     def _call(self, t):
@@ -267,6 +329,7 @@ class TestProbNondetection:
 # ---------------------------------------------------------------------------
 # _risk_days  (deterministic point-estimate integral)
 # ---------------------------------------------------------------------------
+
 
 class TestRiskDays:
     def _call(self, **overrides):
@@ -317,9 +380,10 @@ class TestRiskDays:
 # risk_days_bs  (bootstrap simulations — Python and Go)
 # ---------------------------------------------------------------------------
 
+
 def _assert_bs_result_sane(result, n_bs):
     """Shared structural assertions for any bootstrap result."""
-    rd_pe, rd_cri, rd_range, rdests = result
+    rd_pe, rd_cri, rd_range, rdests, _ = result
     assert rd_pe > 0, "Point estimate must be positive"
     assert len(rdests) == n_bs, "Simulation count must equal n_bs"
     assert all(r > 0 for r in rdests), "All simulation values must be positive"
@@ -332,7 +396,7 @@ def _assert_bs_result_sane(result, n_bs):
 class TestRiskDaysBsPython:
     def test_returns_correct_structure(self):
         result = rr.risk_days_bs(**BS_KWARGS, use_go=False)
-        assert len(result) == 4
+        assert len(result) == 5
 
     def test_sanity_checks(self):
         result = rr.risk_days_bs(**BS_KWARGS, use_go=False)
@@ -341,7 +405,9 @@ class TestRiskDaysBsPython:
     def test_point_estimate_matches_risk_days(self):
         # With point_estimate="primary parameters" the pe should equal _risk_days
         # evaluated at the primary (non-bootstrapped) parameter values.
-        result = rr.risk_days_bs(**BS_KWARGS, use_go=False, point_estimate="primary parameters")
+        result = rr.risk_days_bs(
+            **BS_KWARGS, use_go=False, point_estimate="primary parameters"
+        )
         expected_pe = rr._risk_days(
             copies_per_virion=DEFAULTS["copies_per_virion"],
             C0=DEFAULTS["C0"],
@@ -389,14 +455,16 @@ class TestRiskDaysBsPython:
 class TestRiskDaysBsGo:
     def test_returns_correct_structure(self):
         result = rr.risk_days_bs(**BS_KWARGS, use_go=True)
-        assert len(result) == 4
+        assert len(result) == 5
 
     def test_sanity_checks(self):
         result = rr.risk_days_bs(**BS_KWARGS, use_go=True)
         _assert_bs_result_sane(result, BS_KWARGS["n_bs"])
 
     def test_point_estimate_matches_risk_days(self):
-        result = rr.risk_days_bs(**BS_KWARGS, use_go=True, point_estimate="primary parameters")
+        result = rr.risk_days_bs(
+            **BS_KWARGS, use_go=True, point_estimate="primary parameters"
+        )
         expected_pe = rr._risk_days(
             copies_per_virion=DEFAULTS["copies_per_virion"],
             C0=DEFAULTS["C0"],
@@ -428,8 +496,12 @@ class TestPythonGoAgreement:
     def test_point_estimates_agree(self):
         # Both implementations compute the pe via the same deterministic call
         # to _risk_days, so the point estimates should be identical.
-        py = rr.risk_days_bs(**BS_KWARGS, use_go=False, point_estimate="primary parameters")
-        go = rr.risk_days_bs(**BS_KWARGS, use_go=True, point_estimate="primary parameters")
+        py = rr.risk_days_bs(
+            **BS_KWARGS, use_go=False, point_estimate="primary parameters"
+        )
+        go = rr.risk_days_bs(
+            **BS_KWARGS, use_go=True, point_estimate="primary parameters"
+        )
         assert py[0] == pytest.approx(go[0], rel=1e-6)
 
     def test_simulation_medians_agree_within_tolerance(self):
@@ -448,6 +520,7 @@ class TestPythonGoAgreement:
 # ---------------------------------------------------------------------------
 # residual_risk_rd
 # ---------------------------------------------------------------------------
+
 
 class TestResidualRiskRd:
     # Simulate a plausible iwp_bs (500 draws centred on ~4 days)
@@ -484,8 +557,11 @@ class TestResidualRiskRd:
 
     def test_cri_is_ordered(self):
         _, cri, _ = rr.residual_risk_rd(
-            iwp_pe=4.0, iwp_bs=self._IWP_BS,
-            incidence=1e-4, incidence_norm_sd=1e-5, seed=42,
+            iwp_pe=4.0,
+            iwp_bs=self._IWP_BS,
+            incidence=1e-4,
+            incidence_norm_sd=1e-5,
+            seed=42,
         )
         assert cri[0] < cri[1]
 
@@ -498,20 +574,26 @@ class TestResidualRiskRd:
     def test_zero_incidence_raises(self):
         with pytest.raises(ValueError):
             rr.residual_risk_rd(
-                iwp_pe=4.0, iwp_bs=self._IWP_BS,
-                incidence=0.0, incidence_norm_sd=1e-5,
+                iwp_pe=4.0,
+                iwp_bs=self._IWP_BS,
+                incidence=0.0,
+                incidence_norm_sd=1e-5,
             )
 
     def test_negative_incidence_raises(self):
         with pytest.raises(ValueError):
             rr.residual_risk_rd(
-                iwp_pe=4.0, iwp_bs=self._IWP_BS,
-                incidence=-1e-4, incidence_norm_sd=1e-5,
+                iwp_pe=4.0,
+                iwp_bs=self._IWP_BS,
+                incidence=-1e-4,
+                incidence_norm_sd=1e-5,
             )
 
     def test_zero_iwp_pe_raises(self):
         with pytest.raises(ValueError):
             rr.residual_risk_rd(
-                iwp_pe=0.0, iwp_bs=self._IWP_BS,
-                incidence=1e-4, incidence_norm_sd=1e-5,
+                iwp_pe=0.0,
+                iwp_bs=self._IWP_BS,
+                incidence=1e-4,
+                incidence_norm_sd=1e-5,
             )

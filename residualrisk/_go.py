@@ -20,13 +20,14 @@ Python wrapper for calling the Go implementation of risk_days_bs()
 """
 
 import json
-import subprocess
-from pathlib import Path
-import pandas as pd
-import numpy as np
-from scipy import stats as scipy_stats
-import threading
 import queue
+import subprocess
+import threading
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+from scipy import stats as scipy_stats
 
 
 def find_go_binary():
@@ -107,7 +108,7 @@ def risk_days_bs_go(
     Parameters match the Python implementation exactly.
 
     Returns:
-        Tuple: (rd_pe, rd_cri, rd_range, rdests) or (rd_pe, rd_cri, rd_range, rdests, sim_df)
+        Tuple: (rd_pe, rd_cri, rd_range, rdests, sim_df) or (rd_pe, rd_cri, rd_range, rdests, None)
 
     Raises:
         RuntimeError: If Go binary not found or execution fails
@@ -336,7 +337,7 @@ def risk_days_bs_go(
 
             return (rd_pe, rd_cri, rd_range, rdests, sim_df)
         else:
-            return (rd_pe, rd_cri, rd_range, rdests)
+            return (rd_pe, rd_cri, rd_range, rdests, None)
 
     except subprocess.SubprocessError as e:
         raise RuntimeError(f"Failed to run Go binary: {e}")

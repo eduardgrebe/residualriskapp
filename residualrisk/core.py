@@ -16,10 +16,11 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import math
-import numpy as np
-import scipy.stats as stats
 import statistics
+
+import numpy as np
 import pandas as pd
+import scipy.stats as stats
 
 
 def _concentration(C0, doubling_time, t):
@@ -209,8 +210,8 @@ def get_cpu_core_count() -> int:
     Linux, and most other platforms.  If the call fails for any reason
     (e.g., in a restricted environment), it falls back to 1.
     """
-    import os
     import multiprocessing
+    import os
 
     try:
         return multiprocessing.cpu_count()
@@ -357,10 +358,10 @@ def _risk_days_bs_python(
     else:
         rd_pe = None
 
-    if not return_sim_df:
-        return (rd_pe, rd_cri, rd_range, rdests)
-    elif return_sim_df:
+    if return_sim_df:
         return (rd_pe, rd_cri, rd_range, rdests, sim_df)
+    else:
+        return (rd_pe, rd_cri, rd_range, rdests, None)
 
 
 def risk_days_bs(
@@ -514,8 +515,7 @@ def iwp_from_lookback_data(
     from scipy import stats as scipy_stats
 
     adjusted = [
-        x + negative_diagnostic_delay - positive_diagnostic_delay
-        for x in intervals
+        x + negative_diagnostic_delay - positive_diagnostic_delay for x in intervals
     ]
     if any(adj <= 0 for adj in adjusted):
         raise ValueError(
@@ -530,9 +530,7 @@ def iwp_from_lookback_data(
 
     if n_transmissions > 0:
         iwp_ci_lb = (
-            scipy_stats.chi2.ppf(alpha / 2, df=2 * n_transmissions)
-            / 2
-            / total_exposure
+            scipy_stats.chi2.ppf(alpha / 2, df=2 * n_transmissions) / 2 / total_exposure
         )
     else:
         iwp_ci_lb = 0.0
