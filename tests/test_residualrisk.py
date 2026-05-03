@@ -581,6 +581,154 @@ class TestModeKde:
 
 
 # ---------------------------------------------------------------------------
+# sample_invgamma
+# ---------------------------------------------------------------------------
+
+
+class TestSampleInvgamma:
+    """Unit tests for sample_invgamma()."""
+
+    def test_scale_parameterisation(self):
+        """Direct (a, scale) produces samples with expected median."""
+        samples = rr.sample_invgamma(50_000, a=2.0, scale=0.002019, seed=1)
+        # InvGamma(2, 0.002019) theoretical median ≈ 0.001203
+        assert np.median(samples) == pytest.approx(0.001203, rel=0.03)
+        assert len(samples) == 50_000
+        assert np.all(samples > 0)
+
+    def test_mode_parameterisation(self):
+        """(a, mode) auto-calculates scale = mode * (a + 1)."""
+        scale_samples = rr.sample_invgamma(
+            50_000, a=3.0, scale=0.002692, seed=1
+        )
+        mode_samples = rr.sample_invgamma(
+            50_000, a=3.0, mode=0.000673, seed=1
+        )
+        # scale = 0.000673 * (3 + 1) = 0.002692 — same distribution
+        assert np.array_equal(scale_samples, mode_samples)
+
+    def test_mode_and_scale_mutually_exclusive(self):
+        """Providing both scale and mode raises ValueError."""
+        with pytest.raises(ValueError, match="not both"):
+            rr.sample_invgamma(100, a=2.0, scale=0.002, mode=0.000673)
+
+    def test_neither_scale_nor_mode_raises(self):
+        """Providing neither scale nor mode raises ValueError."""
+        with pytest.raises(ValueError, match="Exactly one"):
+            rr.sample_invgamma(100, a=2.0)
+
+    def test_reproducible_with_seed(self):
+        """Same seed produces identical samples."""
+        s1 = rr.sample_invgamma(500, a=2.0, mode=0.000673, seed=42)
+        s2 = rr.sample_invgamma(500, a=2.0, mode=0.000673, seed=42)
+        assert np.array_equal(s1, s2)
+
+    def test_different_seeds_differ(self):
+        """Different seeds produce different samples."""
+        s1 = rr.sample_invgamma(500, a=2.0, mode=0.000673, seed=1)
+        s2 = rr.sample_invgamma(500, a=2.0, mode=0.000673, seed=2)
+        assert not np.array_equal(s1, s2)
+
+
+# ---------------------------------------------------------------------------
+# InvGamma IWP agreement
+# ---------------------------------------------------------------------------
+
+
+class TestInvgammaIwpAgreement:
+    """The IWP point estimate from InvGamma(k_mode=human_mode) should
+    closely match the IWP point estimate from the human posterior when
+    both use mode as the k point estimate and mode as the IWP point
+    estimate."""
+
+    @staticmethod
+    def _load_human_posterior() -> "np.ndarray":
+        from pathlib import Path
+
+        import pandas as pd
+
+        static = Path(__file__).resolve().parent.parent / "static"
+        return pd.read_parquet(static / "k_param_human.parquet").iloc[
+            :, 0
+        ].values
+
+    @staticmethod
+    def _common_params() -> dict:
+        return dict(
+            doubling_time=20.5 / 24,
+            doubling_time_norm_sd=1.33 / 24,
+            lod50=2.73,
+            lod50_sd=0.193,
+            lod95_lod50_ratio=12.33 / 2.73,
+            volume_transfused=20,
+            volume_transfused_range=(15, 30),
+            pool_size=16,
+            retests=1,
+            n_bs=500,
+            seed=42,
+            threads=2,
+            point_estimate="mode",
+            use_go=False,
+        )
+
+    def test_iwp_mode_agrees_with_human_posterior(self):
+        """IWP mode from InvGamma ≈ IWP mode from human posterior."""
+        k_human = self._load_human_posterior()
+        k_mode_human = rr.mode_kde(k_human)
+        params = self._common_params()
+
+        # Human posterior
+        r_human = rr.risk_days_bs(
+            k=k_mode_human,
+            k_posterior_sample=k_human,
+            **params,
+        )
+        iwp_human = r_human[0]
+
+        # Inverse Gamma with same mode
+        r_ig = rr.risk_days_bs(
+            k=0.000673,
+            k_invgamma_a=2.0,
+            k_invgamma_mode=0.000673,
+            **params,
+        )
+        iwp_ig = r_ig[0]
+
+        # Both are positive risk-days estimates
+        assert iwp_human > 0
+        assert iwp_ig > 0
+
+        # Point estimates should agree within 25% (n_bs=500 is noisy)
+        assert iwp_human == pytest.approx(iwp_ig, rel=0.25)
+    def test_iwp_mode_agrees_with_human_posterior_go(self):
+        """Same as above, but using the Go implementation."""
+        k_human = self._load_human_posterior()
+        k_mode_human = rr.mode_kde(k_human)
+        params = {**self._common_params(), "use_go": True}
+
+        # Human posterior
+        r_human = rr.risk_days_bs(
+            k=k_mode_human,
+            k_posterior_sample=k_human,
+            **params,
+        )
+        iwp_human = r_human[0]
+
+        # Inverse Gamma with same mode
+        r_ig = rr.risk_days_bs(
+            k=0.000673,
+            k_invgamma_a=2.0,
+            k_invgamma_mode=0.000673,
+            **params,
+        )
+        iwp_ig = r_ig[0]
+
+        assert iwp_human > 0
+        assert iwp_ig > 0
+        assert iwp_human == pytest.approx(iwp_ig, rel=0.25)
+
+
+# ---------------------------------------------------------------------------
 # residual_risk_rd
 # ---------------------------------------------------------------------------
 
