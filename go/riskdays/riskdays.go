@@ -168,7 +168,7 @@ func RiskDaysBS(input RiskDaysInput, progressCallback ProgressCallback) (*RiskDa
 	case "mean":
 		rdPE = Mean(rdests)
 	case "mode":
-		rdPE = KDEModeLog(rdests, 0, 0)
+		rdPE = KDEModeLog(rdests, 0, 0, input.Threads)
 	default:
 		return nil, fmt.Errorf("unknown point estimate method: %s", input.PointEstimate)
 	}

@@ -27,9 +27,10 @@ import (
 // KDEModeLog estimates the mode of a positive, right-skewed distribution
 // via KDE on the log scale.  It matches the Python _kde_mode_log() exactly.
 //
-//   - data:  positive-valued samples
-//   - nGrid: number of log-spaced grid points (default 100_000)
-//   - cap:   maximum number of samples to use; 0 means no cap
+//   - data:    positive-valued samples
+//   - nGrid:   number of log-spaced grid points; 0 → auto (max 100k, ≤200k)
+//   - cap:     maximum number of samples to use; 0 means no cap
+//   - threads: number of parallel goroutines; ≤ 0 uses runtime.NumCPU()
 //
 // Algorithm:
 //   1.  log-transform data
@@ -37,7 +38,7 @@ import (
 //   3.  Gaussian KDE evaluated on a log-spaced grid
 //   4.  Change-of-variables: f(k) = f_logk(log k) / k
 //   5.  Return the grid value at maximum density
-func KDEModeLog(data []float64, nGrid int, cap int) float64 {
+func KDEModeLog(data []float64, nGrid int, cap int, threads int) float64 {
 	if len(data) == 0 {
 		return 0
 	}
@@ -59,6 +60,8 @@ func KDEModeLog(data []float64, nGrid int, cap int) float64 {
 		nGrid = len(work)
 		if nGrid < 100_000 {
 			nGrid = 100_000
+		} else if nGrid > 200_000 {
+			nGrid = 200_000
 		}
 	} else if nGrid < 100 {
 		nGrid = 100
@@ -111,7 +114,10 @@ func KDEModeLog(data []float64, nGrid int, cap int) float64 {
 	density := make([]float64, nGrid)
 	var wg sync.WaitGroup
 	// Split grid into chunks for goroutines
-	workers := runtime.NumCPU()
+	workers := threads
+	if workers <= 0 {
+		workers = runtime.NumCPU()
+	}
 	chunkSize := (nGrid + workers - 1) / workers
 	for c := 0; c < workers; c++ {
 		start := c * chunkSize
