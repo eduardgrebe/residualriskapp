@@ -260,6 +260,11 @@ def risk_days_bs_go(
         rd_range = tuple(output["range"])
         rdests = output["simulations"]
 
+        # Override Go's histogram-binning mode with KDE-on-log-scale
+        if point_estimate == "mode":
+            from .core import _kde_mode_log
+            rd_pe = _kde_mode_log(rdests)
+
         # Return in same format as Python version
         if return_sim_df:
             # Construct sim_df matching Python implementation

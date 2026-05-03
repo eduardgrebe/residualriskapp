@@ -134,7 +134,11 @@ if "samp" not in st.session_state:
 
 rde_method = st.selectbox(
     "RDE estimation method",
-    options=["Lookback data", "Mechanistic model", "Mechanistic model with PrEP (coming soon)"],
+    options=[
+        "Lookback data",
+        "Mechanistic model",
+        "Mechanistic model with PrEP (coming soon)",
+    ],
     index=1,
     help="Risk day quivalents (RDEs) are equivalent to the infectious window "
     "period (IWP). Lookback data: estimates the IWP directly from "
@@ -248,15 +252,36 @@ if rde_method == "Mechanistic model":
 
         belov_model = col1.selectbox(
             "Select transmissibility model",
-            options=["Belov animal model", "Belov human model", "Belov human-weighted"],
-            index=2,
+            options=[
+                "Belov human model",
+                "Belov animal model",
+                "Belov human-weighted",
+                "Distribution centred on Belov human model",
+            ],
+            index=0,
             help="Placeholder help text",
         )
 
+        k_param_distribution = col1.selectbox(
+            "Select transmissibility parameter distribution",
+            options=[
+                "Belov human posterior sample",
+                "Belov animal posterior sample",
+                "Human-weighted posterior sample",
+                "Inverse Gamma distribution",
+            ],
+            index=0,
+            help="Pleaceholder help text",
+        )
+
+        if k_param_distribution == "Inverse Gamma distribution":
+            # We need to obtain Inverse Gamma parameters and explain what they do
+            pass
+
         k_param_pe = col2.selectbox(
             "Transmissibility parameter: posterior...",
-            options=["mean", "median", "mode"],
-            index=1,
+            options=["mode", "median", "mean"],
+            index=0,
             help="Placeholder help text",
         )
 
@@ -442,14 +467,14 @@ with incidence_param_container:
             f"Relative standard error on incidence: {inc_per100k_sd / inc_per100k * 100:.1f}%"
         )
 
-button_label = "Run simulations" if rde_method == "Mechanistic model" else "Calculate RDEs"
+button_label = (
+    "Run simulations" if rde_method == "Mechanistic model" else "Calculate RDEs"
+)
 if st.sidebar.button(button_label):
     if rde_method == "Mechanistic model":
         progressbar = st.sidebar.progress(0, text="Running simulations...")
         if k_param_pe == "mode":
-            k_pe = rr.mode_kde(
-                k_param
-            )  # KDE on log scale with Silverman bandwidth
+            k_pe = rr.mode_kde(k_param)  # KDE on log scale with Silverman bandwidth
         elif k_param_pe == "mean":
             k_pe = statistics.mean(k_param)
         elif k_param_pe == "median":
@@ -571,9 +596,7 @@ if st.session_state["sims_run"]:
     )
 
 if not st.session_state["sims_run"]:
-    st.sidebar.write(
-        "Downloads will be available once an estimation has been run."
-    )
+    st.sidebar.write("Downloads will be available once an estimation has been run.")
 else:
     st.sidebar.write("Outputs are from most recent estimation run.")
 
@@ -597,7 +620,9 @@ else:
             elif point_estimate == "mean":
                 iwp_pe = st.session_state["samp"]["iwp"].mean()
             elif point_estimate == "mode":
-                iwp_pe = stats.mode(np.array(st.session_state["samp"]["iwp"]).round(2)).mode
+                iwp_pe = rr.mode_kde(
+                    np.array(st.session_state["samp"]["iwp"])
+                )
             else:
                 iwp_pe = st.session_state["iwp_pe_primpar"]
         elif rde_method == "Lookback data":
@@ -610,7 +635,9 @@ else:
         iwp_pe = st.session_state["iwp_pe_last"]
 
     # Interval label: Bayesian CrI for mechanistic model, frequentist CI for lookback
-    interval_label = "CrI" if st.session_state["rde_method_run"] == "Mechanistic model" else "CI"
+    interval_label = (
+        "CrI" if st.session_state["rde_method_run"] == "Mechanistic model" else "CI"
+    )
 
     iwp_cri = (
         st.session_state["samp"]["iwp"].quantile(alpha / 2),
@@ -666,6 +693,4 @@ else:
             )
 
 st.sidebar.divider()
-st.sidebar.caption(
-    f"App v{APP_VERSION} · Library v{rr.__version__}"
-)
+st.sidebar.caption(f"App v{APP_VERSION} · Library v{rr.__version__}")
