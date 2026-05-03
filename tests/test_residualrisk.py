@@ -518,6 +518,69 @@ class TestPythonGoAgreement:
 
 
 # ---------------------------------------------------------------------------
+# mode_kde
+# ---------------------------------------------------------------------------
+
+
+class TestModeKde:
+    """KDE-on-log-scale mode estimation for posterior distributions.
+
+    Tests that the mode of the human and animal k posteriors matches
+    the documented values.  These are pre-computed Bayesian posteriors
+    stored in static/*.parquet that must not change; the expected modes
+    serve as canary values to detect unintended breakage.
+    """
+
+    @staticmethod
+    def _load_parquet(name: str) -> "np.ndarray":
+        from pathlib import Path
+
+        import pandas as pd
+
+        static = Path(__file__).resolve().parent.parent / "static"
+        return pd.read_parquet(static / name).iloc[:, 0].values
+
+    def test_human_posterior_mode(self):
+        """Human posterior k mode should be ≈ 0.000672 (document value 0.000673)."""
+        k_human = self._load_parquet("k_param_human.parquet")
+        mode = rr._kde_mode_log(k_human)
+        assert mode == pytest.approx(0.000672, abs=1e-6)
+
+    def test_animal_posterior_mode(self):
+        """Animal posterior k mode should be ≈ 0.02086."""
+        k_animal = self._load_parquet("k_param_animal.parquet")
+        mode = rr._kde_mode_log(k_animal)
+        assert mode == pytest.approx(0.020862, abs=1e-5)
+
+    def test_mode_kde_public_wrapper(self):
+        """The public mode_kde wrapper should match the private implementation."""
+        import numpy as np
+
+        rng = np.random.default_rng(seed=1)
+        data = rng.lognormal(mean=-7.0, sigma=0.3, size=5000)
+        assert rr.mode_kde(data) == rr._kde_mode_log(data)
+
+    def test_all_zeros_or_negatives_raises(self):
+        """Zero or negative values should raise ValueError (log undefined)."""
+        import numpy as np
+
+        with pytest.raises(ValueError, match="positive"):
+            rr._kde_mode_log(np.array([0.0, 0.5, 1.0]))
+        with pytest.raises(ValueError, match="positive"):
+            rr._kde_mode_log(np.array([-0.1, 0.5, 1.0]))
+
+    def test_result_is_positive_and_finite(self):
+        """Mode estimate should always be a positive finite number."""
+        import numpy as np
+
+        rng = np.random.default_rng(seed=2)
+        data = rng.lognormal(mean=-7.0, sigma=0.4, size=1000)
+        mode = rr._kde_mode_log(data)
+        assert np.isfinite(mode)
+        assert mode > 0
+
+
+# ---------------------------------------------------------------------------
 # residual_risk_rd
 # ---------------------------------------------------------------------------
 
