@@ -250,33 +250,31 @@ if rde_method == "Mechanistic model":
     with trans_param_container:
         col1, col2 = st.columns(2)
 
-        belov_model = col1.selectbox(
-            "Select transmissibility model",
+        k_param_distribution_choice = col1.selectbox(
+            "Select transmissibility parameter distribution to sample from",
             options=[
-                "Belov human model",
-                "Belov animal model",
-                "Belov human-weighted",
-                "Distribution centred on Belov human model",
+                "Belov human posterior",
+                "Belov animal posterior",
+                "Artificial human-weighted distribution",
+                "Inverse Gamma distribution centred on Belov human posterior",
+                "Lognormal mixture distribution",
             ],
             index=0,
             help="Placeholder help text",
         )
-
-        k_param_distribution = col1.selectbox(
-            "Select transmissibility parameter distribution",
-            options=[
-                "Belov human posterior sample",
-                "Belov animal posterior sample",
-                "Human-weighted posterior sample",
-                "Inverse Gamma distribution",
-            ],
-            index=0,
-            help="Pleaceholder help text",
-        )
-
-        if k_param_distribution == "Inverse Gamma distribution":
-            # We need to obtain Inverse Gamma parameters and explain what they do
-            pass
+        match k_param_distribution_choice:
+            case "Belov human posterior":
+                k_param_dist = "human"
+            case "Belov animal posterior":
+                k_param_dist = "animal"
+            case "Artificial human-weighted distribution":
+                k_param_dist = "human_weighted"
+            case "Inverse Gamma distribution centred on Belov human posterior":
+                k_param_dist = "invgamma"
+            case "Lognormal mixture distribution":
+                k_param_dist = "lnmixture"
+            case _:
+                k_param_dist = None  # This shouldn't happen
 
         k_param_pe = col2.selectbox(
             "Transmissibility parameter: posterior...",
@@ -285,12 +283,14 @@ if rde_method == "Mechanistic model":
             help="Placeholder help text",
         )
 
-        if belov_model == "Belov animal model":
-            k_param = st.session_state["k_animal"]
-        elif belov_model == "Belov human model":
+        if k_param_dist == "human":
             k_param = st.session_state["k_human"]
-        elif belov_model == "Belov human-weighted":
+        elif k_param_dist == "animal":
+            k_param = st.session_state["k_animal"]
+        elif k_param_dist == "human_weighted":
             k_param = st.session_state["k_expdecay"]
+        elif k_param_dist in ("invgamma", "lnmixture"):
+            k_param = None
 
     with model_param_container:
         col1, col2 = st.columns(2)
@@ -620,9 +620,7 @@ else:
             elif point_estimate == "mean":
                 iwp_pe = st.session_state["samp"]["iwp"].mean()
             elif point_estimate == "mode":
-                iwp_pe = rr.mode_kde(
-                    np.array(st.session_state["samp"]["iwp"])
-                )
+                iwp_pe = rr.mode_kde(np.array(st.session_state["samp"]["iwp"]))
             else:
                 iwp_pe = st.session_state["iwp_pe_primpar"]
         elif rde_method == "Lookback data":
