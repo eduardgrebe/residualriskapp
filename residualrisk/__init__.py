@@ -12,6 +12,7 @@
 from .core import (
     get_cpu_core_count,
     iwp_from_lookback_data,
+    mode_kde,
     mode_rounded,
     residual_risk_rd,
     risk_days_bs,
@@ -25,6 +26,7 @@ __all__ = [
     "iwp_from_lookback_data",
     "residual_risk_rd",
     "get_cpu_core_count",
+    "mode_kde",
     "mode_rounded",
     "find_go_binary",
 ]

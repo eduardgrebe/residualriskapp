@@ -224,6 +224,59 @@ def mode_rounded(list, precision=6):
     return stats.mode(np.array(list).round(precision)).mode
 
 
+def _kde_mode_log(data, n_grid=100_000):
+    """Estimate the mode of a positive, right-skewed distribution via
+    KDE on the log scale.
+
+    Applies Silverman's rule for bandwidth selection to log(k), then
+    maps the density back to the original scale via the change-of-
+    variables  f(k) = f_logk(log k) / k  and finds the maximum.
+
+    This is the methodologically correct approach for a log-
+    approximately-normal quantity such as the k posterior.
+
+    Parameters
+    ----------
+    data : array-like
+        Positive-valued posterior samples.
+    n_grid : int
+        Number of log-spaced grid points for density evaluation
+        (default 100 000).
+
+    Returns
+    -------
+    float
+        Mode estimate on the original scale.
+    """
+    import warnings
+    from scipy.stats import gaussian_kde
+
+    data = np.asarray(data, dtype=float)
+    if np.any(data <= 0):
+        raise ValueError("All values must be positive for log-scale KDE.")
+
+    log_data = np.log(data)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        kde = gaussian_kde(log_data, bw_method="silverman")
+
+    grid = np.logspace(np.log10(data.min()), np.log10(data.max()), n_grid)
+    # Density on original scale: f(k) = f_logk(log k) / k
+    fk = kde(np.log(grid)) / grid
+    mode = grid[np.argmax(fk)]
+    return float(mode)
+
+
+def mode_kde(data, n_grid=100_000):
+    """Public wrapper for _kde_mode_log — estimate the mode of a
+    positive posterior distribution via KDE on the log scale.
+
+    See _kde_mode_log for full documentation.
+    """
+    return _kde_mode_log(data, n_grid=n_grid)
+
+
 def _risk_days_bs_python(
     k,
     doubling_time,

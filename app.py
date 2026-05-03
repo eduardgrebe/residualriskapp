@@ -447,9 +447,9 @@ if st.sidebar.button(button_label):
     if rde_method == "Mechanistic model":
         progressbar = st.sidebar.progress(0, text="Running simulations...")
         if k_param_pe == "mode":
-            k_pe = rr.mode_rounded(
-                k_param, precision=5
-            )  # use mode rounded to 5 decimal places
+            k_pe = rr.mode_kde(
+                k_param
+            )  # KDE on log scale with Silverman bandwidth
         elif k_param_pe == "mean":
             k_pe = statistics.mean(k_param)
         elif k_param_pe == "median":
