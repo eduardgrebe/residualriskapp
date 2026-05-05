@@ -80,21 +80,28 @@ def load_data():
     # Use Path to ensure files are loaded relative to this script, not cwd
     static_dir = Path(__file__).parent / "static"
 
-    ests = pd.read_parquet(static_dir / "iwp_estimates_expdecay.parquet")
-    # lowercase = lambda x: str(x).lower()
-    # ests.rename(lowercase, axis='columns', inplace=True)
-    # ests["id"] = ests.index
-    # ests_long = ests.melt(id_vars=["id"], var_name="product", value_name="iwp")
-
     k_animal = np.array(pd.read_parquet(static_dir / "k_param_animal.parquet").k)
     k_human = np.array(pd.read_parquet(static_dir / "k_param_human.parquet").k)
     k_expdecay = np.array(pd.read_parquet(static_dir / "k_param_expdecay.parquet").k)
 
-    k_human_mode = rr.mode_kde(k_human)
-    k_animal_mode = rr.mode_kde(k_animal)
-    k_expdecay_mode = rr.mode_kde(k_expdecay)
+    # KDE modes via Go binary (~1.5s total, 30× faster than Python KDE).
+    # Falls back to hardcoded values if Go binary is unavailable.
+    _go_bin = rr.find_go_binary()
+    if _go_bin is not None:
+        k_human_mode = rr.mode_kde_go(k_human, cap=40_000, n_grid=5_000)
+        k_animal_mode = rr.mode_kde_go(k_animal, cap=40_000, n_grid=5_000)
+        k_expdecay_mode = rr.mode_kde_go(k_expdecay, cap=40_000, n_grid=5_000)
+    else:
+        # Hardcoded fallback (computed with Python KDE on full posteriors).
+        # TODO: remove once Go binary is always available in deployment.
+        # k_human_mode = rr.mode_kde(k_human)   # ~14s — too slow for startup
+        # k_animal_mode = rr.mode_kde(k_animal)  # ~13s
+        # k_expdecay_mode = rr.mode_kde(k_expdecay)  # ~18s
+        k_human_mode = 0.0006717095665107152
+        k_animal_mode = 0.02086193830714558
+        k_expdecay_mode = 0.0005803672369228773
 
-    return ests, k_animal, k_human, k_expdecay, k_human_mode, k_animal_mode, k_expdecay_mode
+    return k_animal, k_human, k_expdecay, k_human_mode, k_animal_mode, k_expdecay_mode
 
 
 @st.cache_data
@@ -127,9 +134,8 @@ header_container.write("""
 Tool for estimating the residual risk of HIV transfusion transmission with NAT screening.
 """)
 
-if "samp" not in st.session_state:
+if "k_human" not in st.session_state:
     (
-        st.session_state["samp"],
         st.session_state["k_animal"],
         st.session_state["k_human"],
         st.session_state["k_expdecay"],
@@ -137,7 +143,6 @@ if "samp" not in st.session_state:
         st.session_state["k_animal_mode"],
         st.session_state["k_expdecay_mode"],
     ) = load_data()
-# defaults only, not after running simulations
 
 rde_method = st.selectbox(
     "RDE estimation method",

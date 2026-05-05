@@ -67,7 +67,7 @@ run_python_tests() {
         PY_SKIPPED=1
         return
     fi
-    if uv run pytest tests/ -v "${extra_args[@]}"; then
+    if uv run pytest tests/ -v "${extra_args[@]+"${extra_args[@]}"}"; then
         PY_OK=1
     fi
 }

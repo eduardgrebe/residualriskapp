@@ -420,7 +420,7 @@ class TestLnMixGoStatistics:
         result_invgamma = rr.risk_days_bs(
             **{k: v for k, v in self._KWARGS.items()
                if k not in ("k_lnmix_w", "k_lnmix_mu1", "k_lnmix_sigma1",
-                            "k_lnmix_mu2", "k_lnmix_sigma2", "use_go")},
+                            "k_lnmix_mu2", "k_lnmix_sigma2", "use_go", "k")},
             k=beta / (alpha + 1),  # InvGamma mode
             k_invgamma_alpha=alpha,
             k_invgamma_beta=beta,
