@@ -80,6 +80,50 @@ func (rg *RandomGenerator) GenerateUniform(low, high float64, n int) []float64 {
 	return samples
 }
 
+// GenerateInvGamma generates samples from an Inverse Gamma distribution.
+// alpha is the shape parameter; beta is the scale parameter (equivalent to
+// scipy's invgamma(a=alpha, scale=beta)).
+//
+// Uses the relationship: if X ~ Gamma(alpha, rate=beta) then 1/X ~ InvGamma(alpha, scale=beta).
+// In Gonum's Gamma, Beta is the rate (1/scale), so setting Beta=beta gives the correct Gamma.
+func (rg *RandomGenerator) GenerateInvGamma(alpha, beta float64, n int) []float64 {
+	samples := make([]float64, n)
+	// Gonum Gamma: Beta = rate = 1/scale. Setting rate=beta yields scale=1/beta.
+	// Then 1/X ~ InvGamma(alpha, scale=beta).
+	gamma := distuv.Gamma{
+		Alpha: alpha,
+		Beta:  beta, // rate parameter in Gonum = 1/scale
+		Src:   rg.rng,
+	}
+	for i := 0; i < n; i++ {
+		samples[i] = 1.0 / gamma.Rand()
+	}
+	return samples
+}
+
+// GenerateLogNormalMixture generates samples from a two-component lognormal mixture.
+//
+// Each sample is drawn from component 1 (weight w, LN(mu1, sigma1)) with probability w,
+// or from component 2 (weight 1-w, LN(mu2, sigma2)) otherwise.
+//
+// mu and sigma are the log-scale mean and standard deviation (parameterisation matches
+// scipy.stats.lognorm(s=sigma, scale=exp(mu)) and numpy.random.lognormal(mean=mu, sigma)).
+// Gonum's LogNormal uses Mu=mu, Sigma=sigma — same convention.
+func (rg *RandomGenerator) GenerateLogNormalMixture(w, mu1, sigma1, mu2, sigma2 float64, n int) []float64 {
+	samples := make([]float64, n)
+	comp1 := distuv.LogNormal{Mu: mu1, Sigma: sigma1, Src: rg.rng}
+	comp2 := distuv.LogNormal{Mu: mu2, Sigma: sigma2, Src: rg.rng}
+	uniform := distuv.Uniform{Min: 0, Max: 1, Src: rg.rng}
+	for i := 0; i < n; i++ {
+		if uniform.Rand() < w {
+			samples[i] = comp1.Rand()
+		} else {
+			samples[i] = comp2.Rand()
+		}
+	}
+	return samples
+}
+
 // GenerateGamma generates samples from a gamma distribution
 // Equivalent to np.random.gamma(shape, scale, n)
 func (rg *RandomGenerator) GenerateGamma(shape, scale float64, n int) []float64 {

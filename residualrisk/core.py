@@ -224,6 +224,180 @@ def mode_rounded(list, precision=6):
     return stats.mode(np.array(list).round(precision)).mode
 
 
+def _kde_mode_log(data, n_grid=100_000, cap=50_000):
+    """Estimate the mode of a positive, right-skewed distribution via
+    KDE on the log scale.
+
+    Applies Silverman's rule for bandwidth selection to log(k), then
+    maps the density back to the original scale via the change-of-
+    variables  f(k) = f_logk(log k) / k  and finds the maximum.
+
+    This is the methodologically correct approach for a log-
+    approximately-normal quantity such as the k posterior.
+
+    Parameters
+    ----------
+    data : array-like
+        Positive-valued posterior samples.
+    n_grid : int
+        Number of log-spaced grid points for density evaluation
+        (default 100 000).
+    cap : int or None
+        Maximum number of samples to use.  If *data* exceeds *cap*,
+        a random subset of size *cap* is drawn before fitting.
+        Pass ``None`` to use all samples regardless of size.
+        Default 50 000.
+
+    Returns
+    -------
+    float
+        Mode estimate on the original scale.
+    """
+    import warnings
+    from scipy.stats import gaussian_kde
+
+    data = np.asarray(data, dtype=float)
+    if np.any(data <= 0):
+        raise ValueError("All values must be positive for log-scale KDE.")
+
+    # Cap to avoid O(n_data × n_grid) blow-up with large samples
+    if cap is not None and len(data) > cap:
+        rng = np.random.default_rng(42)
+        data = rng.choice(data, size=cap, replace=False)
+
+    log_data = np.log(data)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        kde = gaussian_kde(log_data, bw_method="silverman")
+
+    grid = np.logspace(np.log10(data.min()), np.log10(data.max()), n_grid)
+    # Density on original scale: f(k) = f_logk(log k) / k
+    fk = kde(np.log(grid)) / grid
+    mode = grid[np.argmax(fk)]
+    return float(mode)
+
+
+def mode_kde(data, n_grid=100_000, cap=50_000):
+    """Public wrapper for _kde_mode_log — estimate the mode of a
+    positive posterior distribution via KDE on the log scale.
+
+    See _kde_mode_log for full documentation.
+    """
+    return _kde_mode_log(data, n_grid=n_grid, cap=cap)
+
+
+def sample_invgamma(n, alpha, beta=None, mode=None, seed=None):
+    """Sample from an Inverse Gamma distribution.
+
+    Supports two parameterisations:
+
+    1. **alpha + beta** (direct)::
+
+          sample_invgamma(n, alpha=2.0, beta=0.002019)
+
+    2. **alpha + mode** (beta auto-calculated)::
+
+          sample_invgamma(n, alpha=2.0, mode=0.000673)
+
+       Beta is computed as ``mode * (alpha + 1)`` so that the resulting
+       InvGamma(alpha, beta) has its mode at the specified value.
+
+    Parameters
+    ----------
+    n : int
+        Number of samples.
+    alpha : float
+        Shape parameter (must be > 0).
+    beta : float, optional
+        Scale parameter.  Maps to ``scipy.stats.invgamma(a=alpha, scale=beta)``.
+        Exactly one of *beta* or *mode* must be provided.
+    mode : float, optional
+        Target mode.  Beta is computed as ``mode * (alpha + 1)``.
+    seed : int, optional
+        Random seed for reproducibility.
+
+    Returns
+    -------
+    np.ndarray
+        Array of *n* samples from InvGamma(alpha, beta).
+
+    Raises
+    ------
+    ValueError
+        If neither or both of *beta* and *mode* are provided.
+    """
+    if beta is None and mode is None:
+        raise ValueError(
+            "Exactly one of 'beta' or 'mode' must be provided."
+        )
+    if beta is not None and mode is not None:
+        raise ValueError(
+            "Provide 'beta' or 'mode', not both."
+        )
+    if mode is not None:
+        beta = mode * (alpha + 1)
+    rng = np.random.default_rng(seed)
+    from scipy.stats import invgamma
+    return invgamma.rvs(alpha, scale=beta, size=n, random_state=rng)
+
+
+def sample_lnmix(n, w, mu1, sigma1, mu2, sigma2, seed=None):
+    """Sample from a two-component lognormal mixture distribution.
+
+    Each sample is drawn from component 1 (LN(mu1, sigma1)) with probability w,
+    or from component 2 (LN(mu2, sigma2)) with probability 1-w.
+
+    Parameters follow the numpy/scipy lognormal convention:
+    - ``mu`` is the mean of the underlying normal (log-scale mean)
+    - ``sigma`` is the std of the underlying normal (log-scale std)
+
+    This corresponds to ``scipy.stats.lognorm(s=sigma, scale=np.exp(mu))``.
+
+    Parameters
+    ----------
+    n : int
+        Number of samples.
+    w : float
+        Weight of component 1; must be in [0, 1].
+    mu1 : float
+        Log-scale mean of component 1 (e.g. -7.2403 for human posterior fit).
+    sigma1 : float
+        Log-scale std of component 1 (e.g. 0.3241 for human posterior fit).
+    mu2 : float
+        Log-scale mean of component 2 (e.g. -3.7423 for animal posterior fit).
+    sigma2 : float
+        Log-scale std of component 2 (e.g. 0.5258 for animal posterior fit).
+    seed : int, optional
+        Random seed for reproducibility.
+
+    Returns
+    -------
+    np.ndarray
+        Array of *n* positive samples from the mixture distribution.
+
+    Raises
+    ------
+    ValueError
+        If w is not in [0, 1].
+
+    Examples
+    --------
+    Default 90/10 human-weighted mixture (Recommendation B)::
+
+        samples = sample_lnmix(10000, w=0.90,
+                                mu1=-7.2403, sigma1=0.3241,
+                                mu2=-3.7423, sigma2=0.5258)
+    """
+    if not (0.0 <= w <= 1.0):
+        raise ValueError(f"w must be in [0, 1], got {w}")
+    rng = np.random.default_rng(seed)
+    component = rng.random(n) < w
+    comp1 = rng.lognormal(mean=mu1, sigma=sigma1, size=n)
+    comp2 = rng.lognormal(mean=mu2, sigma=sigma2, size=n)
+    return np.where(component, comp1, comp2)
+
+
 def _risk_days_bs_python(
     k,
     doubling_time,
@@ -242,6 +416,14 @@ def _risk_days_bs_python(
     k_posterior_sample=None,
     k_gamma_shape=None,
     k_gamma_scale=None,
+    k_invgamma_alpha=None,
+    k_invgamma_beta=None,
+    k_invgamma_mode=None,
+    k_lnmix_w=None,
+    k_lnmix_mu1=None,
+    k_lnmix_sigma1=None,
+    k_lnmix_mu2=None,
+    k_lnmix_sigma2=None,
     n_bs=10000,
     seed=126887,
     threads=get_cpu_core_count() - 1,
@@ -262,6 +444,24 @@ def _risk_days_bs_python(
         and k_gamma_scale is not None
     ):
         ks = np.random.gamma(k_gamma_shape, k_gamma_scale, n_bs)
+    elif k_invgamma_alpha is not None:
+        _beta = k_invgamma_beta
+        if _beta is None:
+            if k_invgamma_mode is not None:
+                _beta = k_invgamma_mode * (k_invgamma_alpha + 1)
+            else:
+                raise ValueError(
+                    "k_invgamma_alpha requires k_invgamma_beta or k_invgamma_mode"
+                )
+        # Uses the legacy numpy global state set above for reproducibility.
+        ks = stats.invgamma.rvs(k_invgamma_alpha, scale=_beta, size=n_bs)
+    elif k_lnmix_w is not None:
+        if any(p is None for p in [k_lnmix_mu1, k_lnmix_sigma1, k_lnmix_mu2, k_lnmix_sigma2]):
+            raise ValueError(
+                "All lnmix parameters (k_lnmix_w, mu1, sigma1, mu2, sigma2) must be provided together."
+            )
+        ks = sample_lnmix(n_bs, k_lnmix_w, k_lnmix_mu1, k_lnmix_sigma1,
+                           k_lnmix_mu2, k_lnmix_sigma2, seed=seed)
     else:
         raise ValueError(
             "k_posterior_sample and k_gamma parameters must not both be 'None'."
@@ -354,7 +554,7 @@ def _risk_days_bs_python(
     elif point_estimate == "mean":
         rd_pe = statistics.mean(rdests)
     elif point_estimate == "mode":
-        rd_pe = mode_rounded(rdests, precision=mode_precision)
+        rd_pe = _kde_mode_log(rdests, cap=None)
     else:
         rd_pe = None
 
@@ -382,6 +582,14 @@ def risk_days_bs(
     k_posterior_sample=None,
     k_gamma_shape=None,
     k_gamma_scale=None,
+    k_invgamma_alpha=None,
+    k_invgamma_beta=None,
+    k_invgamma_mode=None,
+    k_lnmix_w=None,
+    k_lnmix_mu1=None,
+    k_lnmix_sigma1=None,
+    k_lnmix_mu2=None,
+    k_lnmix_sigma2=None,
     n_bs=10000,
     seed=126887,
     threads=get_cpu_core_count() - 1,
@@ -425,6 +633,14 @@ def risk_days_bs(
                 k_posterior_sample,
                 k_gamma_shape,
                 k_gamma_scale,
+                k_invgamma_alpha,
+                k_invgamma_beta,
+                k_invgamma_mode,
+                k_lnmix_w,
+                k_lnmix_mu1,
+                k_lnmix_sigma1,
+                k_lnmix_mu2,
+                k_lnmix_sigma2,
                 n_bs,
                 seed,
                 threads,
@@ -456,6 +672,14 @@ def risk_days_bs(
         k_posterior_sample,
         k_gamma_shape,
         k_gamma_scale,
+        k_invgamma_alpha,
+        k_invgamma_beta,
+        k_invgamma_mode,
+        k_lnmix_w,
+        k_lnmix_mu1,
+        k_lnmix_sigma1,
+        k_lnmix_mu2,
+        k_lnmix_sigma2,
         n_bs,
         seed,
         threads,

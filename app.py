@@ -30,7 +30,7 @@ import streamlit as st
 
 import residualrisk as rr
 
-APP_VERSION = "0.9.1"
+APP_VERSION = "0.9.3"
 
 # Set default values
 # this keeps resetting to this value, so I am going to get rid of it
@@ -80,17 +80,28 @@ def load_data():
     # Use Path to ensure files are loaded relative to this script, not cwd
     static_dir = Path(__file__).parent / "static"
 
-    ests = pd.read_parquet(static_dir / "iwp_estimates_expdecay.parquet")
-    # lowercase = lambda x: str(x).lower()
-    # ests.rename(lowercase, axis='columns', inplace=True)
-    # ests["id"] = ests.index
-    # ests_long = ests.melt(id_vars=["id"], var_name="product", value_name="iwp")
-
     k_animal = np.array(pd.read_parquet(static_dir / "k_param_animal.parquet").k)
     k_human = np.array(pd.read_parquet(static_dir / "k_param_human.parquet").k)
     k_expdecay = np.array(pd.read_parquet(static_dir / "k_param_expdecay.parquet").k)
 
-    return ests, k_animal, k_human, k_expdecay
+    # KDE modes via Go binary (~1.5s total, 30× faster than Python KDE).
+    # Falls back to hardcoded values if Go binary is unavailable.
+    _go_bin = rr.find_go_binary()
+    if _go_bin is not None:
+        k_human_mode = rr.mode_kde_go(k_human, cap=40_000, n_grid=5_000)
+        k_animal_mode = rr.mode_kde_go(k_animal, cap=40_000, n_grid=5_000)
+        k_expdecay_mode = rr.mode_kde_go(k_expdecay, cap=40_000, n_grid=5_000)
+    else:
+        # Hardcoded fallback (computed with Python KDE on full posteriors).
+        # TODO: remove once Go binary is always available in deployment.
+        # k_human_mode = rr.mode_kde(k_human)   # ~14s — too slow for startup
+        # k_animal_mode = rr.mode_kde(k_animal)  # ~13s
+        # k_expdecay_mode = rr.mode_kde(k_expdecay)  # ~18s
+        k_human_mode = 0.0006717095665107152
+        k_animal_mode = 0.02086193830714558
+        k_expdecay_mode = 0.0005803672369228773
+
+    return k_animal, k_human, k_expdecay, k_human_mode, k_animal_mode, k_expdecay_mode
 
 
 @st.cache_data
@@ -123,18 +134,23 @@ header_container.write("""
 Tool for estimating the residual risk of HIV transfusion transmission with NAT screening.
 """)
 
-if "samp" not in st.session_state:
+if "k_human" not in st.session_state:
     (
-        st.session_state["samp"],
         st.session_state["k_animal"],
         st.session_state["k_human"],
         st.session_state["k_expdecay"],
+        st.session_state["k_human_mode"],
+        st.session_state["k_animal_mode"],
+        st.session_state["k_expdecay_mode"],
     ) = load_data()
-# defaults only, not after running simulations
 
 rde_method = st.selectbox(
     "RDE estimation method",
-    options=["Lookback data", "Mechanistic model", "Mechanistic model with PrEP (coming soon)"],
+    options=[
+        "Lookback data",
+        "Mechanistic model",
+        "Mechanistic model with PrEP (coming soon)",
+    ],
     index=1,
     help="Risk day quivalents (RDEs) are equivalent to the infectious window "
     "period (IWP). Lookback data: estimates the IWP directly from "
@@ -246,26 +262,266 @@ if rde_method == "Mechanistic model":
     with trans_param_container:
         col1, col2 = st.columns(2)
 
-        belov_model = col1.selectbox(
-            "Select transmissibility model",
-            options=["Belov animal model", "Belov human model", "Belov human-weighted"],
-            index=2,
+        k_param_distribution_choice = col1.selectbox(
+            "Select transmissibility parameter distribution to sample from",
+            options=[
+                "Belov human posterior",
+                "Belov animal posterior",
+                "Human-weighted exponential decay distribution",
+                "Inverse Gamma distribution",
+                "Lognormal mixture distribution",
+            ],
+            index=3,
             help="Placeholder help text",
         )
+        match k_param_distribution_choice:
+            case "Belov human posterior":
+                k_param_dist = "human"
+            case "Belov animal posterior":
+                k_param_dist = "animal"
+            case "Human-weighted exponential decay distribution":
+                k_param_dist = "human_weighted"
+            case "Inverse Gamma distribution":
+                k_param_dist = "invgamma"
+            case "Lognormal mixture distribution":
+                k_param_dist = "lnmixture"
+            case _:
+                k_param_dist = None  # This shouldn't happen
 
-        k_param_pe = col2.selectbox(
-            "Transmissibility parameter: posterior...",
-            options=["mean", "median", "mode"],
-            index=1,
-            help="Placeholder help text",
-        )
+        # PE selectbox for non-InvGamma, non-lnmixture paths.
+        # For InvGamma and lnmixture the PE selectbox is deferred until after
+        # parameters are defined so its options can depend on them.
+        if k_param_dist not in ("invgamma", "lnmixture"):
+            k_invgamma_pe_choice = None
+            k_param_pe = col2.selectbox(
+                "Transmissibility parameter point estimate: posterior...",
+                options=["mode", "median", "mean"],
+                index=0,
+                help=(
+                    "Which summary statistic of the posterior distribution to use "
+                    "as the k point estimate when computing the IWP point estimate. "
+                    "Does not affect bootstrap sampling."
+                ),
+            )
+        else:
+            k_param_pe = None
 
-        if belov_model == "Belov animal model":
-            k_param = st.session_state["k_animal"]
-        elif belov_model == "Belov human model":
+        if k_param_dist == "human":
             k_param = st.session_state["k_human"]
-        elif belov_model == "Belov human-weighted":
+        elif k_param_dist == "animal":
+            k_param = st.session_state["k_animal"]
+        elif k_param_dist == "human_weighted":
             k_param = st.session_state["k_expdecay"]
+        else:
+            k_param = None
+
+        # InvGamma parameter inputs — shown only when InvGamma is selected
+        if k_param_dist == "invgamma":
+            st.divider()
+            ig_col1, ig_col2 = st.columns([1, 2])
+
+            k_invgamma_alpha = ig_col1.number_input(
+                "α (shape)",
+                min_value=0.01,
+                max_value=20.0,
+                value=2.0,
+                step=0.05,
+                format="%.2f",
+                help=(
+                    "Shape parameter of the Inverse Gamma distribution. "
+                    "Decrease α for a heavier right tail (more weight on large k values); "
+                    "increase α to concentrate the distribution more tightly around the mode. "
+                    "Recommended value: 2 (power-law tail, infinite variance by design). "
+                    "α > 1 is required for a finite mean; α > 2 for finite variance. "
+                    "The 'mean' point estimate option is disabled when α ≤ 1."
+                ),
+            )
+
+            # PE selectbox placed in col2 of the top row; rendered there even though
+            # defined here — Streamlit column objects accept widgets at any point.
+            # "mean" is excluded when α ≤ 1 because the mean is infinite.
+            _ig_pe_options = (
+                ["mode", "median", "mean"] if k_invgamma_alpha > 1.0 else ["mode", "median"]
+            )
+            k_invgamma_pe_choice = col2.selectbox(
+                "Transmissibility parameter point estimate: distribution...",
+                options=_ig_pe_options,
+                index=0,
+                help=(
+                    "Which summary statistic of the Inverse Gamma distribution to use "
+                    "as the k point estimate when computing the IWP point estimate. "
+                    "Does not affect bootstrap sampling. "
+                    "'Mean' is only available when α > 1."
+                ),
+            )
+
+            ig_param_by = ig_col2.radio(
+                "Parameterise by",
+                options=["Mode (recommended)", "β (scale)"],
+                index=0,
+                horizontal=True,
+            )
+
+            if ig_param_by == "Mode (recommended)":
+                k_human_mode_val = st.session_state["k_human_mode"]
+                mode_col, custom_col = st.columns([2, 1])
+                ig_mode_source = mode_col.radio(
+                    "Mode value",
+                    options=[
+                        f"Human posterior ({k_human_mode_val:.6f})",
+                        "Custom",
+                    ],
+                    index=0,
+                )
+                if "Human" in ig_mode_source:
+                    k_invgamma_mode = k_human_mode_val
+                else:
+                    k_invgamma_mode = custom_col.number_input(
+                        "Custom mode",
+                        min_value=1e-7,
+                        max_value=1.0,
+                        value=float(k_human_mode_val),
+                        format="%.6f",
+                        step=0.000001,
+                        help="Mode of the Inverse Gamma distribution.",
+                    )
+                k_invgamma_beta = k_invgamma_mode * (k_invgamma_alpha + 1)
+                st.caption(
+                    f"β = mode × (α + 1) = {k_invgamma_mode:.6f} × "
+                    f"{k_invgamma_alpha + 1:.2f} = {k_invgamma_beta:.6f}"
+                )
+
+            else:  # "β (scale)"
+                ig_beta_col, _ = st.columns(2)
+                k_invgamma_beta = ig_beta_col.number_input(
+                    "β (scale)",
+                    min_value=1e-8,
+                    max_value=1.0,
+                    value=0.002019,
+                    format="%.6f",
+                    step=0.000001,
+                    help="Scale parameter of the Inverse Gamma distribution.",
+                )
+                k_invgamma_mode = k_invgamma_beta / (k_invgamma_alpha + 1)
+                st.caption(
+                    f"mode = β / (α + 1) = {k_invgamma_beta:.6f} / "
+                    f"{k_invgamma_alpha + 1:.2f} = {k_invgamma_mode:.6f}"
+                )
+
+        else:
+            k_invgamma_alpha = None
+            k_invgamma_beta = None
+
+        # Lognormal mixture parameter inputs — shown only when lnmixture is selected
+        if k_param_dist == "lnmixture":
+            st.divider()
+
+            # Default mixture parameters (Recommendation B from K_PARAM_INPUTDIST.md)
+            _LN_W_DEF   = 0.90
+            _LN_MU1_DEF = -7.2403
+            _LN_S1_DEF  = 0.3241
+            _LN_MU2_DEF = -3.7423
+            _LN_S2_DEF  = 0.5258
+
+            lnmix_col1, lnmix_col2 = st.columns([1, 2])
+
+            k_lnmix_w = lnmix_col1.slider(
+                "Mixing weight (human component)",
+                min_value=0.0,
+                max_value=1.0,
+                value=_LN_W_DEF,
+                step=0.01,
+                format="%.2f",
+                help=(
+                    "Weight placed on the human posterior component (component 1). "
+                    "Remainder (1 − w) goes to the animal posterior component (component 2). "
+                    "Recommended default: 0.90 (90% human, 10% animal)."
+                ),
+            )
+
+            # PE selectbox placed in col2 of the top row
+            k_lnmix_pe_choice = col2.selectbox(
+                "Transmissibility parameter point estimate: distribution...",
+                options=["mode", "median", "mean"],
+                index=0,
+                help=(
+                    "Which summary statistic of the lognormal mixture to use as the k "
+                    "point estimate when computing the IWP point estimate. "
+                    "Does not affect bootstrap sampling. "
+                    "'Mean' is analytic; 'mode' and 'median' are computed numerically."
+                ),
+            )
+
+            # Advanced: edit component parameters
+            lnmix_advanced = lnmix_col2.checkbox(
+                "Advanced: edit component parameters",
+                value=False,
+                help=(
+                    "Edit the log-scale mean (μ) and log-scale standard deviation (σ) "
+                    "of each mixture component. Defaults are the MLE fits to the human "
+                    "and animal k posteriors from the companion analysis."
+                ),
+            )
+
+            if lnmix_advanced:
+                adv_col1, adv_col2 = st.columns(2)
+                k_lnmix_mu1 = adv_col1.number_input(
+                    "μ₁ (human, log-scale mean)",
+                    value=_LN_MU1_DEF,
+                    format="%.4f",
+                    step=0.01,
+                    help="Log-scale mean for component 1 (human). Default: −7.2403.",
+                )
+                k_lnmix_sigma1 = adv_col1.number_input(
+                    "σ₁ (human, log-scale SD)",
+                    min_value=0.001,
+                    value=_LN_S1_DEF,
+                    format="%.4f",
+                    step=0.01,
+                    help="Log-scale SD for component 1 (human). Default: 0.3241.",
+                )
+                k_lnmix_mu2 = adv_col2.number_input(
+                    "μ₂ (animal, log-scale mean)",
+                    value=_LN_MU2_DEF,
+                    format="%.4f",
+                    step=0.01,
+                    help="Log-scale mean for component 2 (animal). Default: −3.7423.",
+                )
+                k_lnmix_sigma2 = adv_col2.number_input(
+                    "σ₂ (animal, log-scale SD)",
+                    min_value=0.001,
+                    value=_LN_S2_DEF,
+                    format="%.4f",
+                    step=0.01,
+                    help="Log-scale SD for component 2 (animal). Default: 0.5258.",
+                )
+            else:
+                k_lnmix_mu1    = _LN_MU1_DEF
+                k_lnmix_sigma1 = _LN_S1_DEF
+                k_lnmix_mu2    = _LN_MU2_DEF
+                k_lnmix_sigma2 = _LN_S2_DEF
+
+            # Derived statistics display
+            import math as _math
+            _lnmix_comp1_median = _math.exp(k_lnmix_mu1)
+            _lnmix_comp2_median = _math.exp(k_lnmix_mu2)
+            _lnmix_mean = (
+                k_lnmix_w * _math.exp(k_lnmix_mu1 + k_lnmix_sigma1**2 / 2)
+                + (1 - k_lnmix_w) * _math.exp(k_lnmix_mu2 + k_lnmix_sigma2**2 / 2)
+            )
+            st.caption(
+                f"Component 1 median: {_lnmix_comp1_median:.6f} &nbsp;|&nbsp; "
+                f"Component 2 median: {_lnmix_comp2_median:.6f} &nbsp;|&nbsp; "
+                f"Mixture mean: {_lnmix_mean:.6f}"
+            )
+
+        else:
+            k_lnmix_w      = None
+            k_lnmix_mu1    = None
+            k_lnmix_sigma1 = None
+            k_lnmix_mu2    = None
+            k_lnmix_sigma2 = None
+            k_lnmix_pe_choice = None
 
     with model_param_container:
         col1, col2 = st.columns(2)
@@ -442,20 +698,62 @@ with incidence_param_container:
             f"Relative standard error on incidence: {inc_per100k_sd / inc_per100k * 100:.1f}%"
         )
 
-button_label = "Run simulations" if rde_method == "Mechanistic model" else "Calculate RDEs"
+button_label = (
+    "Run simulations" if rde_method == "Mechanistic model" else "Calculate RDEs"
+)
 if st.sidebar.button(button_label):
     if rde_method == "Mechanistic model":
         progressbar = st.sidebar.progress(0, text="Running simulations...")
-        if k_param_pe == "mode":
-            k_pe = rr.mode_rounded(
-                k_param, precision=5
-            )  # use mode rounded to 5 decimal places
+        if k_param_dist == "invgamma":
+            if k_invgamma_pe_choice == "mode":
+                k_pe = k_invgamma_beta / (k_invgamma_alpha + 1)
+            elif k_invgamma_pe_choice == "median":
+                k_pe = stats.invgamma.ppf(0.5, a=k_invgamma_alpha, scale=k_invgamma_beta)
+            elif k_invgamma_pe_choice == "mean":
+                k_pe = k_invgamma_beta / (k_invgamma_alpha - 1)
+            else:
+                k_pe = k_invgamma_beta / (k_invgamma_alpha + 1)  # fallback to mode
+        elif k_param_dist == "lnmixture":
+            import math as _math
+            if k_lnmix_pe_choice == "mean":
+                k_pe = (
+                    k_lnmix_w * _math.exp(k_lnmix_mu1 + k_lnmix_sigma1**2 / 2)
+                    + (1 - k_lnmix_w) * _math.exp(k_lnmix_mu2 + k_lnmix_sigma2**2 / 2)
+                )
+            else:
+                # Numerical mode or median from a large sample
+                # Use cached default-param values if parameters are at defaults to avoid delay
+                _lnmix_defaults = (0.90, -7.2403, 0.3241, -3.7423, 0.5258)
+                _lnmix_current = (
+                    k_lnmix_w, k_lnmix_mu1, k_lnmix_sigma1, k_lnmix_mu2, k_lnmix_sigma2
+                )
+                if _lnmix_current == _lnmix_defaults:
+                    _lnmix_sample = st.session_state.get("k_lnmix_default_sample")
+                    if _lnmix_sample is None:
+                        _lnmix_sample = rr.sample_lnmix(100_000, *_lnmix_defaults, seed=42)
+                        st.session_state["k_lnmix_default_sample"] = _lnmix_sample
+                else:
+                    _lnmix_sample = rr.sample_lnmix(
+                        100_000, k_lnmix_w, k_lnmix_mu1, k_lnmix_sigma1,
+                        k_lnmix_mu2, k_lnmix_sigma2, seed=42
+                    )
+                if k_lnmix_pe_choice == "median":
+                    k_pe = float(np.median(_lnmix_sample))
+                else:  # mode
+                    k_pe = rr.mode_kde(_lnmix_sample)
+        elif k_param_pe == "mode":
+            _mode_key = {
+                "human": "k_human_mode",
+                "animal": "k_animal_mode",
+                "human_weighted": "k_expdecay_mode",
+            }.get(k_param_dist)
+            k_pe = st.session_state[_mode_key] if _mode_key else None
         elif k_param_pe == "mean":
             k_pe = statistics.mean(k_param)
         elif k_param_pe == "median":
             k_pe = statistics.median(k_param)
         else:
-            k_pe = None  # should error out but never happen
+            k_pe = None  # should not happen
         (
             st.session_state["iwp_pe_primpar"],
             st.session_state["iwp_cri"],
@@ -474,8 +772,15 @@ if st.sidebar.button(button_label):
             pool_size,
             retests,
             k_posterior_sample=k_param,
+            k_invgamma_alpha=k_invgamma_alpha,
+            k_invgamma_beta=k_invgamma_beta,
             k_gamma_scale=None,
             k_gamma_shape=None,
+            k_lnmix_w=k_lnmix_w,
+            k_lnmix_mu1=k_lnmix_mu1,
+            k_lnmix_sigma1=k_lnmix_sigma1,
+            k_lnmix_mu2=k_lnmix_mu2,
+            k_lnmix_sigma2=k_lnmix_sigma2,
             alpha=alpha,
             n_bs=n_sims,
             point_estimate="primary parameters",  # always run with primary parameters to get iwp_pe_primpar and store in session state -- calculate other methods in app
@@ -571,9 +876,7 @@ if st.session_state["sims_run"]:
     )
 
 if not st.session_state["sims_run"]:
-    st.sidebar.write(
-        "Downloads will be available once an estimation has been run."
-    )
+    st.sidebar.write("Downloads will be available once an estimation has been run.")
 else:
     st.sidebar.write("Outputs are from most recent estimation run.")
 
@@ -597,7 +900,7 @@ else:
             elif point_estimate == "mean":
                 iwp_pe = st.session_state["samp"]["iwp"].mean()
             elif point_estimate == "mode":
-                iwp_pe = stats.mode(np.array(st.session_state["samp"]["iwp"]).round(2)).mode
+                iwp_pe = rr.mode_kde(np.array(st.session_state["samp"]["iwp"]))
             else:
                 iwp_pe = st.session_state["iwp_pe_primpar"]
         elif rde_method == "Lookback data":
@@ -610,7 +913,9 @@ else:
         iwp_pe = st.session_state["iwp_pe_last"]
 
     # Interval label: Bayesian CrI for mechanistic model, frequentist CI for lookback
-    interval_label = "CrI" if st.session_state["rde_method_run"] == "Mechanistic model" else "CI"
+    interval_label = (
+        "CrI" if st.session_state["rde_method_run"] == "Mechanistic model" else "CI"
+    )
 
     iwp_cri = (
         st.session_state["samp"]["iwp"].quantile(alpha / 2),
@@ -666,6 +971,4 @@ else:
             )
 
 st.sidebar.divider()
-st.sidebar.caption(
-    f"App v{APP_VERSION} · Library v{rr.__version__}"
-)
+st.sidebar.caption(f"App v{APP_VERSION} · Library v{rr.__version__}")

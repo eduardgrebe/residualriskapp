@@ -23,6 +23,7 @@ A Streamlit-based interactive web interface is provided that can make use of eit
 - **Interactive Web Interface**: Streamlit-based UI for parameter exploration and visualization
 - **High-Performance Computation**: Go implementation provides 10-50x speedup over the Python fallback and is required for practical use
 - **Flexible Parameterization**: Supports various NAT assays, pooling strategies, and viral kinetics models
+- **Flexible k Input Distribution**: k can be sampled from posterior draws (human, animal, human-weighted) or a parametric distribution: Inverse Gamma(α, β) or a two-component lognormal mixture (90% human + 10% animal by default)
 - **Credible Interval Estimation**: Bootstrap-based credible intervals for risk estimates
 
 ## Requirements
@@ -155,7 +156,8 @@ streamlit run app.py
 
 The interface allows you to:
 - Adjust all model parameters interactively
-- Select infectivity parameter distributions (human, animal, or custom)
+- Select infectivity parameter (k) distribution: posterior samples (human, animal, human-weighted exponential-decay), Inverse Gamma with user-specified α and β, or a two-component lognormal mixture with adjustable mixing weight
+- Choose the k point estimate summary (mode, median, or mean) used for the IWP point estimate
 - Choose between Python and Go computation engines
 - Visualize results with credible intervals
 - Export results and simulation data
@@ -187,7 +189,7 @@ See `go/README.md` for detailed documentation of the JSON schema and parameters.
 ```python
 import residualrisk as rr
 
-# Bootstrap risk-day equivalents (IWP)
+# Bootstrap risk-day equivalents (IWP) — using a posterior sample for k
 rd_pe, rd_cri, rd_range, rdests = rr.risk_days_bs(
     k=0.013,
     doubling_time=20.5 / 24,
@@ -203,8 +205,48 @@ rd_pe, rd_cri, rd_range, rdests = rr.risk_days_bs(
     n_bs=10000,
     use_go=True,                      # use Go acceleration (10-50x faster)
 )
+
+# Alternative: sample k from an Inverse Gamma distribution (α=2, β=0.002019)
+# k_pe can be the mode (β/(α+1)), median, or mean (β/(α-1)) of the distribution
+rd_pe, rd_cri, rd_range, rdests = rr.risk_days_bs(
+    k=0.002019 / 3,                  # mode = β/(α+1) = 0.002019/3
+    doubling_time=20.5 / 24,
+    doubling_time_norm_sd=1.33 / 24,
+    lod50=2.73,
+    lod50_sd=0.193,
+    lod95_lod50_ratio=12.33 / 2.73,
+    volume_transfused=20,
+    volume_transfused_range=(15, 30),
+    pool_size=16,
+    retests=1,
+    k_invgamma_alpha=2.0,
+    k_invgamma_beta=0.002019,
+    n_bs=10000,
+    use_go=True,
+)
 print(f"RDEs point estimate: {rd_pe:.2f} days")
 print(f"95% CrI: [{rd_cri[0]:.2f}, {rd_cri[1]:.2f}]")
+
+# Alternative: sample k from a lognormal mixture (Recommendation B: 90% human + 10% animal)
+rd_pe, rd_cri, rd_range, rdests, _ = rr.risk_days_bs(
+    k=0.000649,                      # approximate mixture mode
+    doubling_time=20.5 / 24,
+    doubling_time_norm_sd=1.33 / 24,
+    lod50=2.73,
+    lod50_sd=0.193,
+    lod95_lod50_ratio=12.33 / 2.73,
+    volume_transfused=20,
+    volume_transfused_range=(15, 30),
+    pool_size=16,
+    retests=1,
+    k_lnmix_w=0.90,
+    k_lnmix_mu1=-7.2403,
+    k_lnmix_sigma1=0.3241,
+    k_lnmix_mu2=-3.7423,
+    k_lnmix_sigma2=0.5258,
+    n_bs=10000,
+    use_go=True,
+)
 
 # Combine RDEs with incidence to get residual risk
 rr_pe, rr_cri, rr_sd = rr.residual_risk_rd(
@@ -220,7 +262,7 @@ print(f"Residual risk: {rr_pe:.3f} per million (95% CrI {rr_cri[0]:.3f}–{rr_cr
 print(f"residualrisk version: {rr.__version__}")
 ```
 
-**Public API surface** (see `residualrisk/__init__.py`): `risk_days_bs`, `iwp_from_lookback_data`, `residual_risk_rd`, `get_cpu_core_count`, `mode_rounded`, `find_go_binary`, `__version__`.
+**Public API surface** (see `residualrisk/__init__.py`): `risk_days_bs`, `iwp_from_lookback_data`, `residual_risk_rd`, `get_cpu_core_count`, `mode_rounded`, `mode_kde`, `sample_invgamma`, `sample_lnmix`, `find_go_binary`, `__version__`.
 
 ### R integration (reticulate)
 
@@ -256,7 +298,7 @@ The model estimates the **infectious window period (IWP)**: the time interval du
 
 1. **Viral Growth**: Concentration increases exponentially: C(t) = C₀ × 2^(t/doubling_time)
 2. **Detection Probability**: Based on LOD characteristics and pooling/retesting protocol
-3. **Infectivity Probability**: P(infection) = 1 - exp(-k × n_copies), where n_copies depends on viral load and transfusion volume
+3. **Infectivity Probability**: P(infection) = 1 - exp(-k × n_copies), where n_copies depends on viral load and transfusion volume. k is sampled each bootstrap iteration from the chosen input distribution: a posterior sample array, a parametric Inverse Gamma(α, β), or a two-component lognormal mixture.
 
 The choice of input distribution for *k* is discussed in detail in the companion
 analysis repository. See [`residualrisk_analysis/exploration/K_PARAM_INPUTDIST.md`](../residualrisk_analysis/exploration/K_PARAM_INPUTDIST.md)
