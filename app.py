@@ -30,7 +30,7 @@ import streamlit as st
 
 import residualrisk as rr
 
-APP_VERSION = "0.9.1"
+APP_VERSION = "0.9.2"
 
 # Set default values
 # this keeps resetting to this value, so I am going to get rid of it
