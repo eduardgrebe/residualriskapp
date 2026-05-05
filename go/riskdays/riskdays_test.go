@@ -760,3 +760,203 @@ func TestRiskDaysBS_InvGamma_PointEstimateMatchesRiskDays(t *testing.T) {
 		t.Errorf("point estimate: got %v, want %v", out.PointEstimate, expected)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// GenerateLogNormalMixture
+// ---------------------------------------------------------------------------
+
+// Default mixture parameters: 90% human + 10% animal (Recommendation B)
+const (
+	defaultLnMixW      = 0.90
+	defaultLnMixMu1    = -7.2403
+	defaultLnMixSigma1 = 0.3241
+	defaultLnMixMu2    = -3.7423
+	defaultLnMixSigma2 = 0.5258
+)
+
+func TestGenerateLogNormalMixture_AllPositive(t *testing.T) {
+	rng := NewRandomGenerator(42)
+	samples := rng.GenerateLogNormalMixture(
+		defaultLnMixW, defaultLnMixMu1, defaultLnMixSigma1,
+		defaultLnMixMu2, defaultLnMixSigma2, 1000)
+	for i, v := range samples {
+		if v <= 0 {
+			t.Errorf("sample[%d] = %v, want > 0", i, v)
+		}
+	}
+}
+
+func TestGenerateLogNormalMixture_Reproducible(t *testing.T) {
+	r1 := NewRandomGenerator(42).GenerateLogNormalMixture(
+		defaultLnMixW, defaultLnMixMu1, defaultLnMixSigma1,
+		defaultLnMixMu2, defaultLnMixSigma2, 500)
+	r2 := NewRandomGenerator(42).GenerateLogNormalMixture(
+		defaultLnMixW, defaultLnMixMu1, defaultLnMixSigma1,
+		defaultLnMixMu2, defaultLnMixSigma2, 500)
+	for i := range r1 {
+		if r1[i] != r2[i] {
+			t.Errorf("sample[%d] differs across identical seeds: %v vs %v", i, r1[i], r2[i])
+			break
+		}
+	}
+}
+
+func TestGenerateLogNormalMixture_DifferentSeedsAreIndependent(t *testing.T) {
+	r1 := NewRandomGenerator(42).GenerateLogNormalMixture(
+		defaultLnMixW, defaultLnMixMu1, defaultLnMixSigma1,
+		defaultLnMixMu2, defaultLnMixSigma2, 100)
+	r2 := NewRandomGenerator(99).GenerateLogNormalMixture(
+		defaultLnMixW, defaultLnMixMu1, defaultLnMixSigma1,
+		defaultLnMixMu2, defaultLnMixSigma2, 100)
+	allSame := true
+	for i := range r1 {
+		if r1[i] != r2[i] {
+			allSame = false
+			break
+		}
+	}
+	if allSame {
+		t.Error("samples from different seeds are identical (should differ)")
+	}
+}
+
+func TestGenerateLogNormalMixture_ComponentIsolation_W1(t *testing.T) {
+	// w=1 → all samples from component 1 (human posterior)
+	// Component 1 median = exp(mu1) ≈ exp(-7.2403) ≈ 0.000715
+	rng := NewRandomGenerator(42)
+	samples := rng.GenerateLogNormalMixture(1.0, defaultLnMixMu1, defaultLnMixSigma1,
+		defaultLnMixMu2, defaultLnMixSigma2, 10000)
+	sorted := make([]float64, len(samples))
+	copy(sorted, samples)
+	// Compute median
+	n := len(sorted)
+	sum := 0.0
+	for _, v := range sorted {
+		sum += math.Log(v)
+	}
+	logMean := sum / float64(n)
+	expectedLogMean := defaultLnMixMu1
+	// Allow 5% relative tolerance
+	if !approxEqual(logMean, expectedLogMean, 0.05, 0.001) {
+		t.Errorf("w=1: log-mean of samples = %v, want ~%v (mu1)", logMean, expectedLogMean)
+	}
+}
+
+func TestGenerateLogNormalMixture_ComponentIsolation_W0(t *testing.T) {
+	// w=0 → all samples from component 2 (animal posterior)
+	// Component 2 median = exp(mu2) ≈ exp(-3.7423) ≈ 0.0237
+	rng := NewRandomGenerator(42)
+	samples := rng.GenerateLogNormalMixture(0.0, defaultLnMixMu1, defaultLnMixSigma1,
+		defaultLnMixMu2, defaultLnMixSigma2, 10000)
+	sum := 0.0
+	for _, v := range samples {
+		sum += math.Log(v)
+	}
+	logMean := sum / float64(len(samples))
+	expectedLogMean := defaultLnMixMu2
+	if !approxEqual(logMean, expectedLogMean, 0.05, 0.001) {
+		t.Errorf("w=0: log-mean of samples = %v, want ~%v (mu2)", logMean, expectedLogMean)
+	}
+}
+
+func TestGenerateLogNormalMixture_MedianPlausible(t *testing.T) {
+	// Expected mixture median ≈ 0.000750 (from companion analysis)
+	rng := NewRandomGenerator(42)
+	n := 100_000
+	samples := rng.GenerateLogNormalMixture(
+		defaultLnMixW, defaultLnMixMu1, defaultLnMixSigma1,
+		defaultLnMixMu2, defaultLnMixSigma2, n)
+	// Approximate median via counting
+	count := 0
+	threshold := 0.000750
+	for _, v := range samples {
+		if v < threshold {
+			count++
+		}
+	}
+	fraction := float64(count) / float64(n)
+	// Should be close to 0.5 (within ±10%)
+	if fraction < 0.40 || fraction > 0.60 {
+		t.Errorf("fraction below expected median threshold %v: got %.3f, want ~0.50", threshold, fraction)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// RiskDaysBS with lognormal mixture k distribution
+// ---------------------------------------------------------------------------
+
+func lnMixBSInput() RiskDaysInput {
+	w := defaultLnMixW
+	mu1 := defaultLnMixMu1
+	s1 := defaultLnMixSigma1
+	mu2 := defaultLnMixMu2
+	s2 := defaultLnMixSigma2
+	input := RiskDaysInput{
+		K:                   0.000649, // approximate mixture mode
+		DoublingTime:        defaultDoublingTime,
+		DoublingTimeNormSD:  1.33 / 24.0,
+		LOD50:               defaultLOD50,
+		LOD50SD:             0.193,
+		LOD95LOD50Ratio:     defaultLOD95LOD50Ratio,
+		VolumeTransfused:    defaultVolumeTransfused,
+		VolumeTransfusedMin: 15,
+		VolumeTransfusedMax: 30,
+		PoolSize:            defaultPoolSize,
+		Retests:             defaultRetests,
+		KLnMixW:             &w,
+		KLnMixMu1:          &mu1,
+		KLnMixSigma1:       &s1,
+		KLnMixMu2:          &mu2,
+		KLnMixSigma2:       &s2,
+		NBS:                 200,
+		Seed:                42,
+		Threads:             2,
+		PointEstimate:       "primary parameters",
+	}
+	input.SetDefaults()
+	return input
+}
+
+func TestRiskDaysBS_LnMix_Sanity(t *testing.T) {
+	out, err := RiskDaysBS(lnMixBSInput(), nil)
+	if err != nil {
+		t.Fatalf("RiskDaysBS with LnMix failed: %v", err)
+	}
+	if out == nil {
+		t.Fatal("RiskDaysBS returned nil output")
+	}
+	if len(out.Simulations) != 200 {
+		t.Errorf("simulation count: got %v, want 200", len(out.Simulations))
+	}
+	for i, v := range out.Simulations {
+		if v <= 0 {
+			t.Errorf("simulation[%d] = %v, want > 0", i, v)
+		}
+	}
+	if out.PointEstimate <= 0 {
+		t.Errorf("point estimate: got %v, want > 0", out.PointEstimate)
+	}
+	if out.CredibleInterval[0] >= out.CredibleInterval[1] {
+		t.Errorf("CrI not ordered: [%v, %v]", out.CredibleInterval[0], out.CredibleInterval[1])
+	}
+}
+
+func TestRiskDaysBS_LnMix_Reproducible(t *testing.T) {
+	r1, err := RiskDaysBS(lnMixBSInput(), nil)
+	if err != nil {
+		t.Fatalf("first run failed: %v", err)
+	}
+	r2, err := RiskDaysBS(lnMixBSInput(), nil)
+	if err != nil {
+		t.Fatalf("second run failed: %v", err)
+	}
+	if r1.PointEstimate != r2.PointEstimate {
+		t.Errorf("point estimates differ: %v vs %v", r1.PointEstimate, r2.PointEstimate)
+	}
+	for i := range r1.Simulations {
+		if r1.Simulations[i] != r2.Simulations[i] {
+			t.Errorf("simulation[%d] differs: %v vs %v", i, r1.Simulations[i], r2.Simulations[i])
+			break
+		}
+	}
+}

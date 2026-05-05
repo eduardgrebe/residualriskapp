@@ -94,6 +94,11 @@ def risk_days_bs_go(
     k_invgamma_alpha=None,
     k_invgamma_beta=None,
     k_invgamma_mode=None,
+    k_lnmix_w=None,
+    k_lnmix_mu1=None,
+    k_lnmix_sigma1=None,
+    k_lnmix_mu2=None,
+    k_lnmix_sigma2=None,
     n_bs=10000,
     seed=126887,
     threads=None,
@@ -177,9 +182,19 @@ def risk_days_bs_go(
                 )
         input_data["k_invgamma_alpha"] = k_invgamma_alpha
         input_data["k_invgamma_beta"] = _beta
+    elif k_lnmix_w is not None:
+        if any(p is None for p in [k_lnmix_mu1, k_lnmix_sigma1, k_lnmix_mu2, k_lnmix_sigma2]):
+            raise ValueError(
+                "All lnmix parameters (k_lnmix_w, mu1, sigma1, mu2, sigma2) must be provided together."
+            )
+        input_data["k_lnmix_w"] = k_lnmix_w
+        input_data["k_lnmix_mu1"] = k_lnmix_mu1
+        input_data["k_lnmix_sigma1"] = k_lnmix_sigma1
+        input_data["k_lnmix_mu2"] = k_lnmix_mu2
+        input_data["k_lnmix_sigma2"] = k_lnmix_sigma2
     else:
         raise ValueError(
-            "Either k_posterior_sample, k_gamma parameters, or k_invgamma parameters must be provided"
+            "Either k_posterior_sample, k_gamma parameters, k_invgamma parameters, or k_lnmix parameters must be provided"
         )
 
     # Run Go binary
@@ -295,6 +310,10 @@ def risk_days_bs_go(
                 ks = np.random.gamma(k_gamma_shape, k_gamma_scale, n_bs)
             elif k_invgamma_alpha is not None:
                 ks = scipy_stats.invgamma.rvs(k_invgamma_alpha, scale=_beta, size=n_bs)
+            elif k_lnmix_w is not None:
+                from .core import sample_lnmix
+                ks = sample_lnmix(n_bs, k_lnmix_w, k_lnmix_mu1, k_lnmix_sigma1,
+                                   k_lnmix_mu2, k_lnmix_sigma2, seed=seed)
 
             # Generate doubling time samples (truncated normal)
             doubling_times = scipy_stats.truncnorm.rvs(

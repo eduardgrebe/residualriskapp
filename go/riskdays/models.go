@@ -47,6 +47,15 @@ type RiskDaysInput struct {
 	KInvGammaAlpha   *float64  `json:"k_invgamma_alpha,omitempty"` // shape (α)
 	KInvGammaBeta    *float64  `json:"k_invgamma_beta,omitempty"`  // scale (β, same as scipy's scale)
 
+	// Lognormal mixture k distribution
+	// Two-component mixture: w * LN(mu1, sigma1) + (1-w) * LN(mu2, sigma2)
+	// mu/sigma are log-scale parameters (scipy: lognorm(s=sigma, scale=exp(mu)))
+	KLnMixW      *float64  `json:"k_lnmix_w,omitempty"`       // weight of component 1 (0–1)
+	KLnMixMu1    *float64  `json:"k_lnmix_mu1,omitempty"`     // log-mean of component 1
+	KLnMixSigma1 *float64  `json:"k_lnmix_sigma1,omitempty"`  // log-sd of component 1
+	KLnMixMu2    *float64  `json:"k_lnmix_mu2,omitempty"`     // log-mean of component 2
+	KLnMixSigma2 *float64  `json:"k_lnmix_sigma2,omitempty"`  // log-sd of component 2
+
 	// Simulation parameters
 	NBS           int    `json:"n_bs"`            // default: 10000
 	Seed          int64  `json:"seed"`            // default: 126887
@@ -129,8 +138,10 @@ func (input *RiskDaysInput) Validate() error {
 	}
 	if input.KPosteriorSample == nil &&
 		(input.KGammaShape == nil || input.KGammaScale == nil) &&
-		(input.KInvGammaAlpha == nil || input.KInvGammaBeta == nil) {
-		return fmt.Errorf("a k distribution must be provided: k_posterior_sample, both k_gamma parameters, or both k_invgamma parameters")
+		(input.KInvGammaAlpha == nil || input.KInvGammaBeta == nil) &&
+		(input.KLnMixW == nil || input.KLnMixMu1 == nil || input.KLnMixSigma1 == nil ||
+			input.KLnMixMu2 == nil || input.KLnMixSigma2 == nil) {
+		return fmt.Errorf("a k distribution must be provided: k_posterior_sample, both k_gamma parameters, both k_invgamma parameters, or all k_lnmix parameters")
 	}
 	return nil
 }

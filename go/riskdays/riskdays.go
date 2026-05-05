@@ -45,6 +45,12 @@ func RiskDaysBS(input RiskDaysInput, progressCallback ProgressCallback) (*RiskDa
 		ks = rng.GenerateGamma(*input.KGammaShape, *input.KGammaScale, input.NBS)
 	} else if input.KInvGammaAlpha != nil && input.KInvGammaBeta != nil {
 		ks = rng.GenerateInvGamma(*input.KInvGammaAlpha, *input.KInvGammaBeta, input.NBS)
+	} else if input.KLnMixW != nil && input.KLnMixMu1 != nil && input.KLnMixSigma1 != nil &&
+		input.KLnMixMu2 != nil && input.KLnMixSigma2 != nil {
+		ks = rng.GenerateLogNormalMixture(
+			*input.KLnMixW, *input.KLnMixMu1, *input.KLnMixSigma1,
+			*input.KLnMixMu2, *input.KLnMixSigma2, input.NBS,
+		)
 	} else {
 		return nil, fmt.Errorf("no valid k distribution specified")
 	}

@@ -342,6 +342,62 @@ def sample_invgamma(n, alpha, beta=None, mode=None, seed=None):
     return invgamma.rvs(alpha, scale=beta, size=n, random_state=rng)
 
 
+def sample_lnmix(n, w, mu1, sigma1, mu2, sigma2, seed=None):
+    """Sample from a two-component lognormal mixture distribution.
+
+    Each sample is drawn from component 1 (LN(mu1, sigma1)) with probability w,
+    or from component 2 (LN(mu2, sigma2)) with probability 1-w.
+
+    Parameters follow the numpy/scipy lognormal convention:
+    - ``mu`` is the mean of the underlying normal (log-scale mean)
+    - ``sigma`` is the std of the underlying normal (log-scale std)
+
+    This corresponds to ``scipy.stats.lognorm(s=sigma, scale=np.exp(mu))``.
+
+    Parameters
+    ----------
+    n : int
+        Number of samples.
+    w : float
+        Weight of component 1; must be in [0, 1].
+    mu1 : float
+        Log-scale mean of component 1 (e.g. -7.2403 for human posterior fit).
+    sigma1 : float
+        Log-scale std of component 1 (e.g. 0.3241 for human posterior fit).
+    mu2 : float
+        Log-scale mean of component 2 (e.g. -3.7423 for animal posterior fit).
+    sigma2 : float
+        Log-scale std of component 2 (e.g. 0.5258 for animal posterior fit).
+    seed : int, optional
+        Random seed for reproducibility.
+
+    Returns
+    -------
+    np.ndarray
+        Array of *n* positive samples from the mixture distribution.
+
+    Raises
+    ------
+    ValueError
+        If w is not in [0, 1].
+
+    Examples
+    --------
+    Default 90/10 human-weighted mixture (Recommendation B)::
+
+        samples = sample_lnmix(10000, w=0.90,
+                                mu1=-7.2403, sigma1=0.3241,
+                                mu2=-3.7423, sigma2=0.5258)
+    """
+    if not (0.0 <= w <= 1.0):
+        raise ValueError(f"w must be in [0, 1], got {w}")
+    rng = np.random.default_rng(seed)
+    component = rng.random(n) < w
+    comp1 = rng.lognormal(mean=mu1, sigma=sigma1, size=n)
+    comp2 = rng.lognormal(mean=mu2, sigma=sigma2, size=n)
+    return np.where(component, comp1, comp2)
+
+
 def _risk_days_bs_python(
     k,
     doubling_time,
@@ -363,6 +419,11 @@ def _risk_days_bs_python(
     k_invgamma_alpha=None,
     k_invgamma_beta=None,
     k_invgamma_mode=None,
+    k_lnmix_w=None,
+    k_lnmix_mu1=None,
+    k_lnmix_sigma1=None,
+    k_lnmix_mu2=None,
+    k_lnmix_sigma2=None,
     n_bs=10000,
     seed=126887,
     threads=get_cpu_core_count() - 1,
@@ -394,6 +455,13 @@ def _risk_days_bs_python(
                 )
         # Uses the legacy numpy global state set above for reproducibility.
         ks = stats.invgamma.rvs(k_invgamma_alpha, scale=_beta, size=n_bs)
+    elif k_lnmix_w is not None:
+        if any(p is None for p in [k_lnmix_mu1, k_lnmix_sigma1, k_lnmix_mu2, k_lnmix_sigma2]):
+            raise ValueError(
+                "All lnmix parameters (k_lnmix_w, mu1, sigma1, mu2, sigma2) must be provided together."
+            )
+        ks = sample_lnmix(n_bs, k_lnmix_w, k_lnmix_mu1, k_lnmix_sigma1,
+                           k_lnmix_mu2, k_lnmix_sigma2, seed=seed)
     else:
         raise ValueError(
             "k_posterior_sample and k_gamma parameters must not both be 'None'."
@@ -517,6 +585,11 @@ def risk_days_bs(
     k_invgamma_alpha=None,
     k_invgamma_beta=None,
     k_invgamma_mode=None,
+    k_lnmix_w=None,
+    k_lnmix_mu1=None,
+    k_lnmix_sigma1=None,
+    k_lnmix_mu2=None,
+    k_lnmix_sigma2=None,
     n_bs=10000,
     seed=126887,
     threads=get_cpu_core_count() - 1,
@@ -563,6 +636,11 @@ def risk_days_bs(
                 k_invgamma_alpha,
                 k_invgamma_beta,
                 k_invgamma_mode,
+                k_lnmix_w,
+                k_lnmix_mu1,
+                k_lnmix_sigma1,
+                k_lnmix_mu2,
+                k_lnmix_sigma2,
                 n_bs,
                 seed,
                 threads,
@@ -597,6 +675,11 @@ def risk_days_bs(
         k_invgamma_alpha,
         k_invgamma_beta,
         k_invgamma_mode,
+        k_lnmix_w,
+        k_lnmix_mu1,
+        k_lnmix_sigma1,
+        k_lnmix_mu2,
+        k_lnmix_sigma2,
         n_bs,
         seed,
         threads,

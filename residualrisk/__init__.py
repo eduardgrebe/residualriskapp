@@ -18,9 +18,10 @@ from .core import (
     residual_risk_rd,
     risk_days_bs,
     sample_invgamma,
+    sample_lnmix,
 )
 
-__version__ = "0.9.2"
+__version__ = "0.9.3"
 
 __all__ = [
     "risk_days_bs",
@@ -30,5 +31,6 @@ __all__ = [
     "mode_kde",
     "mode_rounded",
     "sample_invgamma",
+    "sample_lnmix",
     "find_go_binary",
 ]

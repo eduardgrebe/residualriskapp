@@ -52,6 +52,7 @@ residualriskapp/
 - `get_cpu_core_count`, `mode_rounded` — utility helpers used by the UI
 - `mode_kde` — estimate the mode of a positive posterior via KDE on the log scale (used by `app.py` to pre-compute posterior modes at load time)
 - `sample_invgamma` — sample from an Inverse Gamma distribution; supports `alpha`+`beta` or `alpha`+`mode` parameterisations
+- `sample_lnmix` — sample from a two-component lognormal mixture; parameters: `n, w, mu1, sigma1, mu2, sigma2, seed=None`
 - `find_go_binary` — locator for the Go binary (honors `$RESIDUALRISK_GO_BINARY` env var)
 - `__version__` — package version
 
@@ -161,7 +162,14 @@ It covers:
   with UI wiring in `app.py`. Supports α+β or α+mode parameterisations.
   KDE modes of the three posteriors are pre-computed at load time (cached via
   `@st.cache_data`) so there is no per-click overhead when "mode" is the chosen PE.
-- **Lognormal mixture**: deferred — not yet implemented.
+- **Lognormal mixture**: fully implemented in Python (`residualrisk/core.py`,
+  `sample_lnmix()`), Go (`go/riskdays/random.go`, `GenerateLogNormalMixture()`),
+  bridge (`residualrisk/_go.py`), and UI (`app.py`). Parameters: `k_lnmix_w`,
+  `k_lnmix_mu1`, `k_lnmix_sigma1`, `k_lnmix_mu2`, `k_lnmix_sigma2`. Default
+  values (w=0.90, μ₁=−7.2403, σ₁=0.3241, μ₂=−3.7423, σ₂=0.5258) implement
+  Recommendation B. UI provides a mixing-weight slider with optional advanced
+  component-parameter editing; PE options are mode/median (numerical) and mean
+  (analytic).
 
 Agents modifying the *k* parameter handling, adding new posterior files to
 `static/`, or implementing a custom input distribution for *k* should consult

@@ -101,6 +101,29 @@ func (rg *RandomGenerator) GenerateInvGamma(alpha, beta float64, n int) []float6
 	return samples
 }
 
+// GenerateLogNormalMixture generates samples from a two-component lognormal mixture.
+//
+// Each sample is drawn from component 1 (weight w, LN(mu1, sigma1)) with probability w,
+// or from component 2 (weight 1-w, LN(mu2, sigma2)) otherwise.
+//
+// mu and sigma are the log-scale mean and standard deviation (parameterisation matches
+// scipy.stats.lognorm(s=sigma, scale=exp(mu)) and numpy.random.lognormal(mean=mu, sigma)).
+// Gonum's LogNormal uses Mu=mu, Sigma=sigma — same convention.
+func (rg *RandomGenerator) GenerateLogNormalMixture(w, mu1, sigma1, mu2, sigma2 float64, n int) []float64 {
+	samples := make([]float64, n)
+	comp1 := distuv.LogNormal{Mu: mu1, Sigma: sigma1, Src: rg.rng}
+	comp2 := distuv.LogNormal{Mu: mu2, Sigma: sigma2, Src: rg.rng}
+	uniform := distuv.Uniform{Min: 0, Max: 1, Src: rg.rng}
+	for i := 0; i < n; i++ {
+		if uniform.Rand() < w {
+			samples[i] = comp1.Rand()
+		} else {
+			samples[i] = comp2.Rand()
+		}
+	}
+	return samples
+}
+
 // GenerateGamma generates samples from a gamma distribution
 // Equivalent to np.random.gamma(shape, scale, n)
 func (rg *RandomGenerator) GenerateGamma(shape, scale float64, n int) []float64 {

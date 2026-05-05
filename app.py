@@ -30,7 +30,7 @@ import streamlit as st
 
 import residualrisk as rr
 
-APP_VERSION = "0.9.2"
+APP_VERSION = "0.9.3"
 
 # Set default values
 # this keeps resetting to this value, so I am going to get rid of it
@@ -283,10 +283,10 @@ if rde_method == "Mechanistic model":
             case _:
                 k_param_dist = None  # This shouldn't happen
 
-        # PE selectbox for non-InvGamma paths.
-        # For InvGamma the PE selectbox is deferred until after alpha is defined
-        # so its options can depend on the alpha value.
-        if k_param_dist != "invgamma":
+        # PE selectbox for non-InvGamma, non-lnmixture paths.
+        # For InvGamma and lnmixture the PE selectbox is deferred until after
+        # parameters are defined so its options can depend on them.
+        if k_param_dist not in ("invgamma", "lnmixture"):
             k_invgamma_pe_choice = None
             k_param_pe = col2.selectbox(
                 "Transmissibility parameter point estimate: posterior...",
@@ -406,6 +406,117 @@ if rde_method == "Mechanistic model":
         else:
             k_invgamma_alpha = None
             k_invgamma_beta = None
+
+        # Lognormal mixture parameter inputs — shown only when lnmixture is selected
+        if k_param_dist == "lnmixture":
+            st.divider()
+
+            # Default mixture parameters (Recommendation B from K_PARAM_INPUTDIST.md)
+            _LN_W_DEF   = 0.90
+            _LN_MU1_DEF = -7.2403
+            _LN_S1_DEF  = 0.3241
+            _LN_MU2_DEF = -3.7423
+            _LN_S2_DEF  = 0.5258
+
+            lnmix_col1, lnmix_col2 = st.columns([1, 2])
+
+            k_lnmix_w = lnmix_col1.slider(
+                "Mixing weight (human component)",
+                min_value=0.0,
+                max_value=1.0,
+                value=_LN_W_DEF,
+                step=0.01,
+                format="%.2f",
+                help=(
+                    "Weight placed on the human posterior component (component 1). "
+                    "Remainder (1 − w) goes to the animal posterior component (component 2). "
+                    "Recommended default: 0.90 (90% human, 10% animal)."
+                ),
+            )
+
+            # PE selectbox placed in col2 of the top row
+            k_lnmix_pe_choice = col2.selectbox(
+                "Transmissibility parameter point estimate: distribution...",
+                options=["mode", "median", "mean"],
+                index=0,
+                help=(
+                    "Which summary statistic of the lognormal mixture to use as the k "
+                    "point estimate when computing the IWP point estimate. "
+                    "Does not affect bootstrap sampling. "
+                    "'Mean' is analytic; 'mode' and 'median' are computed numerically."
+                ),
+            )
+
+            # Advanced: edit component parameters
+            lnmix_advanced = lnmix_col2.checkbox(
+                "Advanced: edit component parameters",
+                value=False,
+                help=(
+                    "Edit the log-scale mean (μ) and log-scale standard deviation (σ) "
+                    "of each mixture component. Defaults are the MLE fits to the human "
+                    "and animal k posteriors from the companion analysis."
+                ),
+            )
+
+            if lnmix_advanced:
+                adv_col1, adv_col2 = st.columns(2)
+                k_lnmix_mu1 = adv_col1.number_input(
+                    "μ₁ (human, log-scale mean)",
+                    value=_LN_MU1_DEF,
+                    format="%.4f",
+                    step=0.01,
+                    help="Log-scale mean for component 1 (human). Default: −7.2403.",
+                )
+                k_lnmix_sigma1 = adv_col1.number_input(
+                    "σ₁ (human, log-scale SD)",
+                    min_value=0.001,
+                    value=_LN_S1_DEF,
+                    format="%.4f",
+                    step=0.01,
+                    help="Log-scale SD for component 1 (human). Default: 0.3241.",
+                )
+                k_lnmix_mu2 = adv_col2.number_input(
+                    "μ₂ (animal, log-scale mean)",
+                    value=_LN_MU2_DEF,
+                    format="%.4f",
+                    step=0.01,
+                    help="Log-scale mean for component 2 (animal). Default: −3.7423.",
+                )
+                k_lnmix_sigma2 = adv_col2.number_input(
+                    "σ₂ (animal, log-scale SD)",
+                    min_value=0.001,
+                    value=_LN_S2_DEF,
+                    format="%.4f",
+                    step=0.01,
+                    help="Log-scale SD for component 2 (animal). Default: 0.5258.",
+                )
+            else:
+                k_lnmix_mu1    = _LN_MU1_DEF
+                k_lnmix_sigma1 = _LN_S1_DEF
+                k_lnmix_mu2    = _LN_MU2_DEF
+                k_lnmix_sigma2 = _LN_S2_DEF
+
+            # Derived statistics display
+            import math as _math
+            _lnmix_comp1_median = _math.exp(k_lnmix_mu1)
+            _lnmix_comp2_median = _math.exp(k_lnmix_mu2)
+            _lnmix_mean = (
+                k_lnmix_w * _math.exp(k_lnmix_mu1 + k_lnmix_sigma1**2 / 2)
+                + (1 - k_lnmix_w) * _math.exp(k_lnmix_mu2 + k_lnmix_sigma2**2 / 2)
+            )
+            st.caption(
+                f"Component 1 median: {_lnmix_comp1_median:.6f} &nbsp;|&nbsp; "
+                f"Component 2 median: {_lnmix_comp2_median:.6f} &nbsp;|&nbsp; "
+                f"Mixture mean: {_lnmix_mean:.6f}"
+            )
+
+        else:
+            k_lnmix_w      = None
+            k_lnmix_mu1    = None
+            k_lnmix_sigma1 = None
+            k_lnmix_mu2    = None
+            k_lnmix_sigma2 = None
+            k_lnmix_pe_choice = None
 
     with model_param_container:
         col1, col2 = st.columns(2)
@@ -597,6 +708,34 @@ if st.sidebar.button(button_label):
                 k_pe = k_invgamma_beta / (k_invgamma_alpha - 1)
             else:
                 k_pe = k_invgamma_beta / (k_invgamma_alpha + 1)  # fallback to mode
+        elif k_param_dist == "lnmixture":
+            import math as _math
+            if k_lnmix_pe_choice == "mean":
+                k_pe = (
+                    k_lnmix_w * _math.exp(k_lnmix_mu1 + k_lnmix_sigma1**2 / 2)
+                    + (1 - k_lnmix_w) * _math.exp(k_lnmix_mu2 + k_lnmix_sigma2**2 / 2)
+                )
+            else:
+                # Numerical mode or median from a large sample
+                # Use cached default-param values if parameters are at defaults to avoid delay
+                _lnmix_defaults = (0.90, -7.2403, 0.3241, -3.7423, 0.5258)
+                _lnmix_current = (
+                    k_lnmix_w, k_lnmix_mu1, k_lnmix_sigma1, k_lnmix_mu2, k_lnmix_sigma2
+                )
+                if _lnmix_current == _lnmix_defaults:
+                    _lnmix_sample = st.session_state.get("k_lnmix_default_sample")
+                    if _lnmix_sample is None:
+                        _lnmix_sample = rr.sample_lnmix(100_000, *_lnmix_defaults, seed=42)
+                        st.session_state["k_lnmix_default_sample"] = _lnmix_sample
+                else:
+                    _lnmix_sample = rr.sample_lnmix(
+                        100_000, k_lnmix_w, k_lnmix_mu1, k_lnmix_sigma1,
+                        k_lnmix_mu2, k_lnmix_sigma2, seed=42
+                    )
+                if k_lnmix_pe_choice == "median":
+                    k_pe = float(np.median(_lnmix_sample))
+                else:  # mode
+                    k_pe = rr.mode_kde(_lnmix_sample)
         elif k_param_pe == "mode":
             _mode_key = {
                 "human": "k_human_mode",
@@ -632,6 +771,11 @@ if st.sidebar.button(button_label):
             k_invgamma_beta=k_invgamma_beta,
             k_gamma_scale=None,
             k_gamma_shape=None,
+            k_lnmix_w=k_lnmix_w,
+            k_lnmix_mu1=k_lnmix_mu1,
+            k_lnmix_sigma1=k_lnmix_sigma1,
+            k_lnmix_mu2=k_lnmix_mu2,
+            k_lnmix_sigma2=k_lnmix_sigma2,
             alpha=alpha,
             n_bs=n_sims,
             point_estimate="primary parameters",  # always run with primary parameters to get iwp_pe_primpar and store in session state -- calculate other methods in app
