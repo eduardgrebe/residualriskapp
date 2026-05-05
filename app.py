@@ -266,7 +266,7 @@ if rde_method == "Mechanistic model":
                 "Inverse Gamma distribution",
                 "Lognormal mixture distribution",
             ],
-            index=0,
+            index=3,
             help="Placeholder help text",
         )
         match k_param_distribution_choice:
