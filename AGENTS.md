@@ -50,6 +50,8 @@ residualriskapp/
 
 - `risk_days_bs`, `iwp_from_lookback_data`, `residual_risk_rd` — top-level estimation functions
 - `get_cpu_core_count`, `mode_rounded` — utility helpers used by the UI
+- `mode_kde` — estimate the mode of a positive posterior via KDE on the log scale (used by `app.py` to pre-compute posterior modes at load time)
+- `sample_invgamma` — sample from an Inverse Gamma distribution; supports `alpha`+`beta` or `alpha`+`mode` parameterisations
 - `find_go_binary` — locator for the Go binary (honors `$RESIDUALRISK_GO_BINARY` env var)
 - `__version__` — package version
 
@@ -82,7 +84,7 @@ Downstream analyses (e.g. R scripts via `reticulate`) should call these rather t
 
 1. **Viral Dynamics**: Exponential growth from initial concentration (C0) with doubling time
 2. **Test Sensitivity**: Incorporates LOD (limit of detection) with uncertainty
-3. **Infectivity**: Probabilistic model using posterior-sampled k parameter
+3. **Infectivity**: Probabilistic model using k sampled each bootstrap iteration from the chosen input distribution — either a posterior sample array (human, animal, or human-weighted exponential-decay) or a parametric Inverse Gamma distribution (α, β specified by the user).
 4. **Bootstrap Simulation**: Monte Carlo sampling of parameter uncertainty
 5. **Window Period Calculation**: Numerical integration to find infectious window period
 
@@ -102,7 +104,10 @@ Downstream analyses (e.g. R scripts via `reticulate`) should call these rather t
 - `retests` — Number of retests performed
 
 **Transmission**:
-- `k` — Infectivity parameter (sampled from posterior)
+- `k` — Infectivity parameter point estimate (used for IWP point estimate only; bootstrap samples from the chosen distribution)
+- `k_posterior_sample` — Array of posterior draws for k (used when sampling from a posterior)
+- `k_invgamma_alpha` — Shape parameter α for Inverse Gamma k distribution (omit or `None` for posterior-sample paths)
+- `k_invgamma_beta` — Scale parameter β for Inverse Gamma k distribution (omit or `None` for posterior-sample paths)
 - `volume_transfused` — Volume of blood transfused (mL)
 - `volume_transfused_min/max` — Uncertainty range
 - `copies_per_virion` — RNA copies per virion (default: 2)
@@ -141,11 +146,22 @@ It covers:
 - Two formal recommendations with scipy parameterisations and scientific
   justification:
   - **Recommendation A**: Inverse Gamma(α=2, β=0.002019) — smooth unimodal,
-    power-law tail, mode at human posterior mode (0.000673)
+    power-law tail, mode at human posterior mode (0.000673). Note: α=2 is a
+    deliberate conservative choice — it is far heavier-tailed than a best-fit
+    InvGamma to the human posterior (MLE ≈ α=9.5) and encodes substantial
+    additional uncertainty beyond what the Belov data alone support.
   - **Recommendation B**: 90% LN(human) + 10% LN(animal) mixture — best
     preserves human posterior bulk while giving explicit 10% weight to the
     animal-derived transmissibility range
 - Guidance on sensitivity analysis
+
+**Implementation status:**
+- **Inverse Gamma**: fully implemented in both Python (`residualrisk/core.py`,
+  `sample_invgamma()`) and Go (`go/riskdays/random.go`, `GenerateInvGamma()`),
+  with UI wiring in `app.py`. Supports α+β or α+mode parameterisations.
+  KDE modes of the three posteriors are pre-computed at load time (cached via
+  `@st.cache_data`) so there is no per-click overhead when "mode" is the chosen PE.
+- **Lognormal mixture**: deferred — not yet implemented.
 
 Agents modifying the *k* parameter handling, adding new posterior files to
 `static/`, or implementing a custom input distribution for *k* should consult

@@ -90,7 +90,11 @@ def load_data():
     k_human = np.array(pd.read_parquet(static_dir / "k_param_human.parquet").k)
     k_expdecay = np.array(pd.read_parquet(static_dir / "k_param_expdecay.parquet").k)
 
-    return ests, k_animal, k_human, k_expdecay
+    k_human_mode = rr.mode_kde(k_human)
+    k_animal_mode = rr.mode_kde(k_animal)
+    k_expdecay_mode = rr.mode_kde(k_expdecay)
+
+    return ests, k_animal, k_human, k_expdecay, k_human_mode, k_animal_mode, k_expdecay_mode
 
 
 @st.cache_data
@@ -129,6 +133,9 @@ if "samp" not in st.session_state:
         st.session_state["k_animal"],
         st.session_state["k_human"],
         st.session_state["k_expdecay"],
+        st.session_state["k_human_mode"],
+        st.session_state["k_animal_mode"],
+        st.session_state["k_expdecay_mode"],
     ) = load_data()
 # defaults only, not after running simulations
 
@@ -255,8 +262,8 @@ if rde_method == "Mechanistic model":
             options=[
                 "Belov human posterior",
                 "Belov animal posterior",
-                "Artificial human-weighted distribution",
-                "Inverse Gamma distribution centred on Belov human posterior",
+                "Human-weighted exponential decay distribution",
+                "Inverse Gamma distribution",
                 "Lognormal mixture distribution",
             ],
             index=0,
@@ -267,21 +274,32 @@ if rde_method == "Mechanistic model":
                 k_param_dist = "human"
             case "Belov animal posterior":
                 k_param_dist = "animal"
-            case "Artificial human-weighted distribution":
+            case "Human-weighted exponential decay distribution":
                 k_param_dist = "human_weighted"
-            case "Inverse Gamma distribution centred on Belov human posterior":
+            case "Inverse Gamma distribution":
                 k_param_dist = "invgamma"
             case "Lognormal mixture distribution":
                 k_param_dist = "lnmixture"
             case _:
                 k_param_dist = None  # This shouldn't happen
 
-        k_param_pe = col2.selectbox(
-            "Transmissibility parameter: posterior...",
-            options=["mode", "median", "mean"],
-            index=0,
-            help="Placeholder help text",
-        )
+        # PE selectbox for non-InvGamma paths.
+        # For InvGamma the PE selectbox is deferred until after alpha is defined
+        # so its options can depend on the alpha value.
+        if k_param_dist != "invgamma":
+            k_invgamma_pe_choice = None
+            k_param_pe = col2.selectbox(
+                "Transmissibility parameter point estimate: posterior...",
+                options=["mode", "median", "mean"],
+                index=0,
+                help=(
+                    "Which summary statistic of the posterior distribution to use "
+                    "as the k point estimate when computing the IWP point estimate. "
+                    "Does not affect bootstrap sampling."
+                ),
+            )
+        else:
+            k_param_pe = None
 
         if k_param_dist == "human":
             k_param = st.session_state["k_human"]
@@ -289,8 +307,105 @@ if rde_method == "Mechanistic model":
             k_param = st.session_state["k_animal"]
         elif k_param_dist == "human_weighted":
             k_param = st.session_state["k_expdecay"]
-        elif k_param_dist in ("invgamma", "lnmixture"):
+        else:
             k_param = None
+
+        # InvGamma parameter inputs — shown only when InvGamma is selected
+        if k_param_dist == "invgamma":
+            st.divider()
+            ig_col1, ig_col2 = st.columns([1, 2])
+
+            k_invgamma_alpha = ig_col1.number_input(
+                "α (shape)",
+                min_value=0.01,
+                max_value=20.0,
+                value=2.0,
+                step=0.05,
+                format="%.2f",
+                help=(
+                    "Shape parameter of the Inverse Gamma distribution. "
+                    "Decrease α for a heavier right tail (more weight on large k values); "
+                    "increase α to concentrate the distribution more tightly around the mode. "
+                    "Recommended value: 2 (power-law tail, infinite variance by design). "
+                    "α > 1 is required for a finite mean; α > 2 for finite variance. "
+                    "The 'mean' point estimate option is disabled when α ≤ 1."
+                ),
+            )
+
+            # PE selectbox placed in col2 of the top row; rendered there even though
+            # defined here — Streamlit column objects accept widgets at any point.
+            # "mean" is excluded when α ≤ 1 because the mean is infinite.
+            _ig_pe_options = (
+                ["mode", "median", "mean"] if k_invgamma_alpha > 1.0 else ["mode", "median"]
+            )
+            k_invgamma_pe_choice = col2.selectbox(
+                "Transmissibility parameter point estimate: distribution...",
+                options=_ig_pe_options,
+                index=0,
+                help=(
+                    "Which summary statistic of the Inverse Gamma distribution to use "
+                    "as the k point estimate when computing the IWP point estimate. "
+                    "Does not affect bootstrap sampling. "
+                    "'Mean' is only available when α > 1."
+                ),
+            )
+
+            ig_param_by = ig_col2.radio(
+                "Parameterise by",
+                options=["Mode (recommended)", "β (scale)"],
+                index=0,
+                horizontal=True,
+            )
+
+            if ig_param_by == "Mode (recommended)":
+                k_human_mode_val = st.session_state["k_human_mode"]
+                mode_col, custom_col = st.columns([2, 1])
+                ig_mode_source = mode_col.radio(
+                    "Mode value",
+                    options=[
+                        f"Human posterior ({k_human_mode_val:.6f})",
+                        "Custom",
+                    ],
+                    index=0,
+                )
+                if "Human" in ig_mode_source:
+                    k_invgamma_mode = k_human_mode_val
+                else:
+                    k_invgamma_mode = custom_col.number_input(
+                        "Custom mode",
+                        min_value=1e-7,
+                        max_value=1.0,
+                        value=float(k_human_mode_val),
+                        format="%.6f",
+                        step=0.000001,
+                        help="Mode of the Inverse Gamma distribution.",
+                    )
+                k_invgamma_beta = k_invgamma_mode * (k_invgamma_alpha + 1)
+                st.caption(
+                    f"β = mode × (α + 1) = {k_invgamma_mode:.6f} × "
+                    f"{k_invgamma_alpha + 1:.2f} = {k_invgamma_beta:.6f}"
+                )
+
+            else:  # "β (scale)"
+                ig_beta_col, _ = st.columns(2)
+                k_invgamma_beta = ig_beta_col.number_input(
+                    "β (scale)",
+                    min_value=1e-8,
+                    max_value=1.0,
+                    value=0.002019,
+                    format="%.6f",
+                    step=0.000001,
+                    help="Scale parameter of the Inverse Gamma distribution.",
+                )
+                k_invgamma_mode = k_invgamma_beta / (k_invgamma_alpha + 1)
+                st.caption(
+                    f"mode = β / (α + 1) = {k_invgamma_beta:.6f} / "
+                    f"{k_invgamma_alpha + 1:.2f} = {k_invgamma_mode:.6f}"
+                )
+
+        else:
+            k_invgamma_alpha = None
+            k_invgamma_beta = None
 
     with model_param_container:
         col1, col2 = st.columns(2)
@@ -473,14 +588,28 @@ button_label = (
 if st.sidebar.button(button_label):
     if rde_method == "Mechanistic model":
         progressbar = st.sidebar.progress(0, text="Running simulations...")
-        if k_param_pe == "mode":
-            k_pe = rr.mode_kde(k_param)  # KDE on log scale with Silverman bandwidth
+        if k_param_dist == "invgamma":
+            if k_invgamma_pe_choice == "mode":
+                k_pe = k_invgamma_beta / (k_invgamma_alpha + 1)
+            elif k_invgamma_pe_choice == "median":
+                k_pe = stats.invgamma.ppf(0.5, a=k_invgamma_alpha, scale=k_invgamma_beta)
+            elif k_invgamma_pe_choice == "mean":
+                k_pe = k_invgamma_beta / (k_invgamma_alpha - 1)
+            else:
+                k_pe = k_invgamma_beta / (k_invgamma_alpha + 1)  # fallback to mode
+        elif k_param_pe == "mode":
+            _mode_key = {
+                "human": "k_human_mode",
+                "animal": "k_animal_mode",
+                "human_weighted": "k_expdecay_mode",
+            }.get(k_param_dist)
+            k_pe = st.session_state[_mode_key] if _mode_key else None
         elif k_param_pe == "mean":
             k_pe = statistics.mean(k_param)
         elif k_param_pe == "median":
             k_pe = statistics.median(k_param)
         else:
-            k_pe = None  # should error out but never happen
+            k_pe = None  # should not happen
         (
             st.session_state["iwp_pe_primpar"],
             st.session_state["iwp_cri"],
@@ -499,6 +628,8 @@ if st.sidebar.button(button_label):
             pool_size,
             retests,
             k_posterior_sample=k_param,
+            k_invgamma_alpha=k_invgamma_alpha,
+            k_invgamma_beta=k_invgamma_beta,
             k_gamma_scale=None,
             k_gamma_shape=None,
             alpha=alpha,
