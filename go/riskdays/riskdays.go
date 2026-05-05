@@ -43,8 +43,10 @@ func RiskDaysBS(input RiskDaysInput, progressCallback ProgressCallback) (*RiskDa
 		ks = rng.BootstrapChoice(input.KPosteriorSample, input.NBS)
 	} else if input.KGammaShape != nil && input.KGammaScale != nil {
 		ks = rng.GenerateGamma(*input.KGammaShape, *input.KGammaScale, input.NBS)
+	} else if input.KInvGammaAlpha != nil && input.KInvGammaBeta != nil {
+		ks = rng.GenerateInvGamma(*input.KInvGammaAlpha, *input.KInvGammaBeta, input.NBS)
 	} else {
-		return nil, fmt.Errorf("either k_posterior_sample or k_gamma parameters must be provided")
+		return nil, fmt.Errorf("no valid k distribution specified")
 	}
 
 	doublingTimes := rng.GenerateTruncatedNormal(input.DoublingTime, input.DoublingTimeNormSD, input.NBS)

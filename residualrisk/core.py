@@ -287,59 +287,59 @@ def mode_kde(data, n_grid=100_000, cap=50_000):
     return _kde_mode_log(data, n_grid=n_grid, cap=cap)
 
 
-def sample_invgamma(n, a, scale=None, mode=None, seed=None):
+def sample_invgamma(n, alpha, beta=None, mode=None, seed=None):
     """Sample from an Inverse Gamma distribution.
 
     Supports two parameterisations:
 
-    1. **alpha + scale** (direct)::
+    1. **alpha + beta** (direct)::
 
-          sample_invgamma(n, a=2.0, scale=0.002019)
+          sample_invgamma(n, alpha=2.0, beta=0.002019)
 
     2. **alpha + mode** (beta auto-calculated)::
 
-          sample_invgamma(n, a=2.0, mode=0.000673)
+          sample_invgamma(n, alpha=2.0, mode=0.000673)
 
-       Beta is computed as ``mode * (a + 1)`` so that the resulting
-       InvGamma(a, beta) has its mode at the specified value.
+       Beta is computed as ``mode * (alpha + 1)`` so that the resulting
+       InvGamma(alpha, beta) has its mode at the specified value.
 
     Parameters
     ----------
     n : int
         Number of samples.
-    a : float
-        Shape parameter (alpha, must be > 0).
-    scale : float, optional
-        Scale parameter (beta).  Exactly one of *scale* or *mode*
-        must be provided.
+    alpha : float
+        Shape parameter (must be > 0).
+    beta : float, optional
+        Scale parameter.  Maps to ``scipy.stats.invgamma(a=alpha, scale=beta)``.
+        Exactly one of *beta* or *mode* must be provided.
     mode : float, optional
-        Target mode.  Beta is computed as ``mode * (a + 1)``.
+        Target mode.  Beta is computed as ``mode * (alpha + 1)``.
     seed : int, optional
         Random seed for reproducibility.
 
     Returns
     -------
     np.ndarray
-        Array of *n* samples from InvGamma(a, beta).
+        Array of *n* samples from InvGamma(alpha, beta).
 
     Raises
     ------
     ValueError
-        If neither or both of *scale* and *mode* are provided.
+        If neither or both of *beta* and *mode* are provided.
     """
-    if scale is None and mode is None:
+    if beta is None and mode is None:
         raise ValueError(
-            "Exactly one of 'scale' or 'mode' must be provided."
+            "Exactly one of 'beta' or 'mode' must be provided."
         )
-    if scale is not None and mode is not None:
+    if beta is not None and mode is not None:
         raise ValueError(
-            "Provide 'scale' or 'mode', not both."
+            "Provide 'beta' or 'mode', not both."
         )
     if mode is not None:
-        scale = mode * (a + 1)
+        beta = mode * (alpha + 1)
     rng = np.random.default_rng(seed)
     from scipy.stats import invgamma
-    return invgamma.rvs(a, scale=scale, size=n, random_state=rng)
+    return invgamma.rvs(alpha, scale=beta, size=n, random_state=rng)
 
 
 def _risk_days_bs_python(
@@ -360,6 +360,9 @@ def _risk_days_bs_python(
     k_posterior_sample=None,
     k_gamma_shape=None,
     k_gamma_scale=None,
+    k_invgamma_alpha=None,
+    k_invgamma_beta=None,
+    k_invgamma_mode=None,
     n_bs=10000,
     seed=126887,
     threads=get_cpu_core_count() - 1,
@@ -380,6 +383,17 @@ def _risk_days_bs_python(
         and k_gamma_scale is not None
     ):
         ks = np.random.gamma(k_gamma_shape, k_gamma_scale, n_bs)
+    elif k_invgamma_alpha is not None:
+        _beta = k_invgamma_beta
+        if _beta is None:
+            if k_invgamma_mode is not None:
+                _beta = k_invgamma_mode * (k_invgamma_alpha + 1)
+            else:
+                raise ValueError(
+                    "k_invgamma_alpha requires k_invgamma_beta or k_invgamma_mode"
+                )
+        # Uses the legacy numpy global state set above for reproducibility.
+        ks = stats.invgamma.rvs(k_invgamma_alpha, scale=_beta, size=n_bs)
     else:
         raise ValueError(
             "k_posterior_sample and k_gamma parameters must not both be 'None'."
@@ -500,8 +514,8 @@ def risk_days_bs(
     k_posterior_sample=None,
     k_gamma_shape=None,
     k_gamma_scale=None,
-    k_invgamma_a=None,
-    k_invgamma_scale=None,
+    k_invgamma_alpha=None,
+    k_invgamma_beta=None,
     k_invgamma_mode=None,
     n_bs=10000,
     seed=126887,
@@ -524,21 +538,6 @@ def risk_days_bs(
 
     All other parameters are passed through to the underlying implementation.
     """
-    # Resolve Inverse Gamma → pre-sample into k_posterior_sample
-    if k_invgamma_a is not None:
-        if k_posterior_sample is not None or k_gamma_shape is not None:
-            raise ValueError(
-                "k_invgamma_* is mutually exclusive with "
-                "k_posterior_sample and k_gamma_*"
-            )
-        k_posterior_sample = sample_invgamma(
-            n_bs,
-            a=k_invgamma_a,
-            scale=k_invgamma_scale,
-            mode=k_invgamma_mode,
-            seed=seed + 1,
-        )
-
     if use_go:
         try:
             from ._go import risk_days_bs_go
@@ -561,6 +560,9 @@ def risk_days_bs(
                 k_posterior_sample,
                 k_gamma_shape,
                 k_gamma_scale,
+                k_invgamma_alpha,
+                k_invgamma_beta,
+                k_invgamma_mode,
                 n_bs,
                 seed,
                 threads,
@@ -592,6 +594,9 @@ def risk_days_bs(
         k_posterior_sample,
         k_gamma_shape,
         k_gamma_scale,
+        k_invgamma_alpha,
+        k_invgamma_beta,
+        k_invgamma_mode,
         n_bs,
         seed,
         threads,

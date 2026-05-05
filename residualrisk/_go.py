@@ -91,6 +91,9 @@ def risk_days_bs_go(
     k_posterior_sample=None,
     k_gamma_shape=None,
     k_gamma_scale=None,
+    k_invgamma_alpha=None,
+    k_invgamma_beta=None,
+    k_invgamma_mode=None,
     n_bs=10000,
     seed=126887,
     threads=None,
@@ -162,9 +165,21 @@ def risk_days_bs_go(
     elif k_gamma_shape is not None and k_gamma_scale is not None:
         input_data["k_gamma_shape"] = k_gamma_shape
         input_data["k_gamma_scale"] = k_gamma_scale
+    elif k_invgamma_alpha is not None:
+        # Resolve mode → beta before sending to Go
+        _beta = k_invgamma_beta
+        if _beta is None:
+            if k_invgamma_mode is not None:
+                _beta = k_invgamma_mode * (k_invgamma_alpha + 1)
+            else:
+                raise ValueError(
+                    "k_invgamma_alpha requires k_invgamma_beta or k_invgamma_mode"
+                )
+        input_data["k_invgamma_alpha"] = k_invgamma_alpha
+        input_data["k_invgamma_beta"] = _beta
     else:
         raise ValueError(
-            "Either k_posterior_sample or both k_gamma parameters must be provided"
+            "Either k_posterior_sample, k_gamma parameters, or k_invgamma parameters must be provided"
         )
 
     # Run Go binary
@@ -271,11 +286,15 @@ def risk_days_bs_go(
             # based on Python's RNG with the same seed and distributions.
             np.random.seed(seed)
 
-            # Generate k samples
+            # Generate k samples — mirrors the distribution used by Go.
+            # Note: Python and Go use independent RNGs; values won't match
+            # exactly even with the same seed. See docstring for details.
             if k_posterior_sample is not None:
                 ks = np.random.choice(k_posterior_sample, size=n_bs, replace=True)
             elif k_gamma_shape is not None and k_gamma_scale is not None:
                 ks = np.random.gamma(k_gamma_shape, k_gamma_scale, n_bs)
+            elif k_invgamma_alpha is not None:
+                ks = scipy_stats.invgamma.rvs(k_invgamma_alpha, scale=_beta, size=n_bs)
 
             # Generate doubling time samples (truncated normal)
             doubling_times = scipy_stats.truncnorm.rvs(

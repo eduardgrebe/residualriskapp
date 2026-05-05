@@ -80,6 +80,27 @@ func (rg *RandomGenerator) GenerateUniform(low, high float64, n int) []float64 {
 	return samples
 }
 
+// GenerateInvGamma generates samples from an Inverse Gamma distribution.
+// alpha is the shape parameter; beta is the scale parameter (equivalent to
+// scipy's invgamma(a=alpha, scale=beta)).
+//
+// Uses the relationship: if X ~ Gamma(alpha, rate=beta) then 1/X ~ InvGamma(alpha, scale=beta).
+// In Gonum's Gamma, Beta is the rate (1/scale), so setting Beta=beta gives the correct Gamma.
+func (rg *RandomGenerator) GenerateInvGamma(alpha, beta float64, n int) []float64 {
+	samples := make([]float64, n)
+	// Gonum Gamma: Beta = rate = 1/scale. Setting rate=beta yields scale=1/beta.
+	// Then 1/X ~ InvGamma(alpha, scale=beta).
+	gamma := distuv.Gamma{
+		Alpha: alpha,
+		Beta:  beta, // rate parameter in Gonum = 1/scale
+		Src:   rg.rng,
+	}
+	for i := 0; i < n; i++ {
+		samples[i] = 1.0 / gamma.Rand()
+	}
+	return samples
+}
+
 // GenerateGamma generates samples from a gamma distribution
 // Equivalent to np.random.gamma(shape, scale, n)
 func (rg *RandomGenerator) GenerateGamma(shape, scale float64, n int) []float64 {

@@ -604,3 +604,159 @@ func TestRiskDaysBS_InvalidNBS_ReturnsError(t *testing.T) {
 		t.Error("expected error for n_bs=-1, got nil")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// GenerateInvGamma
+// ---------------------------------------------------------------------------
+
+func TestGenerateInvGamma_AllPositive(t *testing.T) {
+	rng := NewRandomGenerator(42)
+	samples := rng.GenerateInvGamma(2.0, 0.002019, 1000)
+	for i, v := range samples {
+		if v <= 0 {
+			t.Errorf("sample[%d] = %v, want > 0", i, v)
+		}
+	}
+}
+
+func TestGenerateInvGamma_MeanApproximate(t *testing.T) {
+	// InvGamma(alpha, beta): mean = beta / (alpha - 1) for alpha > 1.
+	// With alpha=2.0, beta=0.002019: mean = 0.002019 / 1 = 0.002019.
+	rng := NewRandomGenerator(42)
+	n := 100_000
+	alpha, beta := 2.0, 0.002019
+	samples := rng.GenerateInvGamma(alpha, beta, n)
+	sum := 0.0
+	for _, v := range samples {
+		sum += v
+	}
+	mean := sum / float64(n)
+	expectedMean := beta / (alpha - 1)
+	// Allow 3% relative tolerance for a large sample.
+	if !approxEqual(mean, expectedMean, 0.03, 0) {
+		t.Errorf("GenerateInvGamma mean: got %v, want ~%v", mean, expectedMean)
+	}
+}
+
+func TestGenerateInvGamma_ModeApproximate(t *testing.T) {
+	// InvGamma(alpha=2, beta=0.002019): mode = beta / (alpha + 1) = 0.002019 / 3 ≈ 0.000673.
+	// Verify that the sample mode (via histogram peak) is in the right ballpark.
+	rng := NewRandomGenerator(42)
+	samples := rng.GenerateInvGamma(2.0, 0.002019, 100_000)
+	// Rough check: most samples should be below the mean (right-skewed distribution).
+	mean := 0.002019
+	belowMean := 0
+	for _, v := range samples {
+		if v < mean {
+			belowMean++
+		}
+	}
+	fraction := float64(belowMean) / float64(len(samples))
+	// For InvGamma(2, ...) most mass is below the mean; expect > 60%.
+	if fraction < 0.60 {
+		t.Errorf("expected >60%% of samples below mean, got %.1f%%", fraction*100)
+	}
+}
+
+func TestGenerateInvGamma_Reproducible(t *testing.T) {
+	r1 := NewRandomGenerator(42).GenerateInvGamma(2.0, 0.002019, 500)
+	r2 := NewRandomGenerator(42).GenerateInvGamma(2.0, 0.002019, 500)
+	for i := range r1 {
+		if r1[i] != r2[i] {
+			t.Errorf("sample[%d] differs across identical seeds: %v vs %v", i, r1[i], r2[i])
+			break
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// RiskDaysBS with InvGamma k distribution
+// ---------------------------------------------------------------------------
+
+func invGammaBSInput() RiskDaysInput {
+	alpha := 2.0
+	beta := 0.002019
+	input := RiskDaysInput{
+		K:                   0.000673, // InvGamma mode (beta / (alpha + 1))
+		DoublingTime:        defaultDoublingTime,
+		DoublingTimeNormSD:  1.33 / 24.0,
+		LOD50:               defaultLOD50,
+		LOD50SD:             0.193,
+		LOD95LOD50Ratio:     defaultLOD95LOD50Ratio,
+		VolumeTransfused:    defaultVolumeTransfused,
+		VolumeTransfusedMin: 15,
+		VolumeTransfusedMax: 30,
+		PoolSize:            defaultPoolSize,
+		Retests:             defaultRetests,
+		KInvGammaAlpha:      &alpha,
+		KInvGammaBeta:       &beta,
+		NBS:                 200,
+		Seed:                42,
+		Threads:             2,
+		PointEstimate:       "primary parameters",
+	}
+	input.SetDefaults()
+	return input
+}
+
+func TestRiskDaysBS_InvGamma_Sanity(t *testing.T) {
+	out, err := RiskDaysBS(invGammaBSInput(), nil)
+	if err != nil {
+		t.Fatalf("RiskDaysBS with InvGamma failed: %v", err)
+	}
+	if out == nil {
+		t.Fatal("RiskDaysBS returned nil output")
+	}
+	if len(out.Simulations) != 200 {
+		t.Errorf("simulation count: got %v, want 200", len(out.Simulations))
+	}
+	for i, v := range out.Simulations {
+		if v <= 0 {
+			t.Errorf("simulation[%d] = %v, want > 0", i, v)
+		}
+	}
+	if out.PointEstimate <= 0 {
+		t.Errorf("point estimate: got %v, want > 0", out.PointEstimate)
+	}
+	if out.CredibleInterval[0] >= out.CredibleInterval[1] {
+		t.Errorf("CrI not ordered: [%v, %v]", out.CredibleInterval[0], out.CredibleInterval[1])
+	}
+}
+
+func TestRiskDaysBS_InvGamma_Reproducible(t *testing.T) {
+	r1, err := RiskDaysBS(invGammaBSInput(), nil)
+	if err != nil {
+		t.Fatalf("first run failed: %v", err)
+	}
+	r2, err := RiskDaysBS(invGammaBSInput(), nil)
+	if err != nil {
+		t.Fatalf("second run failed: %v", err)
+	}
+	if r1.PointEstimate != r2.PointEstimate {
+		t.Errorf("point estimates differ: %v vs %v", r1.PointEstimate, r2.PointEstimate)
+	}
+	for i := range r1.Simulations {
+		if r1.Simulations[i] != r2.Simulations[i] {
+			t.Errorf("simulation[%d] differs: %v vs %v", i, r1.Simulations[i], r2.Simulations[i])
+			break
+		}
+	}
+}
+
+func TestRiskDaysBS_InvGamma_PointEstimateMatchesRiskDays(t *testing.T) {
+	// With point_estimate="primary parameters", pe must equal RiskDays(K=mode).
+	input := invGammaBSInput()
+	out, err := RiskDaysBS(input, nil)
+	if err != nil {
+		t.Fatalf("RiskDaysBS failed: %v", err)
+	}
+	params := defaultInnerParams()
+	params.K = input.K // K = mode of InvGamma
+	expected, err := RiskDays(params)
+	if err != nil {
+		t.Fatalf("RiskDays failed: %v", err)
+	}
+	if !approxEqual(out.PointEstimate, expected, 1e-6, 0) {
+		t.Errorf("point estimate: got %v, want %v", out.PointEstimate, expected)
+	}
+}

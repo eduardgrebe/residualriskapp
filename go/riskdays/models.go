@@ -40,10 +40,12 @@ type RiskDaysInput struct {
 	Alpha            float64   `json:"alpha"`             // default: 0.05
 	Z                float64   `json:"z"`                 // default: 1.6449
 
-	// K distribution parameters (one of these must be provided)
+	// K distribution parameters (one of these groups must be provided)
 	KPosteriorSample []float64 `json:"k_posterior_sample,omitempty"`
-	KGammaShape      *float64  `json:"k_gamma_shape,omitempty"`
-	KGammaScale      *float64  `json:"k_gamma_scale,omitempty"`
+	KGammaShape      *float64  `json:"k_gamma_shape,omitempty"`  // Deprecated: use KInvGammaAlpha/Beta
+	KGammaScale      *float64  `json:"k_gamma_scale,omitempty"`  // Deprecated: use KInvGammaAlpha/Beta
+	KInvGammaAlpha   *float64  `json:"k_invgamma_alpha,omitempty"` // shape (α)
+	KInvGammaBeta    *float64  `json:"k_invgamma_beta,omitempty"`  // scale (β, same as scipy's scale)
 
 	// Simulation parameters
 	NBS           int    `json:"n_bs"`            // default: 10000
@@ -125,8 +127,10 @@ func (input *RiskDaysInput) Validate() error {
 	if input.Retests < 0 {
 		return fmt.Errorf("retests must be non-negative")
 	}
-	if input.KPosteriorSample == nil && (input.KGammaShape == nil || input.KGammaScale == nil) {
-		return fmt.Errorf("either k_posterior_sample or both k_gamma parameters must be provided")
+	if input.KPosteriorSample == nil &&
+		(input.KGammaShape == nil || input.KGammaScale == nil) &&
+		(input.KInvGammaAlpha == nil || input.KInvGammaBeta == nil) {
+		return fmt.Errorf("a k distribution must be provided: k_posterior_sample, both k_gamma parameters, or both k_invgamma parameters")
 	}
 	return nil
 }

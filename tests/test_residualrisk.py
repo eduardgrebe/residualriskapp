@@ -588,45 +588,45 @@ class TestModeKde:
 class TestSampleInvgamma:
     """Unit tests for sample_invgamma()."""
 
-    def test_scale_parameterisation(self):
-        """Direct (a, scale) produces samples with expected median."""
-        samples = rr.sample_invgamma(50_000, a=2.0, scale=0.002019, seed=1)
+    def test_beta_parameterisation(self):
+        """Direct (alpha, beta) produces samples with expected median."""
+        samples = rr.sample_invgamma(50_000, alpha=2.0, beta=0.002019, seed=1)
         # InvGamma(2, 0.002019) theoretical median ≈ 0.001203
         assert np.median(samples) == pytest.approx(0.001203, rel=0.03)
         assert len(samples) == 50_000
         assert np.all(samples > 0)
 
     def test_mode_parameterisation(self):
-        """(a, mode) auto-calculates scale = mode * (a + 1)."""
-        scale_samples = rr.sample_invgamma(
-            50_000, a=3.0, scale=0.002692, seed=1
+        """(alpha, mode) auto-calculates beta = mode * (alpha + 1)."""
+        beta_samples = rr.sample_invgamma(
+            50_000, alpha=3.0, beta=0.002692, seed=1
         )
         mode_samples = rr.sample_invgamma(
-            50_000, a=3.0, mode=0.000673, seed=1
+            50_000, alpha=3.0, mode=0.000673, seed=1
         )
-        # scale = 0.000673 * (3 + 1) = 0.002692 — same distribution
-        assert np.array_equal(scale_samples, mode_samples)
+        # beta = 0.000673 * (3 + 1) = 0.002692 — same distribution
+        assert np.array_equal(beta_samples, mode_samples)
 
-    def test_mode_and_scale_mutually_exclusive(self):
-        """Providing both scale and mode raises ValueError."""
+    def test_mode_and_beta_mutually_exclusive(self):
+        """Providing both beta and mode raises ValueError."""
         with pytest.raises(ValueError, match="not both"):
-            rr.sample_invgamma(100, a=2.0, scale=0.002, mode=0.000673)
+            rr.sample_invgamma(100, alpha=2.0, beta=0.002, mode=0.000673)
 
-    def test_neither_scale_nor_mode_raises(self):
-        """Providing neither scale nor mode raises ValueError."""
+    def test_neither_beta_nor_mode_raises(self):
+        """Providing neither beta nor mode raises ValueError."""
         with pytest.raises(ValueError, match="Exactly one"):
-            rr.sample_invgamma(100, a=2.0)
+            rr.sample_invgamma(100, alpha=2.0)
 
     def test_reproducible_with_seed(self):
         """Same seed produces identical samples."""
-        s1 = rr.sample_invgamma(500, a=2.0, mode=0.000673, seed=42)
-        s2 = rr.sample_invgamma(500, a=2.0, mode=0.000673, seed=42)
+        s1 = rr.sample_invgamma(500, alpha=2.0, mode=0.000673, seed=42)
+        s2 = rr.sample_invgamma(500, alpha=2.0, mode=0.000673, seed=42)
         assert np.array_equal(s1, s2)
 
     def test_different_seeds_differ(self):
         """Different seeds produce different samples."""
-        s1 = rr.sample_invgamma(500, a=2.0, mode=0.000673, seed=1)
-        s2 = rr.sample_invgamma(500, a=2.0, mode=0.000673, seed=2)
+        s1 = rr.sample_invgamma(500, alpha=2.0, mode=0.000673, seed=1)
+        s2 = rr.sample_invgamma(500, alpha=2.0, mode=0.000673, seed=2)
         assert not np.array_equal(s1, s2)
 
 
@@ -688,7 +688,7 @@ class TestInvgammaIwpAgreement:
         # Inverse Gamma with same mode
         r_ig = rr.risk_days_bs(
             k=0.000673,
-            k_invgamma_a=2.0,
+            k_invgamma_alpha=2.0,
             k_invgamma_mode=0.000673,
             **params,
         )
@@ -717,7 +717,7 @@ class TestInvgammaIwpAgreement:
         # Inverse Gamma with same mode
         r_ig = rr.risk_days_bs(
             k=0.000673,
-            k_invgamma_a=2.0,
+            k_invgamma_alpha=2.0,
             k_invgamma_mode=0.000673,
             **params,
         )
@@ -808,3 +808,108 @@ class TestResidualRiskRd:
                 incidence=1e-4,
                 incidence_norm_sd=1e-5,
             )
+
+
+# ---------------------------------------------------------------------------
+# risk_days_bs with InvGamma k distribution (Python and Go)
+# ---------------------------------------------------------------------------
+
+# Shared kwargs for InvGamma bootstrap tests
+_INVGAMMA_BS_KWARGS = dict(
+    k=0.000673,  # InvGamma(2, 0.002019) mode
+    doubling_time=DEFAULTS["doubling_time"],
+    doubling_time_norm_sd=DEFAULTS["doubling_time_norm_sd"],
+    lod50=DEFAULTS["lod50"],
+    lod50_sd=DEFAULTS["lod50_sd"],
+    lod95_lod50_ratio=DEFAULTS["lod95_lod50_ratio"],
+    volume_transfused=DEFAULTS["volume_transfused"],
+    volume_transfused_range=DEFAULTS["volume_transfused_range"],
+    pool_size=DEFAULTS["pool_size"],
+    retests=DEFAULTS["retests"],
+    k_invgamma_alpha=2.0,
+    k_invgamma_beta=0.002019,
+    n_bs=500,
+    seed=42,
+    threads=2,
+)
+
+
+class TestRiskDaysBsPythonInvGamma:
+    """InvGamma k distribution via the Python backend."""
+
+    def test_sanity(self):
+        result = rr.risk_days_bs(**_INVGAMMA_BS_KWARGS, use_go=False)
+        _assert_bs_result_sane(result, _INVGAMMA_BS_KWARGS["n_bs"])
+
+    def test_mode_parameterisation_equivalent(self):
+        """k_invgamma_mode should give same result as the equivalent k_invgamma_beta."""
+        kwargs_mode = {
+            k: v for k, v in _INVGAMMA_BS_KWARGS.items() if k != "k_invgamma_beta"
+        }
+        kwargs_mode["k_invgamma_mode"] = 0.000673  # beta = 0.000673 * 3 = 0.002019
+        r_beta = rr.risk_days_bs(**_INVGAMMA_BS_KWARGS, use_go=False)
+        r_mode = rr.risk_days_bs(**kwargs_mode, use_go=False)
+        assert sorted(r_beta[3]) == pytest.approx(sorted(r_mode[3]), rel=1e-6)
+
+    def test_reproducible(self):
+        r1 = rr.risk_days_bs(**_INVGAMMA_BS_KWARGS, use_go=False)
+        r2 = rr.risk_days_bs(**_INVGAMMA_BS_KWARGS, use_go=False)
+        assert sorted(r1[3]) == sorted(r2[3])
+
+    def test_point_estimate_matches_risk_days(self):
+        result = rr.risk_days_bs(
+            **_INVGAMMA_BS_KWARGS, use_go=False, point_estimate="primary parameters"
+        )
+        expected_pe = rr._risk_days(
+            copies_per_virion=DEFAULTS["copies_per_virion"],
+            C0=DEFAULTS["C0"],
+            doubling_time=DEFAULTS["doubling_time"],
+            volume_transfused=DEFAULTS["volume_transfused"],
+            k=_INVGAMMA_BS_KWARGS["k"],
+            pool_size=DEFAULTS["pool_size"],
+            lod50=DEFAULTS["lod50"],
+            lod95_lod50_ratio=DEFAULTS["lod95_lod50_ratio"],
+            retests=DEFAULTS["retests"],
+        )
+        assert result[0] == pytest.approx(expected_pe, rel=1e-6)
+
+
+class TestRiskDaysBsGoInvGamma:
+    """InvGamma k distribution via the Go backend."""
+
+    def test_sanity(self):
+        result = rr.risk_days_bs(**_INVGAMMA_BS_KWARGS, use_go=True)
+        _assert_bs_result_sane(result, _INVGAMMA_BS_KWARGS["n_bs"])
+
+    def test_point_estimate_matches_risk_days(self):
+        result = rr.risk_days_bs(
+            **_INVGAMMA_BS_KWARGS, use_go=True, point_estimate="primary parameters"
+        )
+        expected_pe = rr._risk_days(
+            copies_per_virion=DEFAULTS["copies_per_virion"],
+            C0=DEFAULTS["C0"],
+            doubling_time=DEFAULTS["doubling_time"],
+            volume_transfused=DEFAULTS["volume_transfused"],
+            k=_INVGAMMA_BS_KWARGS["k"],
+            pool_size=DEFAULTS["pool_size"],
+            lod50=DEFAULTS["lod50"],
+            lod95_lod50_ratio=DEFAULTS["lod95_lod50_ratio"],
+            retests=DEFAULTS["retests"],
+        )
+        assert result[0] == pytest.approx(expected_pe, rel=1e-6)
+
+    def test_mode_parameterisation_accepted(self):
+        """k_invgamma_mode should be accepted by the Go path."""
+        kwargs_mode = {
+            k: v for k, v in _INVGAMMA_BS_KWARGS.items() if k != "k_invgamma_beta"
+        }
+        kwargs_mode["k_invgamma_mode"] = 0.000673
+        result = rr.risk_days_bs(**kwargs_mode, use_go=True)
+        _assert_bs_result_sane(result, _INVGAMMA_BS_KWARGS["n_bs"])
+
+    def test_simulation_medians_agree_with_python(self):
+        """Python and Go InvGamma paths should agree within 15% on the median."""
+        py = rr.risk_days_bs(**_INVGAMMA_BS_KWARGS, use_go=False)
+        go = rr.risk_days_bs(**_INVGAMMA_BS_KWARGS, use_go=True)
+        assert np.median(py[3]) == pytest.approx(np.median(go[3]), rel=0.15)
+
