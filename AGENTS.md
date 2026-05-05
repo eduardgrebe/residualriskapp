@@ -50,7 +50,8 @@ residualriskapp/
 
 - `risk_days_bs`, `iwp_from_lookback_data`, `residual_risk_rd` — top-level estimation functions
 - `get_cpu_core_count`, `mode_rounded` — utility helpers used by the UI
-- `mode_kde` — estimate the mode of a positive posterior via KDE on the log scale (used by `app.py` to pre-compute posterior modes at load time)
+- `mode_kde` — estimate the mode of a positive posterior via KDE on the log scale (pure-Python, slow on large posteriors; kept as fallback)
+- `mode_kde_go` — fast Go-backed KDE mode estimation via the `--kde-mode` subcommand; `cap=40_000, n_grid=5_000` by default (< 0.1% error, ~0.9s for all three posteriors); used by `app.py` at load time with Python fallback to hardcoded values
 - `sample_invgamma` — sample from an Inverse Gamma distribution; supports `alpha`+`beta` or `alpha`+`mode` parameterisations
 - `sample_lnmix` — sample from a two-component lognormal mixture; parameters: `n, w, mu1, sigma1, mu2, sigma2, seed=None`
 - `find_go_binary` — locator for the Go binary (honors `$RESIDUALRISK_GO_BINARY` env var)
@@ -78,6 +79,7 @@ Downstream analyses (e.g. R scripts via `reticulate`) should call these rather t
   - Automatic fallback to Python if Go binary unavailable
   - Progress monitoring
   - `find_go_binary()` search order: `$RESIDUALRISK_GO_BINARY` env var → `<repo>/go/bin/riskdays_go` → `/usr/local/bin/riskdays_go` → `$PATH`
+  - `mode_kde_go()` — KDE mode via `riskdays_go --kde-mode`; pre-caps data in Python to minimise JSON payload
 
 ## Technical Architecture
 
@@ -160,8 +162,9 @@ It covers:
 - **Inverse Gamma**: fully implemented in both Python (`residualrisk/core.py`,
   `sample_invgamma()`) and Go (`go/riskdays/random.go`, `GenerateInvGamma()`),
   with UI wiring in `app.py`. Supports α+β or α+mode parameterisations.
-  KDE modes of the three posteriors are pre-computed at load time (cached via
-  `@st.cache_data`) so there is no per-click overhead when "mode" is the chosen PE.
+  KDE modes of the three posteriors are pre-computed at load time via
+  `mode_kde_go()` (Go KDE subprocess, ~0.9s total, < 0.1% error) cached by
+  `@st.cache_data`, with hardcoded fallback if Go binary is unavailable.
 - **Lognormal mixture**: fully implemented in Python (`residualrisk/core.py`,
   `sample_lnmix()`), Go (`go/riskdays/random.go`, `GenerateLogNormalMixture()`),
   bridge (`residualrisk/_go.py`), and UI (`app.py`). Parameters: `k_lnmix_w`,
