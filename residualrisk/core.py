@@ -224,7 +224,7 @@ def mode_rounded(list, precision=6):
     return stats.mode(np.array(list).round(precision)).mode
 
 
-def _kde_mode_log(data, n_grid=100_000, cap=50_000):
+def _kde_mode_log(data, n_grid=5_000, cap=50_000):
     """Estimate the mode of a positive, right-skewed distribution via
     KDE on the log scale.
 

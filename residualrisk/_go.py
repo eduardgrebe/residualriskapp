@@ -75,7 +75,7 @@ def find_go_binary():
 
 def mode_kde_go(
     data: "np.ndarray",
-    cap: int = 40_000,
+    cap: int = 50_000,
     n_grid: int = 5_000,
     threads: int = 0,
 ) -> float:
@@ -91,10 +91,10 @@ def mode_kde_go(
     cap:
         Maximum number of samples to pass to the Go binary.  Data is
         pre-subsampled in Python (seed=42) before serialisation to keep the
-        JSON payload small.  Default 40 000 gives < 0.1 % error vs the full-
+        JSON payload small.  Default 50 000 gives < 0.1 % error vs the full-
         data Python KDE.
     n_grid:
-        Number of log-spaced grid points for the KDE.  Default 10 000.
+        Number of log-spaced grid points for the KDE.  Default 5 000.
     threads:
         Parallel goroutines; 0 → all CPU cores.
 
