@@ -21,7 +21,7 @@ from .core import (
     sample_lnmix,
 )
 
-__version__ = "0.9.3"
+__version__ = "0.9.4"
 
 __all__ = [
     "risk_days_bs",

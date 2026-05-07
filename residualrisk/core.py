@@ -554,7 +554,7 @@ def _risk_days_bs_python(
     elif point_estimate == "mean":
         rd_pe = statistics.mean(rdests)
     elif point_estimate == "mode":
-        rd_pe = _kde_mode_log(rdests, cap=None)
+        rd_pe = _kde_mode_log(rdests, n_grid=1_000_000, cap=None) # Accurate but impractically slow
     else:
         rd_pe = None
 

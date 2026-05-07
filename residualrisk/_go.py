@@ -75,8 +75,8 @@ def find_go_binary():
 
 def mode_kde_go(
     data: "np.ndarray",
-    cap: int = 50_000,
-    n_grid: int = 5_000,
+    cap: int = 1_000_000,
+    n_grid: int = 1_000_000,
     threads: int = 0,
 ) -> float:
     """

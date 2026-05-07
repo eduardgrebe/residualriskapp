@@ -49,9 +49,6 @@ C0 = 0.00025
 # lod95_lod50_ratio = 21.2 / 4.7
 # pool_size = 16
 # retests = 1
-iwp_pe_primpar_animal_default = 4.49
-iwp_pe_primpar_human_default = 0.83
-iwp_pe_primpar_expdecay_default = 1.81
 
 if "seed" not in st.session_state:
     st.session_state["seed"] = random.randint(1, 999999)
@@ -68,8 +65,8 @@ if "iwp_pe_lookback" not in st.session_state:
 if "iwp_ci_lookback" not in st.session_state:
     st.session_state["iwp_ci_lookback"] = None
 
-if "iwp_pe_primpar" not in st.session_state:
-    st.session_state["iwp_pe_primpar"] = None
+if "iwp_pe" not in st.session_state:
+    st.session_state["iwp_pe"] = None
 
 if "iwp_pe_last" not in st.session_state:
     st.session_state["iwp_pe_last"] = None
@@ -88,9 +85,9 @@ def load_data():
     # Falls back to hardcoded values if Go binary is unavailable.
     _go_bin = rr.find_go_binary()
     if _go_bin is not None:
-        k_human_mode = rr.mode_kde_go(k_human, cap=50_000, n_grid=5_000)
-        k_animal_mode = rr.mode_kde_go(k_animal, cap=50_000, n_grid=5_000)
-        k_expdecay_mode = rr.mode_kde_go(k_expdecay, cap=50_000, n_grid=5_000)
+        k_human_mode = rr.mode_kde_go(k_human, cap=40_000, n_grid=1_000_000)
+        k_animal_mode = rr.mode_kde_go(k_animal, cap=40_000, n_grid=1_000_000)
+        k_expdecay_mode = rr.mode_kde_go(k_expdecay, cap=1_000_000, n_grid=1_000_000)
     else:
         # Hardcoded fallback (computed with Python KDE on full posteriors).
         # TODO: remove once Go binary is always available in deployment.
@@ -740,7 +737,7 @@ if st.sidebar.button(button_label):
                 if k_lnmix_pe_choice == "median":
                     k_pe = float(np.median(_lnmix_sample))
                 else:  # mode
-                    k_pe = rr.mode_kde(_lnmix_sample, n_grid=5_000, cap=50_000)
+                    k_pe = rr.mode_kde(_lnmix_sample, cap=1_000_000, n_grid=1_000_000)
         elif k_param_pe == "mode":
             _mode_key = {
                 "human": "k_human_mode",
@@ -755,7 +752,7 @@ if st.sidebar.button(button_label):
         else:
             k_pe = None  # should not happen
         (
-            st.session_state["iwp_pe_primpar"],
+            st.session_state["iwp_pe"],
             st.session_state["iwp_cri"],
             st.session_state["iwp_range"],
             st.session_state["bs"],
@@ -783,7 +780,7 @@ if st.sidebar.button(button_label):
             k_lnmix_sigma2=k_lnmix_sigma2,
             alpha=alpha,
             n_bs=n_sims,
-            point_estimate="primary parameters",  # always run with primary parameters to get iwp_pe_primpar and store in session state -- calculate other methods in app
+            point_estimate=point_estimate,
             seed=st.session_state["seed"],
             threads=n_threads,
             progress=progressbar,
@@ -891,18 +888,11 @@ else:
             "Run using the selected method to update."
         )
 
-    # Calculate point estimate based on whichever method was actually run
+    # Use the point estimate returned directly by risk_days_bs
     method_match = st.session_state["rde_method_run"] == rde_method
     if method_match:
         if rde_method == "Mechanistic model":
-            if point_estimate == "median":
-                iwp_pe = st.session_state["samp"]["iwp"].median()
-            elif point_estimate == "mean":
-                iwp_pe = st.session_state["samp"]["iwp"].mean()
-            elif point_estimate == "mode":
-                iwp_pe = rr.mode_kde(np.array(st.session_state["samp"]["iwp"]), n_grid=5_000, cap=50_000)
-            else:
-                iwp_pe = st.session_state["iwp_pe_primpar"]
+            iwp_pe = st.session_state["iwp_pe"]
         elif rde_method == "Lookback data":
             iwp_pe = st.session_state["iwp_pe_lookback"]
         else:
