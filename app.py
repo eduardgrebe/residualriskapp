@@ -85,18 +85,18 @@ def load_data():
     # Falls back to hardcoded values if Go binary is unavailable.
     _go_bin = rr.find_go_binary()
     if _go_bin is not None:
-        k_human_mode = rr.mode_kde_go(k_human, cap=40_000, n_grid=1_000_000)
-        k_animal_mode = rr.mode_kde_go(k_animal, cap=40_000, n_grid=1_000_000)
-        k_expdecay_mode = rr.mode_kde_go(k_expdecay, cap=1_000_000, n_grid=1_000_000)
+        k_human_mode = rr.mode_kde_go(k_human, cap=None, n_grid=1_000_000)
+        k_animal_mode = rr.mode_kde_go(k_animal, cap=None, n_grid=1_000_000)
+        k_expdecay_mode = rr.mode_kde_go(k_expdecay, cap=None, n_grid=1_000_000)
     else:
         # Hardcoded fallback (computed with Python KDE on full posteriors).
         # TODO: remove once Go binary is always available in deployment.
         # k_human_mode = rr.mode_kde(k_human)   # ~14s — too slow for startup
         # k_animal_mode = rr.mode_kde(k_animal)  # ~13s
         # k_expdecay_mode = rr.mode_kde(k_expdecay)  # ~18s
-        k_human_mode = 0.0006717095665107152
-        k_animal_mode = 0.02086193830714558
-        k_expdecay_mode = 0.0005803672369228773
+        k_human_mode = 0.0006716945195203189
+        k_animal_mode = 0.020860882277014912
+        k_expdecay_mode = 0.0005854393416702409
 
     return k_animal, k_human, k_expdecay, k_human_mode, k_animal_mode, k_expdecay_mode
 
