@@ -20,26 +20,29 @@ package riskdays
 import (
 	"math"
 	"math/rand"
-	"runtime"
-	"sort"
-	"sync"
+
+	"gonum.org/v1/gonum/dsp/fourier"
 )
 
 // KDEModeLog estimates the mode of a positive, right-skewed distribution
-// via KDE on the log scale.  It matches the Python _kde_mode_log() exactly.
+// via KDE on the log scale.
 //
 //   - data:    positive-valued samples
 //   - nGrid:   number of log-spaced grid points; 0 → auto (max 100k, ≤200k)
 //   - cap:     maximum number of samples to use; 0 means no cap
-//   - threads: number of parallel goroutines; ≤ 0 uses runtime.NumCPU()
+//   - threads: unused (kept for API compatibility); FFT convolution is single-pass
 //
-// Algorithm:
-//   1.  log-transform data
-//   2.  Silverman bandwidth on log scale
-//   3.  Gaussian KDE evaluated on a log-spaced grid
-//   4.  Change-of-variables: f(k) = f_logk(log k) / k
-//   5.  Return the grid value at maximum density
+// Algorithm (FFT-accelerated, O(N + M log M)):
+//  1. Log-transform data
+//  2. Silverman bandwidth on log scale
+//  3. Linear binning of log-data onto a regular grid (O(N))
+//  4. Gaussian kernel with wraparound for circular convolution (O(M))
+//  5. FFT convolution: IFFT(FFT(counts) ⊙ FFT(kernel)) (O(M log M))
+//  6. Change-of-variables: f(k) = f_logk(log k) / k
+//  7. Return the grid value at maximum density
 func KDEModeLog(data []float64, nGrid int, cap int, threads int) float64 {
+	_ = threads
+
 	if len(data) == 0 {
 		return 0
 	}
@@ -48,7 +51,6 @@ func KDEModeLog(data []float64, nGrid int, cap int, threads int) float64 {
 	work := data
 	if cap > 0 && len(data) > cap {
 		work = make([]float64, cap)
-		// Reservoir-style random subset
 		rng := rand.New(rand.NewSource(42))
 		for i := 0; i < cap; i++ {
 			j := rng.Intn(len(data))
@@ -93,88 +95,78 @@ func KDEModeLog(data []float64, nGrid int, cap int, threads int) float64 {
 		d := lv - mean
 		ssq += d * d
 	}
-	std := math.Sqrt(ssq / float64(n-1))
+	std := math.Sqrt(ssq / float64(n - 1))
 
 	// ---- Silverman bandwidth ----
 	if std <= 0 || n <= 1 {
-		// Single value or all identical: mode is the (only) value
 		return work[0]
 	}
 	bw := 1.06 * std * math.Pow(float64(n), -0.2)
 
-	// ---- log-spaced grid: work directly in log space ----
-	// grid[i] = Exp(logGridVal[i]) so log(grid[i]) == logGridVal[i] — no need
-	// to store the exp'd grid or call Log() inside the hot loop.
+	// ---- regular grid in log space ----
 	step := (maxVal - minVal) / float64(nGrid-1)
 
-	// ---- pre-sort logData so the 5σ cutoff can use a two-pointer scan ----
-	sorted := make([]float64, n)
-	copy(sorted, logData)
-	sort.Float64s(sorted)
-
-	// ---- evaluate KDE on grid in parallel ----
-	// Pre-compute reciprocals to replace divisions with multiplications in the
-	// inner loop (division is ~3–5× slower than multiplication on modern CPUs).
-	invBw := 1.0 / bw
-	invBwSqNegHalf := -0.5 * invBw * invBw
-	normFactor := float64(n) * bw * math.Sqrt(2*math.Pi)
-	invNormFactor := 1.0 / normFactor
-	cutoff := 5.0 * bw // beyond ±5σ the Gaussian kernel contributes < 3.7e-6
-
-	density := make([]float64, nGrid)
-	var wg sync.WaitGroup
-	workers := threads
-	if workers <= 0 {
-		workers = runtime.NumCPU()
-	}
-	chunkSize := (nGrid + workers - 1) / workers
-	for c := 0; c < workers; c++ {
-		start := c * chunkSize
-		end := start + chunkSize
-		if end > nGrid {
-			end = nGrid
+	// ---- Step 1: Linear binning of logData onto the grid (O(N)) ----
+	// Each data point distributes its unit mass to the two nearest grid points
+	// proportionally to the distance.
+	counts := make([]float64, nGrid)
+	invStep := 1.0 / step
+	for _, lv := range logData {
+		pos := (lv - minVal) * invStep
+		j := int(pos)
+		if j < 0 {
+			counts[0] += 1.0
+		} else if j >= nGrid-1 {
+			counts[nGrid-1] += 1.0
+		} else {
+			frac := pos - float64(j)
+			counts[j] += 1.0 - frac
+			counts[j+1] += frac
 		}
-		if start >= end {
-			continue
-		}
-		wg.Add(1)
-		go func(s, e int) {
-			defer wg.Done()
-			// Two-pointer bounds into sorted logData for the 5σ window.
-			// As logGridVal increases monotonically with i, lo/hi only move right.
-			lo, hi := 0, 0
-			for i := s; i < e; i++ {
-				logGridVal := minVal + step*float64(i)
-				loBound := logGridVal - cutoff
-				hiBound := logGridVal + cutoff
-				// Advance lower bound
-				for lo < n && sorted[lo] < loBound {
-					lo++
-				}
-				// Advance upper bound
-				for hi < n && sorted[hi] <= hiBound {
-					hi++
-				}
-				var sumK float64
-				for j := lo; j < hi; j++ {
-					diff := logGridVal - sorted[j]
-					sumK += math.Exp(diff * diff * invBwSqNegHalf)
-				}
-				// Change-of-variables: f(k) = f_logk(log k) / k
-				density[i] = (sumK * invNormFactor) / math.Exp(logGridVal)
-			}
-		}(start, end)
 	}
-	wg.Wait()
 
-	// ---- argmax → return original-scale mode ----
+	// ---- Step 2: Gaussian kernel (symmetric, wrapped for circular convolution) ----
+	// kernel[d] = exp(-0.5 * (d * step / bw)^2) for the positive half,
+	// mirrored into the upper half of the array for the negative offsets
+	// (circular convolution wraparound).
+	kernel := make([]float64, nGrid)
+	stepOverBw := step / bw
+	halfM := nGrid / 2
+	for d := 0; d <= halfM; d++ {
+		z := float64(d) * stepOverBw
+		if z > 5.0 {
+			break // Gaussian < 3.7e-6 beyond 5σ
+		}
+		kval := math.Exp(-0.5 * z * z)
+		kernel[d] = kval
+		if d > 0 && nGrid-d > halfM {
+			kernel[nGrid-d] = kval // wrap negative offsets
+		}
+	}
+
+	// ---- Step 3: FFT convolution (O(M log M)) ----
+	fftObj := fourier.NewFFT(nGrid)
+	countsFFT := fftObj.Coefficients(nil, counts)
+	kernelFFT := fftObj.Coefficients(nil, kernel)
+	for i := range countsFFT {
+		countsFFT[i] *= kernelFFT[i]
+	}
+	conv := fftObj.Sequence(nil, countsFFT)
+
+	// ---- Step 4: Normalize and change-of-variables, then argmax ----
+	// f_log(g_i) = conv[i] / (N * bw * sqrt(2π))
+	// f(k_i) = f_log(g_i) / exp(g_i)
+	invNormFactor := 1.0 / (float64(n) * bw * math.Sqrt(2*math.Pi))
 	bestIdx := 0
-	bestVal := density[0]
-	for i := 1; i < nGrid; i++ {
-		if density[i] > bestVal {
-			bestVal = density[i]
+	bestVal := -math.MaxFloat64
+	for i := 0; i < nGrid; i++ {
+		logGridVal := minVal + step*float64(i)
+		d := conv[i] * invNormFactor / math.Exp(logGridVal)
+		if d > bestVal {
+			bestVal = d
 			bestIdx = i
 		}
 	}
+
 	return math.Exp(minVal + step*float64(bestIdx))
 }
