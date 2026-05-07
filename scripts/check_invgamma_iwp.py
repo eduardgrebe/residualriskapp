@@ -14,13 +14,13 @@ from residualrisk import core as rr
 # ── Load human posterior ─────────────────────────────────────────────────────
 static = Path("static")
 k_human = pd.read_parquet(static / "k_param_human.parquet").iloc[:, 0].values
-k_mode_human = rr.mode_kde(k_human)
+k_mode_human = rr.mode_kde(k_human, n_grid=5_000, cap=50_000)
 print(f"Human posterior: n={len(k_human)}, mode_kde={k_mode_human:.8f}")
 
 # ── Load artificial posterior ─────────────────────────────────────────────────────
 static = Path("static")
 k_expdecay = pd.read_parquet(static / "k_param_expdecay.parquet").iloc[:, 0].values
-k_mode_exp = rr.mode_kde(k_expdecay, cap = 100_000)
+k_mode_exp = rr.mode_kde(k_expdecay, n_grid=5_000, cap=100_000)
 print(f"Artificial posterior: n={len(k_expdecay)}, mode_kde={k_mode_exp:.8f}")
 
 

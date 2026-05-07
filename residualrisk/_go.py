@@ -21,13 +21,13 @@ Python wrapper for calling the Go implementation of risk_days_bs()
 
 import json
 import queue
+import struct
 import subprocess
 import threading
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from scipy import stats as scipy_stats
 
 
 def find_go_binary():
@@ -252,20 +252,27 @@ def risk_days_bs_go(
             "Either k_posterior_sample, k_gamma parameters, k_invgamma parameters, or k_lnmix parameters must be provided"
         )
 
+    # If sim_df requested, tell Go to return per-iteration params via binary format
+    if return_sim_df:
+        input_data["return_params"] = True
+
     # Run Go binary
     try:
+        # Binary mode on stdout when return_params=True to read raw float64 arrays.
+        # Text mode (current behaviour) otherwise.
+        use_binary = return_sim_df
         process = subprocess.Popen(
             [binary_path],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,  # Line buffering for real-time output
+            text=False,   # always bytes — we decode stderr lines manually
+            bufsize=0,    # unbuffered for binary; progress lines are small
         )
 
         # Send input and close stdin
         input_json = json.dumps(input_data)
-        process.stdin.write(input_json)
+        process.stdin.write(input_json.encode())
         process.stdin.close()
 
         # Read both stdout and stderr in background threads to avoid deadlock
@@ -275,23 +282,23 @@ def risk_days_bs_go(
         stdout_data = []
 
         def read_stderr():
-            """Background thread to read stderr for progress updates"""
+            """Background thread to read stderr for progress updates (bytes → UTF-8 lines)"""
             try:
-                for line in iter(process.stderr.readline, ""):
-                    if not line:
+                for line_bytes in iter(process.stderr.readline, b""):
+                    if not line_bytes:
                         break
-                    stderr_queue.put(line)
+                    stderr_queue.put(line_bytes.decode("utf-8", errors="replace"))
             except Exception as e:
                 stderr_queue.put(f"STDERR_ERROR: {e}")
             finally:
                 process.stderr.close()
 
         def read_stdout():
-            """Background thread to read stdout (potentially large JSON)"""
+            """Background thread to read stdout as raw bytes"""
             try:
                 stdout_data.append(process.stdout.read())
             except Exception as e:
-                stdout_data.append(f"STDOUT_ERROR: {e}")
+                stdout_data.append(f"STDOUT_ERROR: {e}".encode())
             finally:
                 process.stdout.close()
 
@@ -331,110 +338,58 @@ def risk_days_bs_go(
         if process.returncode != 0:
             raise RuntimeError(f"Go binary failed: {error_msg}")
 
-        # Get stdout data
-        stdout = stdout_data[0] if stdout_data else ""
-        if stdout.startswith("STDOUT_ERROR:"):
-            raise RuntimeError(f"Failed to read stdout: {stdout}")
+        # Get stdout bytes
+        raw = stdout_data[0] if stdout_data else b""
+        if isinstance(raw, str) or (isinstance(raw, bytes) and raw.startswith(b"STDOUT_ERROR:")):
+            raise RuntimeError(f"Failed to read stdout: {raw}")
 
-        # Parse output
-        output = json.loads(stdout)
+        if use_binary:
+            # Parse binary wire format:
+            #   [8 bytes]  uint64 LE — length of JSON header
+            #   [N bytes]  JSON header
+            #   [rest]     column-major float64 LE arrays (iwp, k, doubling_time, lod50, volume_transfused)
+            header_len = struct.unpack_from("<Q", raw, 0)[0]
+            header = json.loads(raw[8:8 + header_len])
+            n_cols = len(header["columns"])
+            n_bs_actual = header["n_bs"]
+            arrays = np.frombuffer(raw[8 + header_len:], dtype="<f8").reshape(n_cols, n_bs_actual)
+            col_idx = {name: i for i, name in enumerate(header["columns"])}
 
-        # Extract results
-        rd_pe = output["point_estimate"]
-        rd_cri = tuple(output["credible_interval"])
-        rd_range = tuple(output["range"])
-        rdests = output["simulations"]
+            rd_pe = header["point_estimate"]
+            rd_cri = tuple(header["credible_interval"])
+            rd_range = tuple(header["range"])
+            rdests = arrays[col_idx["iwp"]].tolist()
 
-        # Return in same format as Python version
-        if return_sim_df:
-            # Construct sim_df matching Python implementation
-            # IMPORTANT: Regenerate the same random samples using the same seed.
-            # Note: Due to differences between Go's and Python's RNG implementations,
-            # the regenerated parameters here may not exactly match what the Go
-            # binary used internally, even with the same seed. The iwp results are
-            # correct (from Go), but the associated parameter samples are approximations
-            # based on Python's RNG with the same seed and distributions.
-            np.random.seed(seed)
-
-            # Generate k samples — mirrors the distribution used by Go.
-            # Note: Python and Go use independent RNGs; values won't match
-            # exactly even with the same seed. See docstring for details.
-            if k_posterior_sample is not None:
-                ks = np.random.choice(k_posterior_sample, size=n_bs, replace=True)
-            elif k_gamma_shape is not None and k_gamma_scale is not None:
-                ks = np.random.gamma(k_gamma_shape, k_gamma_scale, n_bs)
-            elif k_invgamma_alpha is not None:
-                ks = scipy_stats.invgamma.rvs(k_invgamma_alpha, scale=_beta, size=n_bs)
-            elif k_lnmix_w is not None:
-                from .core import sample_lnmix
-                ks = sample_lnmix(n_bs, k_lnmix_w, k_lnmix_mu1, k_lnmix_sigma1,
-                                   k_lnmix_mu2, k_lnmix_sigma2, seed=seed)
-
-            # Generate doubling time samples (truncated normal)
-            doubling_times = scipy_stats.truncnorm.rvs(
-                0, np.inf, doubling_time, doubling_time_norm_sd, n_bs
-            )
-
-            # Generate lod50 samples (truncated normal)
-            lod50s = scipy_stats.truncnorm.rvs(0, np.inf, lod50, lod50_sd, n_bs)
-
-            # Generate volume transfused samples (uniform)
-            volumes_transfused = np.random.uniform(
-                volume_transfused_range[0], volume_transfused_range[1], n_bs
-            )
-
-            # Build args_list matching Python format
-            args_list = [
-                (
-                    copies_per_virion,
-                    C0,
-                    doubling_times[i],
-                    volumes_transfused[i],
-                    ks[i],
-                    pool_size,
-                    lod50s[i],
-                    lod95_lod50_ratio,
-                    retests,
-                    z,
-                    (-100, 500),
-                )
-                for i in range(n_bs)
-            ]
-
-            # Create DataFrame
-            sim_df = pd.DataFrame(
-                args_list,
-                columns=[
-                    "copies_per_virion",
-                    "C0",
-                    "doubling_time",
-                    "volume_transfused",
-                    "k",
-                    "pool_size",
-                    "lod50",
-                    "lod95_lod50_ratio",
-                    "retests",
-                    "z",
-                    "limits",
-                ],
-            )
-
-            # Convert lod95 from ratio to actual value
-            sim_df["lod95"] = sim_df["lod50"] * sim_df["lod95_lod50_ratio"]
-
-            # Add iwp results
-            sim_df["iwp"] = rdests
-
-            # Add random seed
-            sim_df["random_seed"] = np.repeat(seed, n_bs)
-
+            # Build sim_df from the REAL per-iteration parameters returned by Go.
+            sim_df = pd.DataFrame({
+                "k":                 arrays[col_idx["k"]],
+                "doubling_time":     arrays[col_idx["doubling_time"]],
+                "lod50":             arrays[col_idx["lod50"]],
+                "volume_transfused": arrays[col_idx["volume_transfused"]],
+                "iwp":               arrays[col_idx["iwp"]],
+            })
+            # Reconstruct constant columns from input (identical across all iterations)
+            sim_df["copies_per_virion"] = copies_per_virion
+            sim_df["C0"] = C0
+            sim_df["pool_size"] = pool_size
+            sim_df["lod95_lod50_ratio"] = lod95_lod50_ratio
+            sim_df["lod95"] = sim_df["lod50"] * lod95_lod50_ratio
+            sim_df["retests"] = retests
+            sim_df["z"] = z
+            sim_df["random_seed"] = seed
             return (rd_pe, rd_cri, rd_range, rdests, sim_df)
         else:
+            # Standard JSON output path (return_sim_df=False)
+            output = json.loads(raw.decode("utf-8"))
+            rd_pe = output["point_estimate"]
+            rd_cri = tuple(output["credible_interval"])
+            rd_range = tuple(output["range"])
+            rdests = output["simulations"]
             return (rd_pe, rd_cri, rd_range, rdests, None)
 
     except subprocess.SubprocessError as e:
         raise RuntimeError(f"Failed to run Go binary: {e}")
     except json.JSONDecodeError as e:
-        raise RuntimeError(f"Failed to parse Go output: {e}. Output was: {stdout}")
+        raise RuntimeError(f"Failed to parse Go output: {e}. Output was: {raw!r:.200}")
     except Exception as e:
         raise RuntimeError(f"Unexpected error calling Go implementation: {e}")

@@ -244,7 +244,7 @@ class TestInvGammaBootstrapKSamples:
     def test_k_samples_mode_matches_theory(self):
         """KDE mode of bootstrap k samples ≈ beta / (alpha + 1)."""
         k = self._get_k_samples(n_bs=5000)
-        mode_est = rr.mode_kde(k)
+        mode_est = rr.mode_kde(k, n_grid=5_000, cap=50_000)
         assert mode_est == pytest.approx(THEORY_MODE, rel=0.15)
 
     def test_k_samples_cdf_ks(self):

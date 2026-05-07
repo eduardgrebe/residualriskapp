@@ -18,6 +18,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -162,12 +163,64 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Write output to stdout as JSON
-	outputJSON, err := json.Marshal(output)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, `{"type": "error", "message": "failed to marshal output: %v"}`+"\n", err)
-		os.Exit(1)
+	if input.ReturnParams {
+		// Binary wire format:
+		//   [8 bytes]  uint64 LE — byte length of JSON header
+		//   [N bytes]  JSON header with summary stats + column metadata
+		//   [rest]     column-major float64 LE arrays:
+		//              iwp, k, doubling_time, lod50, volume_transfused
+		columns := []string{"iwp", "k", "doubling_time", "lod50", "volume_transfused"}
+		type binaryHeader struct {
+			Version          string     `json:"version"`
+			PointEstimate    float64    `json:"point_estimate"`
+			CredibleInterval [2]float64 `json:"credible_interval"`
+			Range            [2]float64 `json:"range"`
+			NBS              int        `json:"n_bs"`
+			Columns          []string   `json:"columns"`
+		}
+		header := binaryHeader{
+			Version:          output.Version,
+			PointEstimate:    output.PointEstimate,
+			CredibleInterval: output.CredibleInterval,
+			Range:            output.Range,
+			NBS:              len(output.Simulations),
+			Columns:          columns,
+		}
+		headerBytes, err := json.Marshal(header)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, `{"type": "error", "message": "failed to marshal binary header: %v"}`+"\n", err)
+			os.Exit(1)
+		}
+		// Write header length as uint64 LE
+		if err := binary.Write(os.Stdout, binary.LittleEndian, uint64(len(headerBytes))); err != nil {
+			fmt.Fprintf(os.Stderr, `{"type": "error", "message": "failed to write header length: %v"}`+"\n", err)
+			os.Exit(1)
+		}
+		// Write JSON header
+		if _, err := os.Stdout.Write(headerBytes); err != nil {
+			fmt.Fprintf(os.Stderr, `{"type": "error", "message": "failed to write header: %v"}`+"\n", err)
+			os.Exit(1)
+		}
+		// Write each column contiguously (column-major)
+		for _, col := range [][]float64{
+			output.Simulations,
+			output.Ks,
+			output.DoublingTimes,
+			output.LOD50s,
+			output.VolumesTransfused,
+		} {
+			if err := binary.Write(os.Stdout, binary.LittleEndian, col); err != nil {
+				fmt.Fprintf(os.Stderr, `{"type": "error", "message": "failed to write binary column: %v"}`+"\n", err)
+				os.Exit(1)
+			}
+		}
+	} else {
+		// Standard JSON output (backward compatible)
+		outputJSON, err := json.Marshal(output)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, `{"type": "error", "message": "failed to marshal output: %v"}`+"\n", err)
+			os.Exit(1)
+		}
+		fmt.Println(string(outputJSON))
 	}
-
-	fmt.Println(string(outputJSON))
 }

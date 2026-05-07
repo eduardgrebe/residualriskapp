@@ -960,3 +960,136 @@ func TestRiskDaysBS_LnMix_Reproducible(t *testing.T) {
 		}
 	}
 }
+
+// TestRiskDaysBS_ReturnsParams verifies that when ReturnParams=true, the returned
+// per-iteration parameter arrays are the actual values used to compute the IWPs.
+// For each simulation i, feeding the returned params back into RiskDays() must
+// reproduce the IWP exactly.
+func TestRiskDaysBS_ReturnsParams(t *testing.T) {
+w := 0.9
+mu1, sigma1 := -7.2403, 0.3241
+mu2, sigma2 := -3.7423, 0.5258
+input := RiskDaysInput{
+K:                    0.000672,
+DoublingTime:         0.85,
+DoublingTimeNormSD:   0.1,
+LOD50:                2.73,
+LOD50SD:              0.1,
+LOD95LOD50Ratio:      1.42,
+VolumeTransfused:     450,
+VolumeTransfusedMin:  300,
+VolumeTransfusedMax:  600,
+PoolSize:             16,
+Retests:              0,
+KLnMixW:              &w,
+KLnMixMu1:            &mu1,
+KLnMixSigma1:         &sigma1,
+KLnMixMu2:            &mu2,
+KLnMixSigma2:         &sigma2,
+NBS:                  200,
+Seed:                 42,
+Threads:              2,
+PointEstimate:        "median",
+ReturnParams:         true,
+}
+output, err := RiskDaysBS(input, nil)
+if err != nil {
+t.Fatalf("RiskDaysBS failed: %v", err)
+}
+
+// Verify all param arrays are populated and correct length
+n := len(output.Simulations)
+if len(output.Ks) != n {
+t.Errorf("Ks length %d != n_bs %d", len(output.Ks), n)
+}
+if len(output.DoublingTimes) != n {
+t.Errorf("DoublingTimes length %d != n_bs %d", len(output.DoublingTimes), n)
+}
+if len(output.LOD50s) != n {
+t.Errorf("LOD50s length %d != n_bs %d", len(output.LOD50s), n)
+}
+if len(output.VolumesTransfused) != n {
+t.Errorf("VolumesTransfused length %d != n_bs %d", len(output.VolumesTransfused), n)
+}
+
+// Verify that feeding each set of params back into RiskDays reproduces the IWP exactly.
+for i := 0; i < n; i++ {
+params := RiskDaysInnerParams{
+CopiesPerVirion:  input.CopiesPerVirion,
+C0:               input.C0,
+DoublingTime:     output.DoublingTimes[i],
+VolumeTransfused: output.VolumesTransfused[i],
+K:                output.Ks[i],
+PoolSize:         input.PoolSize,
+LOD50:            output.LOD50s[i],
+LOD95LOD50Ratio:  input.LOD95LOD50Ratio,
+Retests:          input.Retests,
+Z:                input.Z,
+LimitMin:         -100,
+LimitMax:         500,
+}
+// SetDefaults was already called inside RiskDaysBS, so C0/Z etc are set.
+// But params uses the same defaults, so this is consistent.
+if params.C0 == 0 {
+params.C0 = 0.00025
+}
+if params.Z == 0 {
+params.Z = 1.6449
+}
+if params.CopiesPerVirion == 0 {
+params.CopiesPerVirion = 2
+}
+recomputed, err := RiskDays(params)
+if err != nil {
+t.Errorf("RiskDays(%d) failed: %v", i, err)
+continue
+}
+if recomputed != output.Simulations[i] {
+t.Errorf("sim[%d]: recomputed=%.10f, stored=%.10f (params: k=%.8f dt=%.4f lod50=%.4f vol=%.1f)",
+i, recomputed, output.Simulations[i],
+output.Ks[i], output.DoublingTimes[i], output.LOD50s[i], output.VolumesTransfused[i])
+}
+}
+}
+
+// TestRiskDaysBS_ReturnParamsFalse verifies that when ReturnParams=false (default),
+// param arrays are nil and JSON output is not polluted.
+func TestRiskDaysBS_ReturnParamsFalse(t *testing.T) {
+alpha, beta := 2.0, 0.002019
+input := RiskDaysInput{
+K:                   beta / (alpha + 1),
+DoublingTime:        0.85,
+DoublingTimeNormSD:  0.1,
+LOD50:               2.73,
+LOD50SD:             0.1,
+LOD95LOD50Ratio:     1.42,
+VolumeTransfused:    450,
+VolumeTransfusedMin: 300,
+VolumeTransfusedMax: 600,
+PoolSize:            16,
+Retests:             0,
+KInvGammaAlpha:      &alpha,
+KInvGammaBeta:       &beta,
+NBS:                 100,
+Seed:                42,
+Threads:             2,
+PointEstimate:       "median",
+ReturnParams:        false,
+}
+output, err := RiskDaysBS(input, nil)
+if err != nil {
+t.Fatalf("RiskDaysBS failed: %v", err)
+}
+if output.Ks != nil {
+t.Errorf("expected Ks nil when ReturnParams=false, got len=%d", len(output.Ks))
+}
+if output.DoublingTimes != nil {
+t.Errorf("expected DoublingTimes nil when ReturnParams=false")
+}
+if output.LOD50s != nil {
+t.Errorf("expected LOD50s nil when ReturnParams=false")
+}
+if output.VolumesTransfused != nil {
+t.Errorf("expected VolumesTransfused nil when ReturnParams=false")
+}
+}

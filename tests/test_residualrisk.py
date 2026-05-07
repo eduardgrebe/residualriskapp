@@ -558,7 +558,7 @@ class TestModeKde:
 
         rng = np.random.default_rng(seed=1)
         data = rng.lognormal(mean=-7.0, sigma=0.3, size=5000)
-        assert rr.mode_kde(data) == rr._kde_mode_log(data)
+        assert rr.mode_kde(data, n_grid=5_000) == rr._kde_mode_log(data, n_grid=5_000)
 
     def test_all_zeros_or_negatives_raises(self):
         """Zero or negative values should raise ValueError (log undefined)."""
@@ -674,7 +674,7 @@ class TestInvgammaIwpAgreement:
     def test_iwp_mode_agrees_with_human_posterior(self):
         """IWP mode from InvGamma ≈ IWP mode from human posterior."""
         k_human = self._load_human_posterior()
-        k_mode_human = rr.mode_kde(k_human)
+        k_mode_human = rr.mode_kde(k_human, n_grid=5_000, cap=50_000)
         params = self._common_params()
 
         # Human posterior
@@ -700,10 +700,11 @@ class TestInvgammaIwpAgreement:
 
         # Point estimates should agree within 25% (n_bs=500 is noisy)
         assert iwp_human == pytest.approx(iwp_ig, rel=0.25)
+
     def test_iwp_mode_agrees_with_human_posterior_go(self):
         """Same as above, but using the Go implementation."""
         k_human = self._load_human_posterior()
-        k_mode_human = rr.mode_kde(k_human)
+        k_mode_human = rr.mode_kde(k_human, n_grid=5_000, cap=50_000)
         params = {**self._common_params(), "use_go": True}
 
         # Human posterior

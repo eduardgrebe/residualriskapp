@@ -62,6 +62,9 @@ type RiskDaysInput struct {
 	Threads       int    `json:"threads"`         // default: num_cpu - 1
 	PointEstimate string `json:"point_estimate"`  // "primary parameters", "median", "mean", "mode"
 	ModePrecision int    `json:"mode_precision"`  // default: 2
+
+	// Output control
+	ReturnParams bool `json:"return_params"` // if true, return per-iteration parameter arrays via binary output
 }
 
 // RiskDaysOutput represents the output of the risk days calculation
@@ -71,6 +74,13 @@ type RiskDaysOutput struct {
 	CredibleInterval  [2]float64 `json:"credible_interval"` // [lower, upper]
 	Range             [2]float64 `json:"range"`             // [min, max]
 	Simulations       []float64  `json:"simulations"`
+
+	// Per-iteration parameter arrays — only populated when ReturnParams=true.
+	// Tagged json:"-" so they are never included in standard JSON output.
+	Ks               []float64 `json:"-"`
+	DoublingTimes    []float64 `json:"-"`
+	LOD50s           []float64 `json:"-"`
+	VolumesTransfused []float64 `json:"-"`
 }
 
 // ProgressMessage represents a progress update during calculation

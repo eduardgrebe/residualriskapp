@@ -88,9 +88,9 @@ def load_data():
     # Falls back to hardcoded values if Go binary is unavailable.
     _go_bin = rr.find_go_binary()
     if _go_bin is not None:
-        k_human_mode = rr.mode_kde_go(k_human, cap=40_000, n_grid=5_000)
-        k_animal_mode = rr.mode_kde_go(k_animal, cap=40_000, n_grid=5_000)
-        k_expdecay_mode = rr.mode_kde_go(k_expdecay, cap=40_000, n_grid=5_000)
+        k_human_mode = rr.mode_kde_go(k_human, cap=50_000, n_grid=5_000)
+        k_animal_mode = rr.mode_kde_go(k_animal, cap=50_000, n_grid=5_000)
+        k_expdecay_mode = rr.mode_kde_go(k_expdecay, cap=50_000, n_grid=5_000)
     else:
         # Hardcoded fallback (computed with Python KDE on full posteriors).
         # TODO: remove once Go binary is always available in deployment.
@@ -740,7 +740,7 @@ if st.sidebar.button(button_label):
                 if k_lnmix_pe_choice == "median":
                     k_pe = float(np.median(_lnmix_sample))
                 else:  # mode
-                    k_pe = rr.mode_kde(_lnmix_sample)
+                    k_pe = rr.mode_kde(_lnmix_sample, n_grid=5_000, cap=50_000)
         elif k_param_pe == "mode":
             _mode_key = {
                 "human": "k_human_mode",
@@ -900,7 +900,7 @@ else:
             elif point_estimate == "mean":
                 iwp_pe = st.session_state["samp"]["iwp"].mean()
             elif point_estimate == "mode":
-                iwp_pe = rr.mode_kde(np.array(st.session_state["samp"]["iwp"]))
+                iwp_pe = rr.mode_kde(np.array(st.session_state["samp"]["iwp"]), n_grid=5_000, cap=50_000)
             else:
                 iwp_pe = st.session_state["iwp_pe_primpar"]
         elif rde_method == "Lookback data":

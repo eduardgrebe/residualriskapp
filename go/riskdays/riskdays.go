@@ -184,11 +184,18 @@ func RiskDaysBS(input RiskDaysInput, progressCallback ProgressCallback) (*RiskDa
 	}
 
 	// Return results
-	return &RiskDaysOutput{
+	out := &RiskDaysOutput{
 		Version:          Version,
 		PointEstimate:    rdPE,
 		CredibleInterval: rdCrI,
 		Range:            rdRange,
 		Simulations:      rdests,
-	}, nil
+	}
+	if input.ReturnParams {
+		out.Ks = ks
+		out.DoublingTimes = doublingTimes
+		out.LOD50s = lod50s
+		out.VolumesTransfused = volumesTransfused
+	}
+	return out, nil
 }

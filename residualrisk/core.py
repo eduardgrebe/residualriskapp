@@ -278,7 +278,7 @@ def _kde_mode_log(data, n_grid=5_000, cap=50_000):
     return float(mode)
 
 
-def mode_kde(data, n_grid=100_000, cap=50_000):
+def mode_kde(data, n_grid=5_000, cap=50_000):
     """Public wrapper for _kde_mode_log — estimate the mode of a
     positive posterior distribution via KDE on the log scale.
 

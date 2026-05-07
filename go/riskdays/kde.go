@@ -21,6 +21,7 @@ import (
 	"math"
 	"math/rand"
 	"runtime"
+	"sort"
 	"sync"
 )
 
@@ -101,19 +102,27 @@ func KDEModeLog(data []float64, nGrid int, cap int, threads int) float64 {
 	}
 	bw := 1.06 * std * math.Pow(float64(n), -0.2)
 
-	// ---- log-spaced grid (natural log) ----
-	grid := make([]float64, nGrid)
+	// ---- log-spaced grid: work directly in log space ----
+	// grid[i] = Exp(logGridVal[i]) so log(grid[i]) == logGridVal[i] — no need
+	// to store the exp'd grid or call Log() inside the hot loop.
 	step := (maxVal - minVal) / float64(nGrid-1)
-	for i := 0; i < nGrid; i++ {
-		grid[i] = math.Exp(minVal + step*float64(i))
-	}
+
+	// ---- pre-sort logData so the 5σ cutoff can use a two-pointer scan ----
+	sorted := make([]float64, n)
+	copy(sorted, logData)
+	sort.Float64s(sorted)
 
 	// ---- evaluate KDE on grid in parallel ----
+	// Pre-compute reciprocals to replace divisions with multiplications in the
+	// inner loop (division is ~3–5× slower than multiplication on modern CPUs).
+	invBw := 1.0 / bw
+	invBwSqNegHalf := -0.5 * invBw * invBw
 	normFactor := float64(n) * bw * math.Sqrt(2*math.Pi)
+	invNormFactor := 1.0 / normFactor
+	cutoff := 5.0 * bw // beyond ±5σ the Gaussian kernel contributes < 3.7e-6
 
 	density := make([]float64, nGrid)
 	var wg sync.WaitGroup
-	// Split grid into chunks for goroutines
 	workers := threads
 	if workers <= 0 {
 		workers = runtime.NumCPU()
@@ -131,21 +140,34 @@ func KDEModeLog(data []float64, nGrid int, cap int, threads int) float64 {
 		wg.Add(1)
 		go func(s, e int) {
 			defer wg.Done()
+			// Two-pointer bounds into sorted logData for the 5σ window.
+			// As logGridVal increases monotonically with i, lo/hi only move right.
+			lo, hi := 0, 0
 			for i := s; i < e; i++ {
-				logGrid := math.Log(grid[i])
-				var sumK float64
-				for _, lv := range logData {
-					z := (logGrid - lv) / bw
-					sumK += math.Exp(-0.5 * z * z)
+				logGridVal := minVal + step*float64(i)
+				loBound := logGridVal - cutoff
+				hiBound := logGridVal + cutoff
+				// Advance lower bound
+				for lo < n && sorted[lo] < loBound {
+					lo++
 				}
-				// Density on log scale, then change-of-variables to original
-				density[i] = (sumK / normFactor) / grid[i]
+				// Advance upper bound
+				for hi < n && sorted[hi] <= hiBound {
+					hi++
+				}
+				var sumK float64
+				for j := lo; j < hi; j++ {
+					diff := logGridVal - sorted[j]
+					sumK += math.Exp(diff * diff * invBwSqNegHalf)
+				}
+				// Change-of-variables: f(k) = f_logk(log k) / k
+				density[i] = (sumK * invNormFactor) / math.Exp(logGridVal)
 			}
 		}(start, end)
 	}
 	wg.Wait()
 
-	// ---- argmax ----
+	// ---- argmax → return original-scale mode ----
 	bestIdx := 0
 	bestVal := density[0]
 	for i := 1; i < nGrid; i++ {
@@ -154,5 +176,5 @@ func KDEModeLog(data []float64, nGrid int, cap int, threads int) float64 {
 			bestIdx = i
 		}
 	}
-	return grid[bestIdx]
+	return math.Exp(minVal + step*float64(bestIdx))
 }
