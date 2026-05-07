@@ -128,6 +128,43 @@ def mode_kde_go(
         return None
 
 
+def mode_hsm_go(data: "np.ndarray") -> float:
+    """
+    Estimate the mode using the Half-Sample Mode (HSM) algorithm via the Go
+    binary.
+
+    HSM iteratively finds the shortest interval containing half the data,
+    recursing until 1–3 points remain.  It is bandwidth-free and outlier-robust.
+
+    Parameters
+    ----------
+    data:
+        1-D array of positive values.
+
+    Returns
+    -------
+    float
+        Estimated mode, or ``None`` if the Go binary is unavailable.
+    """
+    go_bin = find_go_binary()
+    if go_bin is None:
+        return None
+
+    arr = np.asarray(data, dtype=float)
+    payload = json.dumps({"data": arr.tolist()})
+    try:
+        result = subprocess.run(
+            [go_bin, "--hsm-mode"],
+            input=payload,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return json.loads(result.stdout)["mode"]
+    except Exception:
+        return None
+
+
 def risk_days_bs_go(
     k,
     doubling_time,

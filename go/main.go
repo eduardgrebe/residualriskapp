@@ -34,16 +34,23 @@ Usage:
   riskdays_go [input.json]        Read parameters from a JSON file
   riskdays_go                     Read parameters from stdin (JSON)
   riskdays_go --kde-mode [f.json] KDE mode estimation (see below)
+  riskdays_go --hsm-mode [f.json] Half-Sample Mode estimation (see below)
 
 Options:
   -h, --help       Show this help message and exit
   -v, --version    Print version and exit
   --kde-mode       Run KDE mode estimation instead of bootstrap simulation
+  --hsm-mode       Run Half-Sample Mode estimation instead of bootstrap simulation
 
 KDE mode:
   Reads JSON {"data":[...], "n_grid":5000, "cap":5000, "threads":0} from
   stdin (or a file argument) and writes {"mode": X} to stdout.
   n_grid=0 → auto-size; cap=0 → no cap; threads=0 → use all CPU cores.
+
+HSM mode:
+  Reads JSON {"data":[...]} from stdin (or a file argument) and writes
+  {"mode": X} to stdout. Uses the Half-Sample Mode algorithm (bandwidth-free,
+  outlier-robust). No tuning parameters needed.
 
 Example (stdin):
   echo '{"doubling_time": 0.85, "lod50": 2.73, "pool_size": 16, "n_bs": 10000}' | riskdays_go
@@ -103,6 +110,33 @@ func main() {
 				os.Exit(1)
 			}
 			mode := riskdays.KDEModeLog(kdeInput.Data, kdeInput.NGrid, kdeInput.Cap, kdeInput.Threads)
+			out, _ := json.Marshal(kdeModeOutput{Mode: mode})
+			fmt.Println(string(out))
+			os.Exit(0)
+		}
+		if arg == "--hsm-mode" {
+			// Half-Sample Mode subcommand: read JSON from file arg or stdin
+			if len(os.Args) > 2 {
+				inputData, err = os.ReadFile(os.Args[2])
+				if err != nil {
+					fmt.Fprintf(os.Stderr, `{"type": "error", "message": "failed to read hsm-mode input file: %v"}`+"\n", err)
+					os.Exit(1)
+				}
+			} else {
+				inputData, err = io.ReadAll(os.Stdin)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, `{"type": "error", "message": "failed to read hsm-mode input from stdin: %v"}`+"\n", err)
+					os.Exit(1)
+				}
+			}
+			var hsmInput struct {
+				Data []float64 `json:"data"`
+			}
+			if err := json.Unmarshal(inputData, &hsmInput); err != nil {
+				fmt.Fprintf(os.Stderr, `{"type": "error", "message": "failed to parse hsm-mode JSON: %v"}`+"\n", err)
+				os.Exit(1)
+			}
+			mode := riskdays.HalfSampleMode(hsmInput.Data)
 			out, _ := json.Marshal(kdeModeOutput{Mode: mode})
 			fmt.Println(string(out))
 			os.Exit(0)
