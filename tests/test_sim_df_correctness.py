@@ -99,8 +99,8 @@ class TestSimDfStructure:
         kw = _invgamma_kwargs()
         _, _, _, _, sim_df = rr.risk_days_bs(**kw)
         np.testing.assert_allclose(
-            sim_df["lod95"].values,
-            sim_df["lod50"].values * kw["lod95_lod50_ratio"],
+            sim_df["lod95"].to_numpy(),
+            sim_df["lod50"].to_numpy() * kw["lod95_lod50_ratio"],
             rtol=1e-9,
         )
 
@@ -156,7 +156,7 @@ class TestSimDfParamsAreReal:
         """rdests (the raw IWP list) must equal sim_df.iwp exactly."""
         _, _, _, rdests, sim_df = rr.risk_days_bs(**_invgamma_kwargs())
         np.testing.assert_array_equal(
-            np.array(rdests), sim_df["iwp"].values,
+            np.array(rdests), sim_df["iwp"].to_numpy(),
             err_msg="rdests and sim_df.iwp must be identical",
         )
 
@@ -223,12 +223,12 @@ class TestBinaryFormatCorrectness:
         kw = _invgamma_kwargs()
         _, _, _, _, df1 = rr.risk_days_bs(**kw)
         _, _, _, _, df2 = rr.risk_days_bs(**kw)
-        np.testing.assert_array_equal(df1["iwp"].values, df2["iwp"].values)
-        np.testing.assert_array_equal(df1["k"].values, df2["k"].values)
+        np.testing.assert_array_equal(df1["iwp"].to_numpy(), df2["iwp"].to_numpy())
+        np.testing.assert_array_equal(df1["k"].to_numpy(), df2["k"].to_numpy())
 
     def test_different_seeds_differ(self):
         kw = _invgamma_kwargs()
         _, _, _, _, df1 = rr.risk_days_bs(**kw)
         _, _, _, _, df2 = rr.risk_days_bs(**{**kw, "seed": 77777})
-        assert not np.array_equal(df1["k"].values, df2["k"].values), \
+        assert not np.array_equal(df1["k"].to_numpy(), df2["k"].to_numpy()), \
             "k samples should differ across seeds"

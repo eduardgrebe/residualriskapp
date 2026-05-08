@@ -224,7 +224,7 @@ class TestInvGammaBootstrapKSamples:
     def _get_k_samples(self, **overrides):
         kwargs = {**self._KWARGS, **overrides}
         result = rr.risk_days_bs(**kwargs)
-        return _simdf(result)["k"].values
+        return _simdf(result)["k"].to_numpy()
 
     def test_k_samples_positive(self):
         """All k values drawn from InvGamma must be strictly positive."""
@@ -268,7 +268,7 @@ class TestInvGammaBootstrapKSamples:
         }
         kwargs_mode["k_invgamma_mode"] = THEORY_MODE
         result_mode = rr.risk_days_bs(**kwargs_mode, n_bs=n)
-        k_mode = _simdf(result_mode)["k"].values
+        k_mode = _simdf(result_mode)["k"].to_numpy()
         # Both samples should be from the same distribution: KS test
         ks_stat, p_value = scipy_stats.ks_2samp(k_beta, k_mode)
         assert p_value > 0.01, (

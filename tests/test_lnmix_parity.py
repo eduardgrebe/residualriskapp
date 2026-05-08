@@ -234,7 +234,7 @@ class TestLnMixBootstrapKSamples:
     def _get_k_samples(self, **overrides):
         kwargs = {**self._KWARGS, **overrides}
         result = rr.risk_days_bs(**kwargs)
-        return _simdf(result)["k"].values
+        return _simdf(result)["k"].to_numpy()
 
     def test_k_samples_positive(self):
         """All k values drawn from lnmix must be strictly positive."""
