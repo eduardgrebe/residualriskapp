@@ -23,7 +23,7 @@ import time
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
+import polars as pl
 import plotly.express as px
 import scipy.stats as stats
 import streamlit as st
@@ -77,9 +77,9 @@ def load_data():
     # Use Path to ensure files are loaded relative to this script, not cwd
     static_dir = Path(__file__).parent / "static"
 
-    k_animal = np.array(pd.read_parquet(static_dir / "k_param_animal.parquet").k)
-    k_human = np.array(pd.read_parquet(static_dir / "k_param_human.parquet").k)
-    k_expdecay = np.array(pd.read_parquet(static_dir / "k_param_expdecay.parquet").k)
+    k_animal = pl.read_parquet(static_dir / "k_param_animal.parquet", columns=["k"]).to_numpy()
+    k_human = pl.read_parquet(static_dir / "k_param_human.parquet", columns=["k"]).to_numpy()
+    k_expdecay = pl.read_parquet(static_dir / "k_param_expdecay.parquet", columns=["k"]).to_numpy()
 
     # KDE modes via Go binary (~1.5s total, 30× faster than Python KDE).
     # Falls back to hardcoded values if Go binary is unavailable.
@@ -789,7 +789,7 @@ if st.sidebar.button(button_label):
         )
         st.session_state["sims_run"] = True
         st.session_state["rde_method_run"] = "Mechanistic model"
-        st.session_state["samp"] = pd.DataFrame(st.session_state["bs"], columns=["iwp"])
+        st.session_state["samp"] = pl.DataFrame({"iwp": st.session_state["bs"]})
         # Fallback: if sim_df is None (e.g., from Go implementation), use samp
         if st.session_state["sim_df"] is None:
             st.session_state["sim_df"] = st.session_state["samp"]
@@ -804,8 +804,8 @@ if st.sidebar.button(button_label):
         idis = None
         try:
             if uploaded_idi is not None:
-                idi_df = pd.read_csv(uploaded_idi, header=None)
-                idis = idi_df.iloc[:, 0].tolist()
+                idi_df = pl.read_csv(uploaded_idi, has_header=False)
+                idis = idi_df.to_series(0).to_list()
             elif idi_text.strip():
                 parts = re.split(r"[,\n\r\s]+", idi_text.strip())
                 idis = [float(v) for v in parts if v.strip()]
@@ -828,7 +828,7 @@ if st.sidebar.button(button_label):
                 st.session_state["iwp_pe_lookback"] = iwp_pe_lb
                 st.session_state["iwp_ci_lookback"] = iwp_ci_lb
                 st.session_state["bs"] = list(iwp_samples_lb)
-                st.session_state["samp"] = pd.DataFrame(iwp_samples_lb, columns=["iwp"])
+                st.session_state["samp"] = pl.DataFrame({"iwp": iwp_samples_lb})
                 st.session_state["sim_df"] = st.session_state["samp"]
                 st.session_state["sims_run"] = True
                 st.session_state["rde_method_run"] = "Lookback data"
