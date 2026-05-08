@@ -535,10 +535,10 @@ class TestModeKde:
     def _load_parquet(name: str) -> "np.ndarray":
         from pathlib import Path
 
-        import pandas as pd
+        import polars as pl
 
         static = Path(__file__).resolve().parent.parent / "static"
-        return pd.read_parquet(static / name).iloc[:, 0].values
+        return pl.read_parquet(static / name).to_series(0).to_numpy()
 
     def test_human_posterior_mode(self):
         """Human posterior k mode should be ≈ 0.000672 (document value 0.000673)."""
@@ -645,12 +645,10 @@ class TestInvgammaIwpAgreement:
     def _load_human_posterior() -> "np.ndarray":
         from pathlib import Path
 
-        import pandas as pd
+        import polars as pl
 
         static = Path(__file__).resolve().parent.parent / "static"
-        return pd.read_parquet(static / "k_param_human.parquet").iloc[
-            :, 0
-        ].values
+        return pl.read_parquet(static / "k_param_human.parquet").get_column("k").to_numpy()
 
     @staticmethod
     def _common_params() -> dict:

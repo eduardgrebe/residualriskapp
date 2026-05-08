@@ -27,7 +27,7 @@ import threading
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
+import polars as pl
 
 
 def find_go_binary():
@@ -397,22 +397,22 @@ def risk_days_bs_go(
             rdests = arrays[col_idx["iwp"]].tolist()
 
             # Build sim_df from the REAL per-iteration parameters returned by Go.
-            sim_df = pd.DataFrame({
+            sim_df = pl.DataFrame({
                 "k":                 arrays[col_idx["k"]],
                 "doubling_time":     arrays[col_idx["doubling_time"]],
                 "lod50":             arrays[col_idx["lod50"]],
                 "volume_transfused": arrays[col_idx["volume_transfused"]],
                 "iwp":               arrays[col_idx["iwp"]],
-            })
-            # Reconstruct constant columns from input (identical across all iterations)
-            sim_df["copies_per_virion"] = copies_per_virion
-            sim_df["C0"] = C0
-            sim_df["pool_size"] = pool_size
-            sim_df["lod95_lod50_ratio"] = lod95_lod50_ratio
-            sim_df["lod95"] = sim_df["lod50"] * lod95_lod50_ratio
-            sim_df["retests"] = retests
-            sim_df["z"] = z
-            sim_df["random_seed"] = seed
+            }).with_columns(
+                pl.lit(copies_per_virion).alias("copies_per_virion"),
+                pl.lit(C0).alias("C0"),
+                pl.lit(pool_size).alias("pool_size"),
+                pl.lit(lod95_lod50_ratio).alias("lod95_lod50_ratio"),
+                (pl.col("lod50") * lod95_lod50_ratio).alias("lod95"),
+                pl.lit(retests).alias("retests"),
+                pl.lit(z).alias("z"),
+                pl.lit(seed).alias("random_seed"),
+            )
             return (rd_pe, rd_cri, rd_range, rdests, sim_df)
         else:
             # Standard JSON output path (return_sim_df=False)

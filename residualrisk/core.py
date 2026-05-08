@@ -19,7 +19,7 @@ import math
 import statistics
 
 import numpy as np
-import pandas as pd
+import polars as pl
 import scipy.stats as stats
 
 
@@ -515,27 +515,26 @@ def _risk_days_bs_python(
     rd_range = [np.min(rdests), np.max(rdests)]
     rd_cri = np.quantile(rdests, (alpha / 2, 1 - alpha / 2))
     if return_sim_df:
-        sim_df = pd.DataFrame(
-            args_list,
-            columns=[
-                "copies_per_virion",
-                "C0",
-                "doubling_time",
-                "volume_transfused",
-                "k",
-                "pool_size",
-                "lod50",
-                "lod95_lod50_ratio",
-                "retests",
-                "z",
-                "limits",
-            ],
+        _col_names = [
+            "copies_per_virion",
+            "C0",
+            "doubling_time",
+            "volume_transfused",
+            "k",
+            "pool_size",
+            "lod50",
+            "lod95_lod50_ratio",
+            "retests",
+            "z",
+            "limits",
+        ]
+        sim_df = pl.DataFrame(
+            {name: list(col) for name, col in zip(_col_names, zip(*args_list))}
+        ).with_columns(
+            (pl.col("lod50") * pl.col("lod95_lod50_ratio")).alias("lod95"),  # Convert ratio to actual lod95
+            pl.Series("iwp", rdests),
+            pl.lit(seed).alias("random_seed"),
         )
-        sim_df["lod95"] = (
-            sim_df["lod50"] * sim_df["lod95_lod50_ratio"]
-        )  # Convert ratio to actual lod95
-        sim_df["iwp"] = rdests
-        sim_df["random_seed"] = np.repeat(seed, n_bs)
 
     if point_estimate == "primary parameters":
         rd_pe = _risk_days(
