@@ -133,16 +133,16 @@ class TestSimDfParamsAreReal:
         and plausible (higher k → longer window period).
         """
         assert len(sim_df) >= n_check
-        sample = sim_df.sample(n=n_check, random_state=42)
+        sample = sim_df.sample(n=n_check, seed=42)
 
         # All iwp values must be positive and finite
-        assert sample["iwp"].gt(0).all()
-        assert sample["iwp"].apply(math.isfinite).all()
+        assert (sample["iwp"] > 0).all()
+        assert sample["iwp"].is_finite().all()
 
         # All param values positive and finite
         for col in ("k", "doubling_time", "lod50", "volume_transfused"):
-            assert sample[col].gt(0).all(), f"non-positive in {col}"
-            assert sample[col].apply(math.isfinite).all(), f"non-finite in {col}"
+            assert (sample[col] > 0).all(), f"non-positive in {col}"
+            assert sample[col].is_finite().all(), f"non-finite in {col}"
 
     def test_invgamma_params_consistent(self):
         _, _, _, _, sim_df = rr.risk_days_bs(**_invgamma_kwargs())
@@ -180,13 +180,13 @@ class TestSimDfParamsAreReal:
         kw = {**_invgamma_kwargs(), "n_bs": 500}
         _, _, _, _, sim_df = rr.risk_days_bs(**kw)
         lo, hi = kw["volume_transfused_range"]
-        assert sim_df["volume_transfused"].between(lo, hi).all()
+        assert sim_df["volume_transfused"].is_between(lo, hi).all()
 
     def test_doubling_time_positive_and_near_mean(self):
         """Doubling times are truncated normal; 95th percentile should be near mean ± 3SD."""
         kw = {**_invgamma_kwargs(), "n_bs": 500}
         _, _, _, _, sim_df = rr.risk_days_bs(**kw)
-        assert sim_df["doubling_time"].gt(0).all()
+        assert (sim_df["doubling_time"] > 0).all()
         assert sim_df["doubling_time"].mean() == pytest.approx(kw["doubling_time"], rel=0.15)
 
 
