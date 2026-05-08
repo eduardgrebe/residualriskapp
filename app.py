@@ -17,6 +17,7 @@
 
 # Expects streamlit to be run from the root of the repository
 # streamlit run app/app.py
+import io
 import random
 import statistics
 import time
@@ -77,9 +78,9 @@ def load_data():
     # Use Path to ensure files are loaded relative to this script, not cwd
     static_dir = Path(__file__).parent / "static"
 
-    k_animal = pl.read_parquet(static_dir / "k_param_animal.parquet", columns=["k"]).to_numpy()
-    k_human = pl.read_parquet(static_dir / "k_param_human.parquet", columns=["k"]).to_numpy()
-    k_expdecay = pl.read_parquet(static_dir / "k_param_expdecay.parquet", columns=["k"]).to_numpy()
+    k_animal = pl.read_parquet(static_dir / "k_param_animal.parquet", columns=["k"]).get_column("k").to_numpy()
+    k_human = pl.read_parquet(static_dir / "k_param_human.parquet", columns=["k"]).get_column("k").to_numpy()
+    k_expdecay = pl.read_parquet(static_dir / "k_param_expdecay.parquet", columns=["k"]).get_column("k").to_numpy()
 
     # KDE modes via Go binary (~1.5s total, 30× faster than Python KDE).
     # Falls back to hardcoded values if Go binary is unavailable.
@@ -104,9 +105,11 @@ def load_data():
 @st.cache_data
 def convert_for_download(df, file_format="csv"):
     if file_format == "csv":
-        return df.to_csv().encode("utf-8")
+        return df.write_csv().encode("utf-8")
     elif file_format == "parquet":
-        return df.to_parquet()
+        buf = io.BytesIO()
+        df.write_parquet(buf)
+        return buf.getvalue()
     else:
         return None
 
