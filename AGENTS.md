@@ -1,4 +1,4 @@
-# Claude Code Instructions for residualriskapp
+# Agent Instructions for residualriskapp
 
 ## Project Overview
 
