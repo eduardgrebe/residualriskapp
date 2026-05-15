@@ -53,3 +53,6 @@ riskdays_go
 # Testing
 #_testing_/
 #testing/
+
+# Claude project settings
+.claude/

@@ -3,18 +3,14 @@ name = "residualrisk"
 dynamic = ["version"]
 description =  "Residual risk estimation tool"
 readme = "README.md"
-requires-python = "==3.14.*"
+requires-python = ">=3.14.5"
 dependencies = [
     "streamlit>=1.57.0",
     "polars>=1.40.1",
     "numpy>=2.4.4",
     "scipy>=1.17.1",
-    "pyarrow>=24.0.0",
-    "matplotlib>=3.10.9",
-    "seaborn>=0.13.2",
     "plotly>=6.7.0",
     "watchdog>=6.0.0",
-    "ipykernel>=7.2.0", # Not clear this is entirely necessary
 ]
 
 [build-system]
@@ -30,8 +26,6 @@ packages = ["residualrisk"]
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
-    "ruff>=0.15.12",
-]
-vulnerable_dependencies = [
-    "tornado>=6.5.5",
+    "ruff>=0.15.13",
+    "ipykernel>=7.2.0",
 ]
