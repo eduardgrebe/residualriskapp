@@ -6,15 +6,9 @@ A simulation tool for estimating the residual risk of HIV transmission through b
 
 ## Overview
 
-This tool implements a Monte Carlo simulation model to estimate the infectious window period and residual transmission risk for HIV in blood donations. The primary window period model accounts for:
+A simulation tool for estimating the residual risk of HIV transmission through blood transfusion during the pre-NAT window period (or due to PrEP breakthrough infection). Accounts for viral kinetics during early infection, NAT sensitivity, pooling strategy, and infectivity using the Belov et al. (2023) model. Provides a Streamlit-based web interface, a Python API and a high-performance Go implementation of the core simulation.
 
-- Viral kinetics during early infection (exponential growth from initial concentration)
-- Nucleic acid testing (NAT) sensitivity characteristics and limit of detection
-- Minipool testing and retesting protocols
-- Uncertainty in infectivity parameters using Bayesian posterior distributions from Belov et al. (2023)
-- Variable transfusion volumes
-
-The tool provides both a Python implementation and a high-performance Go implementation for large-scale parameter space exploration.
+The tool provides both a Python and a high-performance Go implementation, wrapped in a Python package for ease of use.
 
 A Streamlit-based interactive web interface is provided that can make use of either the Python or Go implementations.
 
@@ -443,4 +437,3 @@ go mod tidy
 ## Acknowledgments
 
 Developed at [Vitalant Research Institute](https://research.vitalant.org) for blood safety research.
-

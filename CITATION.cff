@@ -2,13 +2,12 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 title: "Residual HIV Transfusion Transmission Risk Estimation Tool"
 abstract: >-
-  A Monte Carlo simulation tool for estimating the residual risk of HIV
-  transmission through blood transfusion during the pre-NAT window period
-  (or due to PrEP breakthrough infection). Implements viral kinetics during
-  early infection, NAT sensitivity and pooling protocols, and uncertainty in
-  infectivity parameters via Bayesian posterior distributions. Provides a
-  Streamlit-based interactive web interface and a high-performance Go
-  implementation.
+  A simulation tool for estimating the residual risk of HIV transmission
+  through blood transfusion during the pre-NAT window period
+  (or due to PrEP breakthrough infection). Accounts for viral kinetics during
+  early infection, NAT sensitivity, pooling strategy, and infectivity using 
+  the Belov et al. (2023) model. Provides a Streamlit-based web interface, 
+  a Python API and a high-performance Go implementation of the core simulation.
 type: software
 authors:
   - family-names: Grebe
@@ -24,9 +23,9 @@ license: AGPL-3.0-or-later
 keywords:
   - HIV
   - blood transfusion
+  - transfusion transmission
   - residual risk
   - window period
   - nucleic acid testing
   - Monte Carlo simulation
-  - Bayesian inference
   - blood safety
