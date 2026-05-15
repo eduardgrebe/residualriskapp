@@ -278,11 +278,9 @@ bs <- rr$risk_days_bs(...)           # returns a Python tuple; index with [[1]],
 ### Python (Core)
 
 - `streamlit` - Web application framework
-- `pandas` - Data manipulation
+- `polars` - Data manipulation
 - `numpy` - Numerical computing
 - `scipy` - Statistical functions and numerical integration
-- `matplotlib` - Static plotting
-- `seaborn` - Statistical visualization
 - `plotly` - Interactive plotting
 - `watchdog` - File monitoring for Streamlit
 
@@ -354,7 +352,7 @@ residualriskapp/
 
 ## License
 
-Copyright (C) 2025 Vitalant and Eduard Grebe Consulting
+Copyright (C) 2025–2026 Vitalant and Eduard Grebe Consulting
 Author: Eduard Grebe <egrebe@vitalant.org> <eduard@grebe.consulting>
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
@@ -370,11 +368,32 @@ You should have received a copy of the GNU Affero General Public License along w
 - Email: eduard@grebe.consulting
 - Institution: Vitalant Research Institute
 
+Contributors:
+- Brian Custer
+- Michael P. Busch
+
 ## Citation
 
-If you use this tool in your research, please cite:
+If you use this tool in your research, please cite it as:
 
-[Citation information to be added]
+> Grebe, E. (2026). *Residual HIV Transfusion Transmission Risk Estimation Tool* (Version 0.9.4) [Software]. Vitalant Research Institute. https://codeberg.org/eduardgrebe/residualriskapp
+
+BibTeX:
+
+```bibtex
+@software{grebe2026rr,
+  author       = {Grebe, Eduard},
+  title        = {{Residual HIV Transfusion Transmission Risk Estimation Tool}},
+  year         = {2026},
+  month        = {5},
+  version      = {0.9.4},
+  url          = {https://codeberg.org/eduardgrebe/residualriskapp},
+  organization = {Vitalant Research Institute},
+  license      = {AGPL-3.0-or-later}
+}
+```
+
+Machine-readable citation metadata is provided in [`CITATION.cff`](CITATION.cff). A DOI will be assigned for a future public release; please update your citation accordingly once one is available.
 
 ## References
 
@@ -391,8 +410,8 @@ The model makes use of established methodology and novel approaches for HIV tran
 ## Support and Contributions
 
 For questions, bug reports, or feature requests:
-- Email: egrebe@vitalant.org
-- GitHub Issues: [Add once repo becomes public]
+- Email: egrebe@vitalant.org or eduard@grebe.consulting
+- Issue tracker: https://codeberg.org/eduardgrebe/residualriskapp/issues
 
 ## Development
 
@@ -423,12 +442,5 @@ go mod tidy
 
 ## Acknowledgments
 
-Developed at Vitalant Research Institute for blood safety research.
-
-Authors:
-- Eduard Grebe
-
-Contributors:
-- Brian Custer
-- Michael P. Busch
+Developed at [Vitalant Research Institute](https://research.vitalant.org) for blood safety research.
 

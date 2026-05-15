@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "Residual HIV Transfusion Transmission Risk Estimation Tool"
+abstract: >-
+  A Monte Carlo simulation tool for estimating the residual risk of HIV
+  transmission through blood transfusion during the pre-NAT window period
+  (or due to PrEP breakthrough infection). Implements viral kinetics during
+  early infection, NAT sensitivity and pooling protocols, and uncertainty in
+  infectivity parameters via Bayesian posterior distributions. Provides a
+  Streamlit-based interactive web interface and a high-performance Go
+  implementation.
+type: software
+authors:
+  - family-names: Grebe
+    given-names: Eduard
+    orcid: "https://orcid.org/0000-0001-7046-7245"
+    affiliation: "Vitalant Research Institute"
+    email: egrebe@vitalant.org
+version: 0.9.4
+date-released: 2026-05-07
+url: "https://codeberg.org/eduardgrebe/residualriskapp"
+repository-code: "https://codeberg.org/eduardgrebe/residualriskapp"
+license: AGPL-3.0-or-later
+keywords:
+  - HIV
+  - blood transfusion
+  - residual risk
+  - window period
+  - nucleic acid testing
+  - Monte Carlo simulation
+  - Bayesian inference
+  - blood safety
