@@ -125,12 +125,9 @@ Downstream analyses (e.g. R scripts via `reticulate`) should call these rather t
 Pre-computed posterior parameter distributions in Parquet format:
 - `k_param_human.parquet` — Human infectivity parameter posterior
 - `k_param_animal.parquet` — Animal model infectivity posterior
-- `k_param_expdecay.parquet` — Exponential decay posterior
-- `newnewdist_k_param.parquet` — Latest distribution samples
-- `weibull_min_k_param.parquet` — Weibull minimum posterior
-- `iwp_estimates_expdecay.parquet` — Infectious window period estimates
+- `k_param_expdecay.parquet` — Human-weighted exponential-decay posterior
 
-**Do not modify these files** — they are large pre-computed Bayesian posteriors (up to 8MB). Regeneration requires rerunning the upstream Bayesian analyses.
+**Do not modify these files** — they are pre-computed Bayesian posteriors. Regeneration requires rerunning the upstream Bayesian analyses.
 
 ### Input Distribution for *k* — See Companion Analysis Repo
 
