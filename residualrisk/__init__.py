@@ -20,11 +20,13 @@ from .core import (
     sample_invgamma,
     sample_lnmix,
 )
+from .prep import risk_days_prep_bs
 
-__version__ = "0.9.4"
+__version__ = "1.1.0.dev0"
 
 __all__ = [
     "risk_days_bs",
+    "risk_days_prep_bs",
     "iwp_from_lookback_data",
     "residual_risk_rd",
     "get_cpu_core_count",
