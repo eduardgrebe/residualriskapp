@@ -1,3 +1,6 @@
+# Local claude settings
+.claude/
+
 # Server configuration (not part of the app)
 robots.txt
 
