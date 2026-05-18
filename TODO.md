@@ -1,5 +1,34 @@
 # TODO
 
+## Open
+
+### PrEP model — `feature_prep_model` branch
+
+- [ ] Wire `residualrisk.prep.risk_days_prep_bs()` into the app runner.
+      Clicking **Run simulations** with "Mechanistic model with PrEP"
+      selected is currently a silent no-op: the PrEP parameter widgets
+      render but the sidebar button block in `app.py`
+      (`if rde_method == "Mechanistic model":` at line ~813) only
+      dispatches the non-PrEP path. Add a parallel
+      `elif rde_method == "Mechanistic model with PrEP":` branch that
+      reads the PrEP widgets and calls `rrprep.risk_days_prep_bs(...)`,
+      then writes results into `st.session_state["samp"]` / `["iwp_pe"]` /
+      `["sim_df"]` so the existing results-rendering block picks them up.
+
+### Pre-existing on `main` (file against `main`, not this branch)
+
+- [ ] Plot histogram does not render after a successful **Mechanistic
+      model** run. PE and CrI display correctly, but
+      `output_container.plotly_chart(fig, width="stretch")` at
+      `app.py:1038` produces no visible chart. Reproduces on pristine
+      `origin/main` (predates the PrEP rebase) — likely fallout from
+      the pandas → polars migration (`b19e7ae` / `1b257cd`). Nothing
+      prints in the Streamlit terminal beyond the unrelated websockets
+      keepalive noise. Diagnose and fix on `main`; `feature_prep_model`
+      will inherit the fix on its next rebase.
+
+---
+
 ## Completed
 
 - [x] Port KDE mode estimation (`_kde_mode_log`) to Go (`go/riskdays/kde.go`)
