@@ -17,21 +17,15 @@
 
 ### Pre-existing on `main` (file against `main`, not this branch)
 
-- [ ] Plot histogram does not render after a successful **Mechanistic
-      model** run. PE and CrI display correctly, but
-      `output_container.plotly_chart(fig, width="stretch")` at
-      `app.py:1038` produces no visible chart. Reproduces on pristine
-      `origin/main` (predates the PrEP rebase) — likely fallout from
-      the pandas → polars migration (`b19e7ae` / `1b257cd`). Nothing
-      prints in the Streamlit terminal beyond the unrelated websockets
-      keepalive noise. Diagnose and fix on `main`; `feature_prep_model`
-      will inherit the fix on its next rebase.
+
 
 ---
 
 ## Completed
 
-- [x] Port KDE mode estimation (`_kde_mode_log`) to Go (`go/riskdays/kde.go`)
+- [x] Plot histogram does not render after a successful **Mechanistic model** run — confirmed working (2026-05-20)
+
+
 - [x] Implement Inverse Gamma sampling in Go (`go/riskdays/random.go`)
 - [x] Native InvGamma sampling in Python backend — `k_invgamma_alpha` / `k_invgamma_beta` / `k_invgamma_mode` kwargs in `core.py` and `_go.py`
 - [x] Rename `sample_invgamma` params from `a`/`scale` to `alpha`/`beta` throughout

@@ -1,5 +1,11 @@
 # Agent Instructions for residualriskapp
 
+## Task Tracking
+
+**`TODO.md` in the repository root is the canonical task tracker for this project.**
+
+Before starting any work, read `TODO.md` to understand open tasks, in-progress work, and recently completed items. After completing a task, move it from the **Open** section to the **Completed** section (or update its checkbox). Add new tasks to the **Open** section as they are identified.
+
 ## Project Overview
 
 **Residual HIV Transfusion Transmission Risk Estimation Tool**
