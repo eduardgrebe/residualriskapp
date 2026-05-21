@@ -1114,6 +1114,7 @@ if st.sidebar.button(button_label):
                 progress=prep_oral_bar,
                 return_sim_df=True,
             )
+            st.session_state["prep_oral_run"] = True
             st.session_state["samp_prep_oral"] = pl.DataFrame(
                 {"iwp": st.session_state["bs_prep_oral"]}
             )
@@ -1166,6 +1167,7 @@ if st.sidebar.button(button_label):
                 progress=prep_inj_bar,
                 return_sim_df=True,
             )
+            st.session_state["prep_inj_run"] = True
             st.session_state["samp_prep_inj"] = pl.DataFrame(
                 {"iwp": st.session_state["bs_prep_inj"]}
             )
