@@ -1075,7 +1075,7 @@ if st.sidebar.button(button_label):
 
         if include_prep_oral:
             prep_oral_bar = st.sidebar.progress(
-                0, text="Running oral PrEP simulations (Python)..."
+                0, text=f"Running oral PrEP simulations ({'Go' if use_go_acceleration else 'Python'})..."
             )
             (
                 st.session_state["iwp_pe_prep_oral"],
@@ -1113,6 +1113,7 @@ if st.sidebar.button(button_label):
                 threads=n_threads,
                 progress=prep_oral_bar,
                 return_sim_df=True,
+                use_go=use_go_acceleration,
             )
             st.session_state["prep_oral_run"] = True
             st.session_state["samp_prep_oral"] = pl.DataFrame(
@@ -1128,7 +1129,7 @@ if st.sidebar.button(button_label):
 
         if include_prep_inj:
             prep_inj_bar = st.sidebar.progress(
-                0, text="Running injectable PrEP simulations (Python)..."
+                0, text=f"Running injectable PrEP simulations ({'Go' if use_go_acceleration else 'Python'})..."
             )
             (
                 st.session_state["iwp_pe_prep_inj"],
@@ -1166,6 +1167,7 @@ if st.sidebar.button(button_label):
                 threads=n_threads,
                 progress=prep_inj_bar,
                 return_sim_df=True,
+                use_go=use_go_acceleration,
             )
             st.session_state["prep_inj_run"] = True
             st.session_state["samp_prep_inj"] = pl.DataFrame(

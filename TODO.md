@@ -51,11 +51,49 @@
       exercising each k-distribution path. Unit tests for `_sample_k()` already
       exist in `tests/test_prep_k_distributions.py`.
 
-### Deferred (post-initial-release)
+- [ ] **Go implementation of PrEP model.** Port PrEP breakthrough infection model
+      from Python to Go for 10-50× speedup. Five phases:
 
-- [ ] **Go acceleration for PrEP model.** No PrEP code exists in `go/`. Without
-      it the PrEP bootstrap is ~10-50× slower than the standard model. Porting
-      requires: viral dynamics, serology non-detection, integration → Go.
+  - [ ] **Phase 1: Go PrEP functions** (`go/riskdays/`)
+    - [ ] `prep.go` — PrEP viral dynamics (3-phase: eclipse → exponential →
+          set-point + sinusoidal oscillation), serology non-detection (Weibull-like),
+          PrEP infectivity, and 3-product integrand. Functions: `SinVaried`,
+          `VLPostBT`, `FindTcrit`, `ProbInfectiousPrep`, `ProbNondetectionSerology`,
+          `ProbNondetectionPrep`, `ProbInfectiousNondetectionPrep`.
+    - [ ] `prep_models.go` — `PrepInnerParams` struct with PrEP-specific fields.
+    - [ ] `prep_integration.go` — `RiskDaysPrep()` quadrature wrapper using
+          `quad.Fixed`.
+    - [ ] `models.go` — Add PrEP fields to `RiskDaysInput` (`set_point`,
+          `set_point_dist_uniform`, `eclipse`, `eclipse_dist_uniform`, `a`, `b`,
+          `offset`, `ser_min`, `ser_max`, `ser_alpha`, `ser_beta`, `prep_mode`),
+          update `SetDefaults()` and `Validate()`.
+    - [ ] `riskdays.go` — Add PrEP path in `RiskDaysBS()`: branch on `PrepMode`,
+          sample PrEP-specific params (set_points, eclipses), build
+          `PrepInnerParams`, call `RiskDaysPrep()` in workers.
+    - [ ] `main.go` — Handle PrEP columns in binary output format.
+
+  - [ ] **Phase 2: Go tests** (`go/riskdays/prep_test.go`)
+        ~20 unit + integration tests: `TestSinVaried`, `TestVLPostBT` (eclipse,
+        exponential, set-point phases), `TestProbNondetectionSerology`,
+        `TestRiskDaysPrep` (golden value cross-validated against Python),
+        `TestRiskDaysBSPrep` (sanity, reproducibility, different seeds, PE matching,
+        InvGamma, LnMix, ReturnParams).
+
+  - [ ] **Phase 3: Python wrapper** (`residualrisk/_go.py`)
+        Add `risk_days_prep_bs_go()` paralleling `risk_days_bs_go()`. JSON
+        serialization with `prep_mode: true` + PrEP fields, progress monitoring,
+        binary output parsing with PrEP columns (iwp, k, doubling_time, set_point,
+        eclipse, lod50, volume_transfused).
+
+  - [ ] **Phase 4: Dispatcher + app.py wiring**
+        Add `use_go=False` parameter to `risk_days_prep_bs()` in `prep.py`.
+        Pass `use_go=use_go_acceleration` in `app.py` PrEP bootstrap calls.
+
+  - [ ] **Phase 5: Cross-validation** (`tests/test_prep_go_parity.py`)
+        Python↔Go golden value comparison (single iteration), bootstrap median
+        agreement (~1% tolerance), CrI upper bound agreement.
+
+### Deferred (post-initial-release)
 
 ### Pre-existing on `main` (file against `main`, not this branch)
 

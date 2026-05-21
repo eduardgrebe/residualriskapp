@@ -9,7 +9,7 @@
 
 """Residual HIV transfusion transmission risk estimation."""
 
-from ._go import find_go_binary, mode_hsm_go, mode_kde_go
+from ._go import find_go_binary, mode_hsm_go, mode_kde_go, risk_days_prep_bs_go
 from .core import (
     get_cpu_core_count,
     iwp_from_lookback_data,
@@ -37,4 +37,5 @@ __all__ = [
     "find_go_binary",
     "mode_hsm_go",
     "mode_kde_go",
+    "risk_days_prep_bs_go",
 ]

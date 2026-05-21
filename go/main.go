@@ -201,9 +201,33 @@ func main() {
 		// Binary wire format:
 		//   [8 bytes]  uint64 LE — byte length of JSON header
 		//   [N bytes]  JSON header with summary stats + column metadata
-		//   [rest]     column-major float64 LE arrays:
-		//              iwp, k, doubling_time, lod50, volume_transfused
-		columns := []string{"iwp", "k", "doubling_time", "lod50", "volume_transfused"}
+		//   [rest]     column-major float64 LE arrays
+		//
+		// Baseline columns: iwp, k, doubling_time, lod50, volume_transfused
+		// PrEP columns:     iwp, k, doubling_time, set_point, eclipse, lod50, volume_transfused
+		var columns []string
+		var dataColumns [][]float64
+		if input.PrepMode {
+			columns = []string{"iwp", "k", "doubling_time", "set_point", "eclipse", "lod50", "volume_transfused"}
+			dataColumns = [][]float64{
+				output.Simulations,
+				output.Ks,
+				output.DoublingTimes,
+				output.SetPoints,
+				output.Eclipses,
+				output.LOD50s,
+				output.VolumesTransfused,
+			}
+		} else {
+			columns = []string{"iwp", "k", "doubling_time", "lod50", "volume_transfused"}
+			dataColumns = [][]float64{
+				output.Simulations,
+				output.Ks,
+				output.DoublingTimes,
+				output.LOD50s,
+				output.VolumesTransfused,
+			}
+		}
 		type binaryHeader struct {
 			Version          string     `json:"version"`
 			PointEstimate    float64    `json:"point_estimate"`
@@ -236,13 +260,7 @@ func main() {
 			os.Exit(1)
 		}
 		// Write each column contiguously (column-major)
-		for _, col := range [][]float64{
-			output.Simulations,
-			output.Ks,
-			output.DoublingTimes,
-			output.LOD50s,
-			output.VolumesTransfused,
-		} {
+		for _, col := range dataColumns {
 			if err := binary.Write(os.Stdout, binary.LittleEndian, col); err != nil {
 				fmt.Fprintf(os.Stderr, `{"type": "error", "message": "failed to write binary column: %v"}`+"\n", err)
 				os.Exit(1)

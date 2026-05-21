@@ -309,7 +309,60 @@ def risk_days_prep_bs(
     mode_precision=2,
     progress=None,
     return_sim_df=False,
+    use_go=False,
 ):
+    if use_go:
+        try:
+            from ._go import risk_days_prep_bs_go
+
+            return risk_days_prep_bs_go(
+                k=k,
+                doubling_time=doubling_time,
+                doubling_time_norm_sd=doubling_time_norm_sd,
+                lod50=lod50,
+                lod50_sd=lod50_sd,
+                lod95_lod50_ratio=lod95_lod50_ratio,
+                volume_transfused=volume_transfused,
+                volume_transfused_range=volume_transfused_range,
+                pool_size=pool_size,
+                retests=retests,
+                set_point=set_point,
+                set_point_dist_uniform=set_point_dist_uniform,
+                eclipse=eclipse,
+                eclipse_dist_uniform=eclipse_dist_uniform,
+                a=a,
+                b=b,
+                offset=offset,
+                ser_min=ser_min,
+                ser_max=ser_max,
+                ser_alpha=ser_alpha,
+                ser_beta=ser_beta,
+                C0=C0,
+                copies_per_virion=copies_per_virion,
+                alpha=alpha,
+                z=z,
+                k_posterior_sample=k_posterior_sample,
+                k_gamma_shape=k_gamma_shape,
+                k_gamma_scale=k_gamma_scale,
+                k_invgamma_alpha=k_invgamma_alpha,
+                k_invgamma_beta=k_invgamma_beta,
+                k_invgamma_mode=k_invgamma_mode,
+                k_lnmix_w=k_lnmix_w,
+                k_lnmix_mu1=k_lnmix_mu1,
+                k_lnmix_sigma1=k_lnmix_sigma1,
+                k_lnmix_mu2=k_lnmix_mu2,
+                k_lnmix_sigma2=k_lnmix_sigma2,
+                n_bs=n_bs,
+                seed=seed,
+                threads=threads,
+                point_estimate=point_estimate,
+                mode_precision=mode_precision,
+                progress=progress,
+                return_sim_df=return_sim_df,
+            )
+        except Exception:
+            pass  # fall back to Python
+
     if n_bs <= 0:
         raise ValueError("n_bs must be greater than zero to perform simulations.")
 

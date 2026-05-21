@@ -429,3 +429,274 @@ def risk_days_bs_go(
         raise RuntimeError(f"Failed to parse Go output: {e}. Output was: {raw!r:.200}")
     except Exception as e:
         raise RuntimeError(f"Unexpected error calling Go implementation: {e}")
+
+
+def risk_days_prep_bs_go(
+    k,
+    doubling_time,
+    doubling_time_norm_sd,
+    lod50,
+    lod50_sd,
+    lod95_lod50_ratio,
+    volume_transfused,
+    volume_transfused_range,
+    pool_size,
+    retests,
+    set_point=336,
+    set_point_dist_uniform=(19.1, 2265),
+    eclipse=7.0,
+    eclipse_dist_uniform=(4.0, 10.0),
+    a=0.7,
+    b=0.6,
+    offset=1,
+    ser_min=28.7,
+    ser_max=250,
+    ser_alpha=50.49434,
+    ser_beta=1.15062,
+    C0=0.00025,
+    copies_per_virion=2,
+    alpha=0.05,
+    z=1.6449,
+    k_posterior_sample=None,
+    k_gamma_shape=None,
+    k_gamma_scale=None,
+    k_invgamma_alpha=None,
+    k_invgamma_beta=None,
+    k_invgamma_mode=None,
+    k_lnmix_w=None,
+    k_lnmix_mu1=None,
+    k_lnmix_sigma1=None,
+    k_lnmix_mu2=None,
+    k_lnmix_sigma2=None,
+    n_bs=10000,
+    seed=126887,
+    threads=None,
+    point_estimate="primary parameters",
+    mode_precision=2,
+    progress=None,
+    return_sim_df=False,
+):
+    """
+    Go implementation of risk_days_prep_bs() via CLI subprocess.
+
+    Signature matches the Python version in residualrisk/prep.py.
+    Sets ``prep_mode: true`` in the Go binary input so the PrEP 3-phase viral
+    dynamics and serology non-detection are used.
+
+    Returns:
+        Tuple: (rd_pe, rd_cri, rd_range, rdests, sim_df)
+        sim_df is None unless return_sim_df=True.
+    """
+    binary_path = find_go_binary()
+    if not binary_path:
+        raise RuntimeError(
+            "Go binary 'riskdays_go' not found. "
+            "Please build it with 'cd go && make build' "
+            "or install it with 'cd go && sudo make install'"
+        )
+
+    if threads is None:
+        import multiprocessing
+        threads = max(1, multiprocessing.cpu_count() - 1)
+
+    # Build input JSON — baseline fields + prep_mode + PrEP-specific fields
+    input_data = {
+        "k": k,
+        "doubling_time": doubling_time,
+        "doubling_time_norm_sd": doubling_time_norm_sd,
+        "lod50": lod50,
+        "lod50_sd": lod50_sd,
+        "lod95_lod50_ratio": lod95_lod50_ratio,
+        "volume_transfused": volume_transfused,
+        "volume_transfused_min": volume_transfused_range[0],
+        "volume_transfused_max": volume_transfused_range[1],
+        "pool_size": pool_size,
+        "retests": retests,
+        "c0": C0,
+        "copies_per_virion": copies_per_virion,
+        "alpha": alpha,
+        "z": z,
+        "n_bs": n_bs,
+        "seed": seed,
+        "threads": threads,
+        "point_estimate": point_estimate,
+        "mode_precision": mode_precision,
+        # PrEP-specific
+        "prep_mode": True,
+        "set_point": set_point,
+        "set_point_dist_uniform": list(set_point_dist_uniform),
+        "eclipse": eclipse,
+        "eclipse_dist_uniform": list(eclipse_dist_uniform),
+        "a": a,
+        "b": b,
+        "offset": offset,
+        "ser_min": ser_min,
+        "ser_max": ser_max,
+        "ser_alpha": ser_alpha,
+        "ser_beta": ser_beta,
+    }
+
+    # Add k distribution parameters (same logic as baseline wrapper)
+    if k_posterior_sample is not None:
+        input_data["k_posterior_sample"] = (
+            k_posterior_sample.tolist()
+            if hasattr(k_posterior_sample, "tolist")
+            else list(k_posterior_sample)
+        )
+    elif k_gamma_shape is not None and k_gamma_scale is not None:
+        input_data["k_gamma_shape"] = k_gamma_shape
+        input_data["k_gamma_scale"] = k_gamma_scale
+    elif k_invgamma_alpha is not None:
+        _beta = k_invgamma_beta
+        if _beta is None:
+            if k_invgamma_mode is not None:
+                _beta = k_invgamma_mode * (k_invgamma_alpha + 1)
+            else:
+                raise ValueError(
+                    "k_invgamma_alpha requires k_invgamma_beta or k_invgamma_mode"
+                )
+        input_data["k_invgamma_alpha"] = k_invgamma_alpha
+        input_data["k_invgamma_beta"] = _beta
+    elif k_lnmix_w is not None:
+        if any(p is None for p in [k_lnmix_mu1, k_lnmix_sigma1, k_lnmix_mu2, k_lnmix_sigma2]):
+            raise ValueError(
+                "All lnmix parameters (k_lnmix_w, mu1, sigma1, mu2, sigma2) must be provided together."
+            )
+        input_data["k_lnmix_w"] = k_lnmix_w
+        input_data["k_lnmix_mu1"] = k_lnmix_mu1
+        input_data["k_lnmix_sigma1"] = k_lnmix_sigma1
+        input_data["k_lnmix_mu2"] = k_lnmix_mu2
+        input_data["k_lnmix_sigma2"] = k_lnmix_sigma2
+    else:
+        raise ValueError(
+            "Either k_posterior_sample, k_gamma parameters, k_invgamma parameters, or k_lnmix parameters must be provided"
+        )
+
+    if return_sim_df:
+        input_data["return_params"] = True
+
+    try:
+        use_binary = return_sim_df
+        process = subprocess.Popen(
+            [binary_path],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=False,
+            bufsize=0,
+        )
+
+        input_json = json.dumps(input_data)
+        process.stdin.write(input_json.encode())
+        process.stdin.close()
+
+        error_msg = "Unknown error"
+        stderr_queue = queue.Queue()
+        stdout_data = []
+
+        def read_stderr():
+            try:
+                for line_bytes in iter(process.stderr.readline, b""):
+                    if not line_bytes:
+                        break
+                    stderr_queue.put(line_bytes.decode("utf-8", errors="replace"))
+            except Exception as e:
+                stderr_queue.put(f"STDERR_ERROR: {e}")
+            finally:
+                process.stderr.close()
+
+        def read_stdout():
+            try:
+                stdout_data.append(process.stdout.read())
+            except Exception as e:
+                stdout_data.append(f"STDOUT_ERROR: {e}".encode())
+            finally:
+                process.stdout.close()
+
+        stderr_thread = threading.Thread(target=read_stderr, daemon=True)
+        stdout_thread = threading.Thread(target=read_stdout, daemon=True)
+        stderr_thread.start()
+        stdout_thread.start()
+
+        while stderr_thread.is_alive() or not stderr_queue.empty():
+            try:
+                line = stderr_queue.get(timeout=0.1)
+                if line.startswith("STDERR_ERROR:"):
+                    break
+                try:
+                    msg = json.loads(line.strip())
+                    if msg.get("type") == "progress" and progress is not None:
+                        percent_value = int(msg["percent"] * 100)
+                        progress.progress(
+                            msg["percent"], text=f"Progress: {percent_value}%"
+                        )
+                    elif msg.get("type") == "error":
+                        error_msg = msg.get("message", error_msg)
+                except json.JSONDecodeError:
+                    pass
+            except queue.Empty:
+                continue
+
+        stdout_thread.join()
+        process.wait()
+
+        if process.returncode != 0:
+            raise RuntimeError(f"Go binary failed: {error_msg}")
+
+        raw = stdout_data[0] if stdout_data else b""
+        if isinstance(raw, str) or (isinstance(raw, bytes) and raw.startswith(b"STDOUT_ERROR:")):
+            raise RuntimeError(f"Failed to read stdout: {raw}")
+
+        if use_binary:
+            header_len = struct.unpack_from("<Q", raw, 0)[0]
+            header = json.loads(raw[8:8 + header_len])
+            n_cols = len(header["columns"])
+            n_bs_actual = header["n_bs"]
+            arrays = np.frombuffer(raw[8 + header_len:], dtype="<f8").reshape(n_cols, n_bs_actual)
+            col_idx = {name: i for i, name in enumerate(header["columns"])}
+
+            rd_pe = header["point_estimate"]
+            rd_cri = tuple(header["credible_interval"])
+            rd_range = tuple(header["range"])
+            rdests = arrays[col_idx["iwp"]].tolist()
+
+            sim_df = pl.DataFrame({
+                "k":                 arrays[col_idx["k"]],
+                "doubling_time":     arrays[col_idx["doubling_time"]],
+                "set_point":         arrays[col_idx["set_point"]],
+                "eclipse":           arrays[col_idx["eclipse"]],
+                "lod50":             arrays[col_idx["lod50"]],
+                "volume_transfused": arrays[col_idx["volume_transfused"]],
+                "iwp":               arrays[col_idx["iwp"]],
+            }).with_columns(
+                pl.lit(copies_per_virion).alias("copies_per_virion"),
+                pl.lit(C0).alias("C0"),
+                pl.lit(pool_size).alias("pool_size"),
+                pl.lit(lod95_lod50_ratio).alias("lod95_lod50_ratio"),
+                (pl.col("lod50") * lod95_lod50_ratio).alias("lod95"),
+                pl.lit(retests).alias("retests"),
+                pl.lit(z).alias("z"),
+                pl.lit(a).alias("a"),
+                pl.lit(b).alias("b"),
+                pl.lit(offset).alias("offset"),
+                pl.lit(ser_min).alias("ser_min"),
+                pl.lit(ser_max).alias("ser_max"),
+                pl.lit(ser_alpha).alias("ser_alpha"),
+                pl.lit(ser_beta).alias("ser_beta"),
+                pl.lit(seed).alias("random_seed"),
+            )
+            return (rd_pe, rd_cri, rd_range, rdests, sim_df)
+        else:
+            output = json.loads(raw.decode("utf-8"))
+            rd_pe = output["point_estimate"]
+            rd_cri = tuple(output["credible_interval"])
+            rd_range = tuple(output["range"])
+            rdests = output["simulations"]
+            return (rd_pe, rd_cri, rd_range, rdests, None)
+
+    except subprocess.SubprocessError as e:
+        raise RuntimeError(f"Failed to run Go binary: {e}")
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"Failed to parse Go output: {e}. Output was: {raw!r:.200}")
+    except Exception as e:
+        raise RuntimeError(f"Unexpected error calling Go implementation: {e}")

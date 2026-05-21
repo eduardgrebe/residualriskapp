@@ -59,6 +59,15 @@ func RiskDaysBS(input RiskDaysInput, progressCallback ProgressCallback) (*RiskDa
 	lod50s := rng.GenerateTruncatedNormal(input.LOD50, input.LOD50SD, input.NBS)
 	volumesTransfused := rng.GenerateUniform(input.VolumeTransfusedMin, input.VolumeTransfusedMax, input.NBS)
 
+	if input.PrepMode {
+		return riskDaysBSPrep(input, rng, ks, doublingTimes, lod50s, volumesTransfused, progressCallback)
+	}
+	return riskDaysBSBaseline(input, ks, doublingTimes, lod50s, volumesTransfused, progressCallback)
+}
+
+// riskDaysBSBaseline runs the standard (non-PrEP) bootstrap simulation.
+func riskDaysBSBaseline(input RiskDaysInput, ks, doublingTimes, lod50s, volumesTransfused []float64, progressCallback ProgressCallback) (*RiskDaysOutput, error) {
+
 	// Prepare args list for parallel execution
 	argsList := make([]RiskDaysInnerParams, input.NBS)
 	for i := 0; i < input.NBS; i++ {
@@ -194,6 +203,169 @@ func RiskDaysBS(input RiskDaysInput, progressCallback ProgressCallback) (*RiskDa
 		out.DoublingTimes = doublingTimes
 		out.LOD50s = lod50s
 		out.VolumesTransfused = volumesTransfused
+	}
+	return out, nil
+}
+
+// riskDaysBSPrep runs the PrEP breakthrough infection bootstrap simulation.
+func riskDaysBSPrep(input RiskDaysInput, rng *RandomGenerator, ks, doublingTimes, lod50s, volumesTransfused []float64, progressCallback ProgressCallback) (*RiskDaysOutput, error) {
+	// Generate PrEP-specific samples
+	var setPoints []float64
+	if input.SetPointDistUniform[0] != 0 || input.SetPointDistUniform[1] != 0 {
+		setPoints = rng.GenerateUniform(input.SetPointDistUniform[0], input.SetPointDistUniform[1], input.NBS)
+	} else {
+		setPoints = make([]float64, input.NBS)
+		for i := range setPoints {
+			setPoints[i] = input.SetPoint
+		}
+	}
+
+	var eclipses []float64
+	if input.EclipseDistUniform[0] != 0 || input.EclipseDistUniform[1] != 0 {
+		eclipses = rng.GenerateUniform(input.EclipseDistUniform[0], input.EclipseDistUniform[1], input.NBS)
+	} else {
+		eclipses = make([]float64, input.NBS)
+		for i := range eclipses {
+			eclipses[i] = input.Eclipse
+		}
+	}
+
+	// Build PrEP args
+	argsList := make([]PrepInnerParams, input.NBS)
+	for i := 0; i < input.NBS; i++ {
+		argsList[i] = PrepInnerParams{
+			CopiesPerVirion:  input.CopiesPerVirion,
+			C0:               input.C0,
+			DoublingTime:     doublingTimes[i],
+			SetPoint:         setPoints[i],
+			Eclipse:          eclipses[i],
+			A:                input.A,
+			B:                input.B,
+			Offset:           input.Offset,
+			VolumeTransfused: volumesTransfused[i],
+			K:                ks[i],
+			PoolSize:         input.PoolSize,
+			LOD50:            lod50s[i],
+			LOD95LOD50Ratio:  input.LOD95LOD50Ratio,
+			Retests:          input.Retests,
+			SerMin:           input.SerMin,
+			SerMax:           input.SerMax,
+			SerAlpha:         input.SerAlpha,
+			SerBeta:          input.SerBeta,
+			Z:                input.Z,
+			LimitMin:         -100,
+			LimitMax:         500,
+		}
+	}
+
+	// Parallel execution
+	rdests := make([]float64, input.NBS)
+
+	jobs := make(chan int, input.NBS)
+	results := make(chan struct {
+		index int
+		value float64
+	}, input.NBS)
+
+	var wg sync.WaitGroup
+	for w := 0; w < input.Threads; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range jobs {
+				rd := RiskDaysPrep(argsList[i])
+				results <- struct {
+					index int
+					value float64
+				}{i, rd}
+			}
+		}()
+	}
+
+	go func() {
+		for i := 0; i < input.NBS; i++ {
+			jobs <- i
+		}
+		close(jobs)
+	}()
+
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	completed := 0
+	for result := range results {
+		rdests[result.index] = result.value
+		completed++
+		if progressCallback != nil {
+			progressCallback(completed, input.NBS)
+		}
+	}
+
+	if progressCallback != nil {
+		progressCallback(input.NBS, input.NBS)
+	}
+
+	// Statistics
+	rdRange := [2]float64{Min(rdests), Max(rdests)}
+	rdCrI := [2]float64{
+		Quantile(rdests, input.Alpha/2),
+		Quantile(rdests, 1-input.Alpha/2),
+	}
+
+	// Point estimate
+	var rdPE float64
+	switch input.PointEstimate {
+	case "primary parameters":
+		primaryParams := PrepInnerParams{
+			CopiesPerVirion:  input.CopiesPerVirion,
+			C0:               input.C0,
+			DoublingTime:     input.DoublingTime,
+			SetPoint:         input.SetPoint,
+			Eclipse:          input.Eclipse,
+			A:                input.A,
+			B:                input.B,
+			Offset:           input.Offset,
+			VolumeTransfused: input.VolumeTransfused,
+			K:                input.K,
+			PoolSize:         input.PoolSize,
+			LOD50:            input.LOD50,
+			LOD95LOD50Ratio:  input.LOD95LOD50Ratio,
+			Retests:          input.Retests,
+			SerMin:           input.SerMin,
+			SerMax:           input.SerMax,
+			SerAlpha:         input.SerAlpha,
+			SerBeta:          input.SerBeta,
+			Z:                input.Z,
+			LimitMin:         -100,
+			LimitMax:         500,
+		}
+		rdPE = RiskDaysPrep(primaryParams)
+	case "median":
+		rdPE = Median(rdests)
+	case "mean":
+		rdPE = Mean(rdests)
+	case "mode":
+		rdPE = KDEModeLog(rdests, 1_000_000, 0, input.Threads)
+	default:
+		return nil, fmt.Errorf("unknown point estimate method: %s", input.PointEstimate)
+	}
+
+	out := &RiskDaysOutput{
+		Version:          Version,
+		PointEstimate:    rdPE,
+		CredibleInterval: rdCrI,
+		Range:            rdRange,
+		Simulations:      rdests,
+	}
+	if input.ReturnParams {
+		out.Ks = ks
+		out.DoublingTimes = doublingTimes
+		out.LOD50s = lod50s
+		out.VolumesTransfused = volumesTransfused
+		out.SetPoints = setPoints
+		out.Eclipses = eclipses
 	}
 	return out, nil
 }

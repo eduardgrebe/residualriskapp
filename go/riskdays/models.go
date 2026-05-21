@@ -65,6 +65,22 @@ type RiskDaysInput struct {
 
 	// Output control
 	ReturnParams bool `json:"return_params"` // if true, return per-iteration parameter arrays via binary output
+
+	// PrEP mode — when true, uses 3-phase viral dynamics + serology non-detection
+	PrepMode bool `json:"prep_mode"`
+
+	// PrEP-specific parameters (only used when PrepMode=true)
+	SetPoint             float64 `json:"set_point"`               // set-point viral load (copies/mL)
+	SetPointDistUniform  [2]float64 `json:"set_point_dist_uniform"` // [min, max] for uniform sampling
+	Eclipse              float64 `json:"eclipse"`                 // eclipse period (days)
+	EclipseDistUniform   [2]float64 `json:"eclipse_dist_uniform"`   // [min, max] for uniform sampling
+	A                    float64 `json:"a"`                       // sinusoidal amplitude
+	B                    float64 `json:"b"`                       // sinusoidal frequency
+	Offset               float64 `json:"offset"`                  // sinusoidal offset
+	SerMin               float64 `json:"ser_min"`                 // serology window start (days)
+	SerMax               float64 `json:"ser_max"`                 // serology window end (days)
+	SerAlpha             float64 `json:"ser_alpha"`               // Weibull scale parameter
+	SerBeta              float64 `json:"ser_beta"`                // Weibull shape parameter
 }
 
 // RiskDaysOutput represents the output of the risk days calculation
@@ -81,6 +97,10 @@ type RiskDaysOutput struct {
 	DoublingTimes    []float64 `json:"-"`
 	LOD50s           []float64 `json:"-"`
 	VolumesTransfused []float64 `json:"-"`
+
+	// PrEP-specific per-iteration arrays (PrepMode + ReturnParams)
+	SetPoints []float64 `json:"-"`
+	Eclipses  []float64 `json:"-"`
 }
 
 // ProgressMessage represents a progress update during calculation
@@ -133,6 +153,37 @@ func (input *RiskDaysInput) SetDefaults() {
 	if input.ModePrecision == 0 {
 		input.ModePrecision = 2
 	}
+
+	// PrEP defaults
+	if input.PrepMode {
+		if input.SetPoint == 0 {
+			input.SetPoint = 336
+		}
+		if input.Eclipse == 0 {
+			input.Eclipse = 7
+		}
+		if input.A == 0 {
+			input.A = 0.7
+		}
+		if input.B == 0 {
+			input.B = 0.6
+		}
+		if input.Offset == 0 {
+			input.Offset = 1.0
+		}
+		if input.SerMin == 0 {
+			input.SerMin = 10
+		}
+		if input.SerMax == 0 {
+			input.SerMax = 500
+		}
+		if input.SerAlpha == 0 {
+			input.SerAlpha = 9.1
+		}
+		if input.SerBeta == 0 {
+			input.SerBeta = 5.2
+		}
+	}
 }
 
 // Validate checks that input parameters are valid
@@ -153,5 +204,27 @@ func (input *RiskDaysInput) Validate() error {
 			input.KLnMixMu2 == nil || input.KLnMixSigma2 == nil) {
 		return fmt.Errorf("a k distribution must be provided: k_posterior_sample, both k_gamma parameters, both k_invgamma parameters, or all k_lnmix parameters")
 	}
+
+	if input.PrepMode {
+		if input.SetPoint <= 0 {
+			return fmt.Errorf("set_point must be positive in PrEP mode")
+		}
+		if input.Eclipse < 0 {
+			return fmt.Errorf("eclipse must be non-negative in PrEP mode")
+		}
+		if input.SerMin < 0 {
+			return fmt.Errorf("ser_min must be non-negative in PrEP mode")
+		}
+		if input.SerMax <= input.SerMin {
+			return fmt.Errorf("ser_max must be greater than ser_min in PrEP mode")
+		}
+		if input.SerAlpha <= 0 {
+			return fmt.Errorf("ser_alpha must be positive in PrEP mode")
+		}
+		if input.SerBeta <= 0 {
+			return fmt.Errorf("ser_beta must be positive in PrEP mode")
+		}
+	}
+
 	return nil
 }
