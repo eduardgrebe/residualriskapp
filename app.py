@@ -127,7 +127,7 @@ def convert_for_download(df, file_format="csv"):
         return None
 
 
-def plot_histogram(data, x="iwp", colour=None, histnorm=None):
+def plot_histogram(data, x="iwp", colour=None, histnorm=None, title="Distribution of simulated RDEs"):
     fig = px.histogram(
         data,
         x=x,
@@ -135,7 +135,7 @@ def plot_histogram(data, x="iwp", colour=None, histnorm=None):
         histnorm=histnorm,
         barmode="overlay",
         labels={"iwp": "risk day equivalents (RDEs)"},
-        title="Distribution of RDEs",
+        title=title,
     )
     return fig
 
@@ -1324,7 +1324,7 @@ else:
             f"Range: {iwp_range[0]:.2f} to {iwp_range[1]:.2f})"
         )
 
-    fig = plot_histogram(st.session_state["samp"], histnorm=plot_norm)
+    fig = plot_histogram(st.session_state["samp"], histnorm=plot_norm, title="Distribution of simulated RDEs (baseline)")
     output_container.plotly_chart(fig, width="stretch")
 
     # --- PrEP RDE results ---
@@ -1343,7 +1343,7 @@ else:
                 f"{oral_cri[0]:.2f} to {oral_cri[1]:.2f}; "
                 f"Range: {oral_range[0]:.2f} to {oral_range[1]:.2f})"
             )
-            fig_oral = plot_histogram(samp_oral, histnorm=plot_norm)
+            fig_oral = plot_histogram(samp_oral, histnorm=plot_norm, title="Distribution of simulated RDEs (oral PrEP)")
             output_container.plotly_chart(fig_oral, width="stretch")
 
     if st.session_state.get("prep_inj_run"):
@@ -1361,7 +1361,7 @@ else:
                 f"{inj_cri[0]:.2f} to {inj_cri[1]:.2f}; "
                 f"Range: {inj_range[0]:.2f} to {inj_range[1]:.2f})"
             )
-            fig_inj = plot_histogram(samp_inj, histnorm=plot_norm)
+            fig_inj = plot_histogram(samp_inj, histnorm=plot_norm, title="Distribution of simulated RDEs (injectable PrEP)")
             output_container.plotly_chart(fig_inj, width="stretch")
 
     if calculate_rr:
