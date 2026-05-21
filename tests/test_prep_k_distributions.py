@@ -141,16 +141,17 @@ class TestPrepBsKDistributions:
 
     def test_posterior_sample(self):
         posterior = np.random.default_rng(99).exponential(0.001, size=200)
-        rd_pe, rd_cri, rd_range, rdests = risk_days_prep_bs(
+        rd_pe, rd_cri, rd_range, rdests, sim_df = risk_days_prep_bs(
             **COMMON_PREP_KWARGS,
             k_posterior_sample=posterior,
         )
         assert rd_pe is not None
         assert len(rdests) == COMMON_PREP_KWARGS["n_bs"]
         assert all(r >= 0 for r in rdests)
+        assert sim_df is None  # return_sim_df=False by default
 
     def test_invgamma(self):
-        rd_pe, rd_cri, rd_range, rdests = risk_days_prep_bs(
+        rd_pe, rd_cri, rd_range, rdests, sim_df = risk_days_prep_bs(
             **COMMON_PREP_KWARGS,
             k_invgamma_alpha=2.0,
             k_invgamma_beta=0.002019,
@@ -158,18 +159,20 @@ class TestPrepBsKDistributions:
         assert rd_pe is not None
         assert len(rdests) == COMMON_PREP_KWARGS["n_bs"]
         assert all(r >= 0 for r in rdests)
+        assert sim_df is None
 
     def test_invgamma_mode(self):
-        rd_pe, rd_cri, rd_range, rdests = risk_days_prep_bs(
+        rd_pe, rd_cri, rd_range, rdests, sim_df = risk_days_prep_bs(
             **COMMON_PREP_KWARGS,
             k_invgamma_alpha=2.0,
             k_invgamma_mode=0.000673,
         )
         assert rd_pe is not None
         assert len(rdests) == COMMON_PREP_KWARGS["n_bs"]
+        assert sim_df is None
 
     def test_lnmix(self):
-        rd_pe, rd_cri, rd_range, rdests = risk_days_prep_bs(
+        rd_pe, rd_cri, rd_range, rdests, sim_df = risk_days_prep_bs(
             **COMMON_PREP_KWARGS,
             k_lnmix_w=0.90,
             k_lnmix_mu1=-7.2403,
@@ -180,16 +183,34 @@ class TestPrepBsKDistributions:
         assert rd_pe is not None
         assert len(rdests) == COMMON_PREP_KWARGS["n_bs"]
         assert all(r >= 0 for r in rdests)
+        assert sim_df is None
 
     def test_legacy_gamma(self):
-        rd_pe, rd_cri, rd_range, rdests = risk_days_prep_bs(
+        rd_pe, rd_cri, rd_range, rdests, sim_df = risk_days_prep_bs(
             **COMMON_PREP_KWARGS,
             k_gamma_shape=2.0,
             k_gamma_scale=0.001,
         )
         assert rd_pe is not None
         assert len(rdests) == COMMON_PREP_KWARGS["n_bs"]
+        assert sim_df is None
 
     def test_no_distribution_raises(self):
         with pytest.raises(ValueError, match="At least one k-distribution"):
             risk_days_prep_bs(**COMMON_PREP_KWARGS)
+
+    def test_return_sim_df(self):
+        """When return_sim_df=True, a Polars DataFrame with expected columns is returned."""
+        import polars as pl
+        rd_pe, rd_cri, rd_range, rdests, sim_df = risk_days_prep_bs(
+            **COMMON_PREP_KWARGS,
+            k_invgamma_alpha=2.0,
+            k_invgamma_beta=0.002019,
+            return_sim_df=True,
+        )
+        assert isinstance(sim_df, pl.DataFrame)
+        assert len(sim_df) == COMMON_PREP_KWARGS["n_bs"]
+        assert "iwp" in sim_df.columns
+        assert "set_point" in sim_df.columns
+        assert "eclipse" in sim_df.columns
+        assert "k" in sim_df.columns

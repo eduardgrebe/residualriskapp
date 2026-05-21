@@ -5,28 +5,38 @@
 ### PrEP model — `feature_prep_model` branch
 
 - [x] **Design decision: oPrEP vs iPrEP scenario handling.** *(Resolved 2026-05-21.)*
-      User selects one of three modes: **oral only**, **injectable only**, or
-      **both**. `risk_days_prep_bs()` remains a single-scenario function.
-      When "both" is selected the app runs two independent bootstraps (oPrEP
-      and iPrEP) and presents results side-by-side, plus a combined additive
-      total (populations don't overlap → risk is additive).
+      `risk_days_prep_bs()` remains a single-scenario function.
+      Populations don't overlap → risk is additive.
 
-- [ ] **Design decision: PrEP as additive layer on baseline risk.** PrEP
-      breakthrough risk is *on top of* the standard window-period donation
-      risk (from non-PrEP incident infections). The tool should allow
-      modelling the baseline risk alone (standard mechanistic model), or
-      layering oPrEP, iPrEP, or both on top. This affects how the UI
-      presents the PrEP option — it may be an "add PrEP layer" toggle
-      within the mechanistic model rather than a separate RDE method, and
-      the total residual risk = baseline + PrEP components. Needs further
-      design work on UI flow and results presentation.
+- [x] **Design decision: PrEP as additive layer on baseline risk.** *(Resolved 2026-05-21.)*
+      PrEP breakthrough risk layers *on top of* baseline window-period risk.
+      UI design:
+      - Remove "Mechanistic model with PrEP" from the RDE method dropdown.
+      - Add two independent checkboxes below the dropdown:
+        ☐ Include oral PrEP breakthrough risk
+        ☐ Include injectable PrEP breakthrough risk
+      - When checked, corresponding PrEP parameter expander appears.
+      - Run button always runs baseline first, then PrEP bootstraps if checked.
+      - Results: baseline RDE (always), oPrEP RDE (if checked), iPrEP RDE
+        (if checked), displayed side-by-side.
+      - Residual risk: baseline incidence input (exists), plus separate PrEP
+        breakthrough incidence inputs (prepopulated with defaults). Total
+        residual risk = sum of all components.
 
-- [ ] **Wire PrEP into the app runner.** Add PrEP dispatch in the button
-      block in `app.py`. Add a PrEP-modality radio (oral / injectable /
-      both). For oral-only or injectable-only: single bootstrap call. For
-      "both": two calls, combine additively, show side-by-side + total.
-      Populate session state for results rendering. Design must account
-      for the additive-layer model (baseline + PrEP components).
+- [ ] **Wire PrEP into app.py.** Implementation steps:
+      1. Remove "Mechanistic model with PrEP" from RDE method dropdown.
+      2. Add two PrEP checkboxes below the dropdown (only visible when
+         mechanistic model is selected).
+      3. Conditionally show PrEP parameter expanders. Shared params
+         (eclipse, a/b/offset) appear once; modality-specific params
+         (set point, seroconversion Weibull) appear per modality.
+      4. In the button dispatch: after baseline run, run oPrEP and/or iPrEP
+         bootstraps. Store results in separate session state keys
+         (e.g. `iwp_pe_prep_oral`, `samp_prep_oral`, etc.).
+      5. In the incidence section: add PrEP breakthrough incidence inputs
+         (with defaults) when PrEP checkboxes are ticked.
+      6. In the results section: show baseline + PrEP RDEs side-by-side.
+         Show residual risk breakdown + total if calculate_rr is checked.
 
 - [x] **Add `return_sim_df` support to `risk_days_prep_bs()`.** *(Done 2026-05-21.)*
       Returns a per-iteration Polars DataFrame including PrEP-specific columns
