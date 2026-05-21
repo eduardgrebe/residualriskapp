@@ -287,6 +287,60 @@ def mode_kde(data, n_grid=5_000, cap=50_000):
     return _kde_mode_log(data, n_grid=n_grid, cap=cap)
 
 
+def _sample_k(
+    n_bs,
+    seed,
+    k_posterior_sample=None,
+    k_gamma_shape=None,
+    k_gamma_scale=None,
+    k_invgamma_alpha=None,
+    k_invgamma_beta=None,
+    k_invgamma_mode=None,
+    k_lnmix_w=None,
+    k_lnmix_mu1=None,
+    k_lnmix_sigma1=None,
+    k_lnmix_mu2=None,
+    k_lnmix_sigma2=None,
+):
+    """Sample *n_bs* values of *k* from the specified distribution.
+
+    Dispatches in priority order:
+    1. ``k_posterior_sample`` — resample with replacement from an array
+    2. ``k_gamma_shape`` / ``k_gamma_scale`` — legacy Gamma (deprecated)
+    3. ``k_invgamma_alpha`` + (``k_invgamma_beta`` or ``k_invgamma_mode``) — Inverse Gamma
+    4. ``k_lnmix_*`` — two-component lognormal mixture
+
+    Assumes ``np.random.seed(seed)`` has already been called by the caller
+    (legacy global-state RNG contract used throughout the bootstrap functions).
+    """
+    if k_posterior_sample is not None:
+        return np.random.choice(k_posterior_sample, size=n_bs, replace=True)
+    elif k_gamma_shape is not None and k_gamma_scale is not None:
+        return np.random.gamma(k_gamma_shape, k_gamma_scale, n_bs)
+    elif k_invgamma_alpha is not None:
+        _beta = k_invgamma_beta
+        if _beta is None:
+            if k_invgamma_mode is not None:
+                _beta = k_invgamma_mode * (k_invgamma_alpha + 1)
+            else:
+                raise ValueError(
+                    "k_invgamma_alpha requires k_invgamma_beta or k_invgamma_mode"
+                )
+        return stats.invgamma.rvs(k_invgamma_alpha, scale=_beta, size=n_bs)
+    elif k_lnmix_w is not None:
+        if any(p is None for p in [k_lnmix_mu1, k_lnmix_sigma1, k_lnmix_mu2, k_lnmix_sigma2]):
+            raise ValueError(
+                "All lnmix parameters (k_lnmix_w, mu1, sigma1, mu2, sigma2) must be provided together."
+            )
+        return sample_lnmix(n_bs, k_lnmix_w, k_lnmix_mu1, k_lnmix_sigma1,
+                            k_lnmix_mu2, k_lnmix_sigma2, seed=seed)
+    else:
+        raise ValueError(
+            "At least one k-distribution must be specified: k_posterior_sample, "
+            "k_gamma_shape/scale, k_invgamma_alpha, or k_lnmix_w."
+        )
+
+
 def sample_invgamma(n, alpha, beta=None, mode=None, seed=None):
     """Sample from an Inverse Gamma distribution.
 
@@ -436,36 +490,20 @@ def _risk_days_bs_python(
         raise ValueError("n_bs must be greater than zero to perform simulations.")
 
     np.random.seed(seed)
-    if k_posterior_sample is not None:
-        ks = np.random.choice(k_posterior_sample, size=n_bs, replace=True)
-    elif (
-        k_posterior_sample is None
-        and k_gamma_shape is not None
-        and k_gamma_scale is not None
-    ):
-        ks = np.random.gamma(k_gamma_shape, k_gamma_scale, n_bs)
-    elif k_invgamma_alpha is not None:
-        _beta = k_invgamma_beta
-        if _beta is None:
-            if k_invgamma_mode is not None:
-                _beta = k_invgamma_mode * (k_invgamma_alpha + 1)
-            else:
-                raise ValueError(
-                    "k_invgamma_alpha requires k_invgamma_beta or k_invgamma_mode"
-                )
-        # Uses the legacy numpy global state set above for reproducibility.
-        ks = stats.invgamma.rvs(k_invgamma_alpha, scale=_beta, size=n_bs)
-    elif k_lnmix_w is not None:
-        if any(p is None for p in [k_lnmix_mu1, k_lnmix_sigma1, k_lnmix_mu2, k_lnmix_sigma2]):
-            raise ValueError(
-                "All lnmix parameters (k_lnmix_w, mu1, sigma1, mu2, sigma2) must be provided together."
-            )
-        ks = sample_lnmix(n_bs, k_lnmix_w, k_lnmix_mu1, k_lnmix_sigma1,
-                           k_lnmix_mu2, k_lnmix_sigma2, seed=seed)
-    else:
-        raise ValueError(
-            "k_posterior_sample and k_gamma parameters must not both be 'None'."
-        )
+    ks = _sample_k(
+        n_bs, seed,
+        k_posterior_sample=k_posterior_sample,
+        k_gamma_shape=k_gamma_shape,
+        k_gamma_scale=k_gamma_scale,
+        k_invgamma_alpha=k_invgamma_alpha,
+        k_invgamma_beta=k_invgamma_beta,
+        k_invgamma_mode=k_invgamma_mode,
+        k_lnmix_w=k_lnmix_w,
+        k_lnmix_mu1=k_lnmix_mu1,
+        k_lnmix_sigma1=k_lnmix_sigma1,
+        k_lnmix_mu2=k_lnmix_mu2,
+        k_lnmix_sigma2=k_lnmix_sigma2,
+    )
     doubling_times = stats.truncnorm.rvs(
         0, np.inf, doubling_time, doubling_time_norm_sd, n_bs
     )

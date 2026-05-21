@@ -27,6 +27,7 @@ from .core import (
     _prob_infectious_copies,
     _prob_neg_retest,
     _prob_pos_init,
+    _sample_k,
     get_cpu_core_count,
     mode_rounded,
 )
@@ -303,6 +304,14 @@ def risk_days_prep_bs(
     k_posterior_sample=None,
     k_gamma_shape=None,
     k_gamma_scale=None,
+    k_invgamma_alpha=None,
+    k_invgamma_beta=None,
+    k_invgamma_mode=None,
+    k_lnmix_w=None,
+    k_lnmix_mu1=None,
+    k_lnmix_sigma1=None,
+    k_lnmix_mu2=None,
+    k_lnmix_sigma2=None,
     n_bs=10000,
     seed=126887,
     threads=get_cpu_core_count() - 1,
@@ -314,14 +323,20 @@ def risk_days_prep_bs(
         raise ValueError("n_bs must be greater than zero to perform simulations.")
 
     np.random.seed(seed)
-    if k_posterior_sample is not None:
-        ks = np.random.choice(k_posterior_sample, size=n_bs, replace=True)
-    elif k_posterior_sample is None and k_gamma_shape is not None and k_gamma_scale is not None:
-        ks = np.random.gamma(k_gamma_shape, k_gamma_scale, n_bs)
-    else:
-        raise ValueError(
-            "k_posterior_sample and k_gamma parameters must not both be 'None'."
-        )
+    ks = _sample_k(
+        n_bs, seed,
+        k_posterior_sample=k_posterior_sample,
+        k_gamma_shape=k_gamma_shape,
+        k_gamma_scale=k_gamma_scale,
+        k_invgamma_alpha=k_invgamma_alpha,
+        k_invgamma_beta=k_invgamma_beta,
+        k_invgamma_mode=k_invgamma_mode,
+        k_lnmix_w=k_lnmix_w,
+        k_lnmix_mu1=k_lnmix_mu1,
+        k_lnmix_sigma1=k_lnmix_sigma1,
+        k_lnmix_mu2=k_lnmix_mu2,
+        k_lnmix_sigma2=k_lnmix_sigma2,
+    )
     doubling_times = stats.truncnorm.rvs(0, np.inf, doubling_time, doubling_time_norm_sd, n_bs)
     set_points = np.random.uniform(set_point_dist_uniform[0], set_point_dist_uniform[1], n_bs)
     eclipses = np.random.uniform(eclipse_dist_uniform[0], eclipse_dist_uniform[1], n_bs)
@@ -330,7 +345,6 @@ def risk_days_prep_bs(
         volume_transfused_range[0], volume_transfused_range[1], n_bs
     )
 
-    print("Starting parallel risk days calculation on ", threads, " cores...")
     args_list = [
         (
             copies_per_virion, C0, doubling_times[i], set_points[i], eclipses[i],

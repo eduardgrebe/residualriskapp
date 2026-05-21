@@ -1,0 +1,195 @@
+# Residual HIV Transfusion Transmission Risk Estimation Tool
+# Copyright (C) 2025-2026  Vitalant and Eduard Grebe Consulting
+# Author: Eduard Grebe <egrebe@vitalant.org> <eduard@grebe.consulting>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+"""
+Tests for k-distribution flexibility in the PrEP model
+(residualrisk.prep.risk_days_prep_bs) and the shared _sample_k helper.
+
+Verifies that all four k-distribution paths (posterior sample, legacy gamma,
+inverse gamma, lognormal mixture) work correctly in both the shared helper
+and the PrEP bootstrap function.
+"""
+
+import numpy as np
+import pytest
+import scipy.stats as stats
+
+from residualrisk.core import _sample_k
+from residualrisk.prep import risk_days_prep_bs
+
+
+# ---------------------------------------------------------------------------
+# Shared test fixtures
+# ---------------------------------------------------------------------------
+
+COMMON_PREP_KWARGS = dict(
+    k=0.001,
+    doubling_time=1.1,
+    doubling_time_norm_sd=0.14,
+    lod50=36.1,
+    lod50_sd=4.6,
+    lod95_lod50_ratio=3.01,
+    volume_transfused=300,
+    volume_transfused_range=(250, 350),
+    pool_size=16,
+    retests=0,
+    seed=42,
+    n_bs=20,
+    threads=1,
+    point_estimate="median",
+)
+
+
+# ---------------------------------------------------------------------------
+# _sample_k helper tests
+# ---------------------------------------------------------------------------
+
+class TestSampleK:
+    """Tests for the shared _sample_k dispatch helper."""
+
+    def test_posterior_sample(self):
+        np.random.seed(0)
+        posterior = np.array([0.001, 0.002, 0.003, 0.004, 0.005])
+        ks = _sample_k(100, seed=0, k_posterior_sample=posterior)
+        assert len(ks) == 100
+        assert all(k in posterior for k in ks)
+
+    def test_gamma_legacy(self):
+        np.random.seed(0)
+        ks = _sample_k(100, seed=0, k_gamma_shape=2.0, k_gamma_scale=0.001)
+        assert len(ks) == 100
+        assert all(k > 0 for k in ks)
+
+    def test_invgamma_alpha_beta(self):
+        np.random.seed(0)
+        ks = _sample_k(1000, seed=0, k_invgamma_alpha=2.0, k_invgamma_beta=0.002019)
+        assert len(ks) == 1000
+        assert all(k > 0 for k in ks)
+        # Theoretical mean of InvGamma(2, 0.002019) = beta / (alpha - 1)
+        expected_mean = 0.002019 / (2.0 - 1)
+        assert abs(np.mean(ks) - expected_mean) / expected_mean < 0.15
+
+    def test_invgamma_alpha_mode(self):
+        np.random.seed(0)
+        mode = 0.000673
+        alpha = 2.0
+        ks = _sample_k(1000, seed=0, k_invgamma_alpha=alpha, k_invgamma_mode=mode)
+        assert len(ks) == 1000
+        # beta = mode * (alpha + 1) = 0.000673 * 3 = 0.002019
+        expected_beta = mode * (alpha + 1)
+        expected_mean = expected_beta / (alpha - 1)
+        assert abs(np.mean(ks) - expected_mean) / expected_mean < 0.15
+
+    def test_invgamma_missing_beta_and_mode(self):
+        np.random.seed(0)
+        with pytest.raises(ValueError, match="k_invgamma_alpha requires"):
+            _sample_k(100, seed=0, k_invgamma_alpha=2.0)
+
+    def test_lnmix(self):
+        np.random.seed(0)
+        ks = _sample_k(
+            1000, seed=0,
+            k_lnmix_w=0.90,
+            k_lnmix_mu1=-7.2403, k_lnmix_sigma1=0.3241,
+            k_lnmix_mu2=-3.7423, k_lnmix_sigma2=0.5258,
+        )
+        assert len(ks) == 1000
+        assert all(k > 0 for k in ks)
+
+    def test_lnmix_missing_params(self):
+        np.random.seed(0)
+        with pytest.raises(ValueError, match="lnmix parameters"):
+            _sample_k(100, seed=0, k_lnmix_w=0.90, k_lnmix_mu1=-7.0)
+
+    def test_no_distribution_raises(self):
+        np.random.seed(0)
+        with pytest.raises(ValueError, match="At least one k-distribution"):
+            _sample_k(100, seed=0)
+
+    def test_posterior_takes_priority(self):
+        """When posterior is provided alongside parametric args, posterior wins."""
+        np.random.seed(0)
+        posterior = np.array([0.001, 0.001, 0.001])
+        ks = _sample_k(
+            50, seed=0,
+            k_posterior_sample=posterior,
+            k_invgamma_alpha=2.0, k_invgamma_beta=0.002,
+        )
+        assert all(k == 0.001 for k in ks)
+
+
+# ---------------------------------------------------------------------------
+# PrEP bootstrap with each k-distribution
+# ---------------------------------------------------------------------------
+
+class TestPrepBsKDistributions:
+    """Integration tests: risk_days_prep_bs with each k-distribution path."""
+
+    def test_posterior_sample(self):
+        posterior = np.random.default_rng(99).exponential(0.001, size=200)
+        rd_pe, rd_cri, rd_range, rdests = risk_days_prep_bs(
+            **COMMON_PREP_KWARGS,
+            k_posterior_sample=posterior,
+        )
+        assert rd_pe is not None
+        assert len(rdests) == COMMON_PREP_KWARGS["n_bs"]
+        assert all(r >= 0 for r in rdests)
+
+    def test_invgamma(self):
+        rd_pe, rd_cri, rd_range, rdests = risk_days_prep_bs(
+            **COMMON_PREP_KWARGS,
+            k_invgamma_alpha=2.0,
+            k_invgamma_beta=0.002019,
+        )
+        assert rd_pe is not None
+        assert len(rdests) == COMMON_PREP_KWARGS["n_bs"]
+        assert all(r >= 0 for r in rdests)
+
+    def test_invgamma_mode(self):
+        rd_pe, rd_cri, rd_range, rdests = risk_days_prep_bs(
+            **COMMON_PREP_KWARGS,
+            k_invgamma_alpha=2.0,
+            k_invgamma_mode=0.000673,
+        )
+        assert rd_pe is not None
+        assert len(rdests) == COMMON_PREP_KWARGS["n_bs"]
+
+    def test_lnmix(self):
+        rd_pe, rd_cri, rd_range, rdests = risk_days_prep_bs(
+            **COMMON_PREP_KWARGS,
+            k_lnmix_w=0.90,
+            k_lnmix_mu1=-7.2403,
+            k_lnmix_sigma1=0.3241,
+            k_lnmix_mu2=-3.7423,
+            k_lnmix_sigma2=0.5258,
+        )
+        assert rd_pe is not None
+        assert len(rdests) == COMMON_PREP_KWARGS["n_bs"]
+        assert all(r >= 0 for r in rdests)
+
+    def test_legacy_gamma(self):
+        rd_pe, rd_cri, rd_range, rdests = risk_days_prep_bs(
+            **COMMON_PREP_KWARGS,
+            k_gamma_shape=2.0,
+            k_gamma_scale=0.001,
+        )
+        assert rd_pe is not None
+        assert len(rdests) == COMMON_PREP_KWARGS["n_bs"]
+
+    def test_no_distribution_raises(self):
+        with pytest.raises(ValueError, match="At least one k-distribution"):
+            risk_days_prep_bs(**COMMON_PREP_KWARGS)
