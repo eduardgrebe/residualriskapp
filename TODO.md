@@ -23,20 +23,16 @@
         breakthrough incidence inputs (prepopulated with defaults). Total
         residual risk = sum of all components.
 
-- [ ] **Wire PrEP into app.py.** Implementation steps:
-      1. Remove "Mechanistic model with PrEP" from RDE method dropdown.
-      2. Add two PrEP checkboxes below the dropdown (only visible when
-         mechanistic model is selected).
-      3. Conditionally show PrEP parameter expanders. Shared params
-         (eclipse, a/b/offset) appear once; modality-specific params
-         (set point, seroconversion Weibull) appear per modality.
-      4. In the button dispatch: after baseline run, run oPrEP and/or iPrEP
-         bootstraps. Store results in separate session state keys
-         (e.g. `iwp_pe_prep_oral`, `samp_prep_oral`, etc.).
-      5. In the incidence section: add PrEP breakthrough incidence inputs
-         (with defaults) when PrEP checkboxes are ticked.
-      6. In the results section: show baseline + PrEP RDEs side-by-side.
-         Show residual risk breakdown + total if calculate_rr is checked.
+- [x] **Wire PrEP into app.py.** *(Done 2026-05-21.)*
+      Removed "Mechanistic model with PrEP" from dropdown. Added two independent
+      checkboxes (Include oral PrEP / Include injectable PrEP) below the dropdown,
+      only shown when mechanistic model is selected. Shared PrEP params expander
+      (eclipse, a/b/offset) + per-modality expanders (set point, seroconversion
+      Weibull). Button dispatch runs oPrEP and/or iPrEP bootstraps after baseline.
+      Incidence section shows PrEP breakthrough incidence inputs when checkboxes ticked.
+      Results show baseline + oPrEP + iPrEP RDEs; residual risk section shows
+      per-component breakdown + additive total. Download button combines all scenario
+      DataFrames with a `scenario` column.
 
 - [x] **Add `return_sim_df` support to `risk_days_prep_bs()`.** *(Done 2026-05-21.)*
       Returns a per-iteration Polars DataFrame including PrEP-specific columns

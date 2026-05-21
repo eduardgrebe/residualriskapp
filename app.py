@@ -73,6 +73,18 @@ if "iwp_pe" not in st.session_state:
 if "iwp_pe_last" not in st.session_state:
     st.session_state["iwp_pe_last"] = None
 
+# PrEP session state
+for _k in (
+    "iwp_pe_prep_oral", "samp_prep_oral", "sim_df_prep_oral",
+    "iwp_pe_prep_inj", "samp_prep_inj", "sim_df_prep_inj",
+):
+    if _k not in st.session_state:
+        st.session_state[_k] = None
+
+for _k in ("prep_oral_run", "prep_inj_run"):
+    if _k not in st.session_state:
+        st.session_state[_k] = False
+
 
 @st.cache_data
 def load_data():
@@ -150,16 +162,31 @@ rde_method = st.selectbox(
     options=[
         "Lookback data",
         "Mechanistic model",
-        "Mechanistic model with PrEP",
     ],
     index=1,
-    help="Risk day quivalents (RDEs) are equivalent to the infectious window "
+    help="Risk day equivalents (RDEs) are equivalent to the infectious window "
     "period (IWP). Lookback data: estimates the IWP directly from "
     "lookback investigation data. Mechanistic model: simulates the "
     "IWP from viral dynamics and assay parameters. ",
 )
 
-is_mechanistic_ui = rde_method in ("Mechanistic model", "Mechanistic model with PrEP")
+is_mechanistic_ui = rde_method == "Mechanistic model"
+
+include_prep_oral = False
+include_prep_inj = False
+if is_mechanistic_ui:
+    include_prep_oral = st.checkbox(
+        "Include oral PrEP breakthrough risk",
+        value=False,
+        help="Add a separate oral PrEP (oPrEP) breakthrough infection RDE "
+        "estimate on top of the baseline window-period risk.",
+    )
+    include_prep_inj = st.checkbox(
+        "Include injectable PrEP breakthrough risk",
+        value=False,
+        help="Add a separate injectable PrEP (iPrEP) breakthrough infection "
+        "RDE estimate on top of the baseline window-period risk.",
+    )
 
 st.sidebar.write("Number of CPU cores: ", n_cpu)
 
@@ -203,9 +230,17 @@ if rde_method == "Lookback data":
     lookback_param_container = st.expander(
         "Lookback data parameters", expanded=True, icon=":material/menu_open:"
     )
-if rde_method == "Mechanistic model with PrEP":
-    prep_param_container = st.expander(
-        "PrEP parameters", expanded=True, icon=":material/menu_open:"
+if include_prep_oral or include_prep_inj:
+    prep_shared_container = st.expander(
+        "PrEP shared parameters", expanded=True, icon=":material/menu_open:"
+    )
+if include_prep_oral:
+    prep_oral_container = st.expander(
+        "Oral PrEP (oPrEP) parameters", expanded=True, icon=":material/menu_open:"
+    )
+if include_prep_inj:
+    prep_inj_container = st.expander(
+        "Injectable PrEP (iPrEP) parameters", expanded=True, icon=":material/menu_open:"
     )
 incidence_param_container = st.expander(
     "Incidence parameters", expanded=True, icon=":material/menu_open:"
@@ -670,8 +705,8 @@ if rde_method == "Lookback data":
             placeholder="105\n98\n120\n...",
         )
 
-if rde_method == "Mechanistic model with PrEP":
-    with prep_param_container:
+if include_prep_oral or include_prep_inj:
+    with prep_shared_container:
         col1, col2 = st.columns(2)
 
         eclipse = col1.number_input(
@@ -680,6 +715,7 @@ if rde_method == "Mechanistic model with PrEP":
             max_value=30,
             value=7,
             step=1,
+            help="Duration of the eclipse phase before viral RNA becomes detectable.",
         )
         eclipse_range = col1.slider(
             "Eclipse period range (days)",
@@ -687,93 +723,154 @@ if rde_method == "Mechanistic model with PrEP":
             max_value=20,
             value=(4, 10),
             step=1,
+            help="Uncertainty range for the eclipse period (sampled uniformly).",
         )
+
+        col2.write("**Sinusoidal set-point oscillation parameters**")
+        prep_a = col2.number_input(
+            "Amplitude (a)",
+            min_value=0.0,
+            max_value=2.0,
+            value=0.7,
+            step=0.05,
+            format="%.2f",
+            help="Amplitude of sinusoidal oscillation around the viral set point.",
+        )
+        prep_b = col2.number_input(
+            "Frequency (b)",
+            min_value=0.0,
+            max_value=5.0,
+            value=0.6,
+            step=0.05,
+            format="%.2f",
+            help="Frequency of sinusoidal oscillation.",
+        )
+        prep_offset = col2.number_input(
+            "Offset",
+            min_value=0.0,
+            max_value=2.0,
+            value=1.0,
+            step=0.05,
+            format="%.2f",
+            help="Vertical offset of sinusoidal oscillation (multiplied by set point).",
+        )
+
+if include_prep_oral:
+    with prep_oral_container:
+        col1, col2 = st.columns(2)
+
         vl_setpoint_oral = col1.number_input(
-            "oPrEP viral load setpoint (c/mL)",
+            "Viral load set point (c/mL)",
             min_value=1,
             max_value=5000,
             value=340,
             step=10,
+            help="Median oPrEP breakthrough viral load set point.",
         )
         vl_setpoint_range_oral = col1.slider(
-            "oPrEP viral load setpoint range (c/mL)",
+            "Viral load set point range (c/mL)",
             min_value=1,
             max_value=5000,
             value=(10, 2270),
             step=10,
-        )
-        vl_setpoint_inj = col1.number_input(
-            "iPrEP viral load setpoint (c/mL)",
-            min_value=1,
-            max_value=5000,
-            value=30,
-            step=10,
-        )
-        vl_setpoint_range_inj = col1.slider(
-            "iPrEP viral load setpoint range (c/mL)",
-            min_value=1,
-            max_value=5000,
-            value=(10, 2500),
-            step=10,
+            help="Uncertainty range for the oPrEP viral load set point (sampled uniformly).",
         )
 
         seroconversion_min_oral = col2.number_input(
-            "oPrEP time to seroconversion min (days)",
+            "Time to seroconversion min (days)",
             min_value=0,
             max_value=500,
             value=29,
             step=1,
+            help="Minimum time from infection to seroconversion in oPrEP users.",
         )
         seroconversion_max_oral = col2.number_input(
-            "oPrEP time to seroconversion max (days)",
+            "Time to seroconversion max (days)",
             min_value=0,
             max_value=500,
             value=250,
             step=1,
+            help="Maximum time from infection to seroconversion in oPrEP users.",
         )
         seroconversion_weibull_alpha_oral = col2.number_input(
-            "oPrEP time to seroconversion Weibul shape (α)",
+            "Seroconversion Weibull shape (α)",
             min_value=0.0,
             max_value=500.0,
             value=50.49434,
             step=0.001,
+            format="%.5f",
+            help="Shape parameter of the Weibull-family seroconversion curve for oPrEP.",
         )
         seroconversion_weibull_beta_oral = col2.number_input(
-            "oPrEP time to seroconversion Weibul scale (β)",
+            "Seroconversion Weibull scale (β)",
             min_value=0.0,
             max_value=500.0,
             value=1.15062,
             step=0.001,
+            format="%.5f",
+            help="Scale parameter of the Weibull-family seroconversion curve for oPrEP.",
+        )
+
+if include_prep_inj:
+    with prep_inj_container:
+        col1, col2 = st.columns(2)
+
+        vl_setpoint_inj = col1.number_input(
+            "Viral load set point (c/mL)",
+            min_value=1,
+            max_value=5000,
+            value=30,
+            step=10,
+            help="Median iPrEP breakthrough viral load set point.",
+        )
+        vl_setpoint_range_inj = col1.slider(
+            "Viral load set point range (c/mL)",
+            min_value=1,
+            max_value=5000,
+            value=(10, 2500),
+            step=10,
+            help="Uncertainty range for the iPrEP viral load set point (sampled uniformly).",
         )
 
         seroconversion_min_inj = col2.number_input(
-            "iPrEP time to seroconversion min (days)",
+            "Time to seroconversion min (days)",
             min_value=0,
             max_value=500,
             value=42,
             step=1,
+            help="Minimum time from infection to seroconversion in iPrEP users.",
         )
         seroconversion_max_inj = col2.number_input(
-            "iPrEP time to seroconversion max (days)",
+            "Time to seroconversion max (days)",
             min_value=0,
             max_value=500,
             value=250,
             step=1,
+            help="Maximum time from infection to seroconversion in iPrEP users.",
         )
         seroconversion_weibull_alpha_inj = col2.number_input(
-            "iPrEP time to seroconversion Weibul shape (α)",
+            "Seroconversion Weibull shape (α)",
             min_value=0.0,
             max_value=500.0,
             value=90.88988,
             step=0.001,
+            format="%.5f",
+            help="Shape parameter of the Weibull-family seroconversion curve for iPrEP.",
         )
         seroconversion_weibull_beta_inj = col2.number_input(
-            "iPrEP time to seroconversion Weibul scale (β)",
+            "Seroconversion Weibull scale (β)",
             min_value=0.0,
             max_value=500.0,
             value=3.048339,
             step=0.001,
+            format="%.5f",
+            help="Scale parameter of the Weibull-family seroconversion curve for iPrEP.",
         )
+
+inc_prep_oral_perpy = None
+inc_prep_oral_perpy_sd = None
+inc_prep_inj_perpy = None
+inc_prep_inj_perpy_sd = None
 
 with incidence_param_container:
     calculate_rr = st.checkbox(
@@ -782,6 +879,7 @@ with incidence_param_container:
         help="Placeholder help text",
     )
     if calculate_rr:
+        st.write("**Baseline (non-PrEP) incidence**")
         inc_per100k = st.number_input(
             "Incidence (/100,000 PY)",
             min_value=0.001,
@@ -805,6 +903,58 @@ with incidence_param_container:
         st.text(
             f"Relative standard error on incidence: {inc_per100k_sd / inc_per100k * 100:.1f}%"
         )
+
+        if include_prep_oral:
+            st.write("**Oral PrEP breakthrough infection incidence**")
+            inc_prep_oral_per100k = st.number_input(
+                "oPrEP breakthrough incidence (/100,000 PY)",
+                min_value=0.001,
+                max_value=10000.000,
+                value=0.200,
+                step=0.1,
+                help="Incidence of HIV breakthrough infection among oral PrEP users.",
+                key="inc_prep_oral",
+            )
+            inc_prep_oral_per100k_sd = st.number_input(
+                "oPrEP breakthrough incidence SD (/100,000 PY)",
+                min_value=0.001,
+                max_value=10000.000,
+                value=inc_prep_oral_per100k * 0.3,
+                step=0.01,
+                help="Standard deviation of oPrEP breakthrough incidence.",
+                key="inc_prep_oral_sd",
+            )
+            inc_prep_oral_perpy = inc_prep_oral_per100k / 100000
+            inc_prep_oral_perpy_sd = inc_prep_oral_per100k_sd / 100000
+            st.text(
+                f"Relative standard error: {inc_prep_oral_per100k_sd / inc_prep_oral_per100k * 100:.1f}%"
+            )
+
+        if include_prep_inj:
+            st.write("**Injectable PrEP breakthrough infection incidence**")
+            inc_prep_inj_per100k = st.number_input(
+                "iPrEP breakthrough incidence (/100,000 PY)",
+                min_value=0.001,
+                max_value=10000.000,
+                value=0.050,
+                step=0.01,
+                help="Incidence of HIV breakthrough infection among injectable PrEP users.",
+                key="inc_prep_inj",
+            )
+            inc_prep_inj_per100k_sd = st.number_input(
+                "iPrEP breakthrough incidence SD (/100,000 PY)",
+                min_value=0.001,
+                max_value=10000.000,
+                value=inc_prep_inj_per100k * 0.3,
+                step=0.001,
+                help="Standard deviation of iPrEP breakthrough incidence.",
+                key="inc_prep_inj_sd",
+            )
+            inc_prep_inj_perpy = inc_prep_inj_per100k / 100000
+            inc_prep_inj_perpy_sd = inc_prep_inj_per100k_sd / 100000
+            st.text(
+                f"Relative standard error: {inc_prep_inj_per100k_sd / inc_prep_inj_per100k * 100:.1f}%"
+            )
 
 button_label = (
     "Run simulations" if is_mechanistic_ui else "Calculate RDEs"
@@ -909,6 +1059,124 @@ if st.sidebar.button(button_label):
         time.sleep(0.3)
         progressbar.empty()
 
+        # --- PrEP bootstrap runs (Python-only) ---
+        _prep_k_kwargs = dict(
+            k_posterior_sample=k_param,
+            k_invgamma_alpha=k_invgamma_alpha,
+            k_invgamma_beta=k_invgamma_beta,
+            k_gamma_scale=None,
+            k_gamma_shape=None,
+            k_lnmix_w=k_lnmix_w,
+            k_lnmix_mu1=k_lnmix_mu1,
+            k_lnmix_sigma1=k_lnmix_sigma1,
+            k_lnmix_mu2=k_lnmix_mu2,
+            k_lnmix_sigma2=k_lnmix_sigma2,
+        )
+
+        if include_prep_oral:
+            prep_oral_bar = st.sidebar.progress(
+                0, text="Running oral PrEP simulations (Python)..."
+            )
+            (
+                st.session_state["iwp_pe_prep_oral"],
+                st.session_state["iwp_cri_prep_oral"],
+                st.session_state["iwp_range_prep_oral"],
+                st.session_state["bs_prep_oral"],
+                st.session_state["sim_df_prep_oral"],
+            ) = rrprep.risk_days_prep_bs(
+                k_pe,
+                doubling_time,
+                doubling_time_sd,
+                lod50,
+                lod50_sd,
+                lod95_lod50_ratio,
+                volume_pe,
+                volume_range,
+                pool_size,
+                retests,
+                set_point=vl_setpoint_oral,
+                set_point_dist_uniform=vl_setpoint_range_oral,
+                eclipse=eclipse,
+                eclipse_dist_uniform=eclipse_range,
+                a=prep_a,
+                b=prep_b,
+                offset=prep_offset,
+                ser_min=seroconversion_min_oral,
+                ser_max=seroconversion_max_oral,
+                ser_alpha=seroconversion_weibull_alpha_oral,
+                ser_beta=seroconversion_weibull_beta_oral,
+                **_prep_k_kwargs,
+                alpha=alpha,
+                n_bs=n_sims,
+                point_estimate=point_estimate,
+                seed=st.session_state["seed"],
+                threads=n_threads,
+                return_sim_df=True,
+            )
+            st.session_state["prep_oral_run"] = True
+            st.session_state["samp_prep_oral"] = pl.DataFrame(
+                {"iwp": st.session_state["bs_prep_oral"]}
+            )
+            if st.session_state["sim_df_prep_oral"] is None:
+                st.session_state["sim_df_prep_oral"] = st.session_state["samp_prep_oral"]
+            prep_oral_bar.progress(1.0, text="Oral PrEP simulations complete!")
+            time.sleep(0.3)
+            prep_oral_bar.empty()
+        else:
+            st.session_state["prep_oral_run"] = False
+
+        if include_prep_inj:
+            prep_inj_bar = st.sidebar.progress(
+                0, text="Running injectable PrEP simulations (Python)..."
+            )
+            (
+                st.session_state["iwp_pe_prep_inj"],
+                st.session_state["iwp_cri_prep_inj"],
+                st.session_state["iwp_range_prep_inj"],
+                st.session_state["bs_prep_inj"],
+                st.session_state["sim_df_prep_inj"],
+            ) = rrprep.risk_days_prep_bs(
+                k_pe,
+                doubling_time,
+                doubling_time_sd,
+                lod50,
+                lod50_sd,
+                lod95_lod50_ratio,
+                volume_pe,
+                volume_range,
+                pool_size,
+                retests,
+                set_point=vl_setpoint_inj,
+                set_point_dist_uniform=vl_setpoint_range_inj,
+                eclipse=eclipse,
+                eclipse_dist_uniform=eclipse_range,
+                a=prep_a,
+                b=prep_b,
+                offset=prep_offset,
+                ser_min=seroconversion_min_inj,
+                ser_max=seroconversion_max_inj,
+                ser_alpha=seroconversion_weibull_alpha_inj,
+                ser_beta=seroconversion_weibull_beta_inj,
+                **_prep_k_kwargs,
+                alpha=alpha,
+                n_bs=n_sims,
+                point_estimate=point_estimate,
+                seed=st.session_state["seed"],
+                threads=n_threads,
+                return_sim_df=True,
+            )
+            st.session_state["prep_inj_run"] = True
+            st.session_state["samp_prep_inj"] = pl.DataFrame(
+                {"iwp": st.session_state["bs_prep_inj"]}
+            )
+            if st.session_state["sim_df_prep_inj"] is None:
+                st.session_state["sim_df_prep_inj"] = st.session_state["samp_prep_inj"]
+            prep_inj_bar.progress(1.0, text="Injectable PrEP simulations complete!")
+            time.sleep(0.3)
+            prep_inj_bar.empty()
+        else:
+            st.session_state["prep_inj_run"] = False
+
     elif rde_method == "Lookback data":
         import re
 
@@ -967,14 +1235,34 @@ if st.session_state["sims_run"]:
         index=1,
         help="Placeholder help text",
     )
+    # Build combined download: baseline + any PrEP scenarios
+    _dl_frames = []
     if "sim_df" in st.session_state and st.session_state["sim_df"] is not None:
-        res_dl = convert_for_download(
-            st.session_state["sim_df"], file_format=download_format
+        _bl_df = st.session_state["sim_df"].with_columns(
+            pl.lit("baseline").alias("scenario")
         )
+        _dl_frames.append(_bl_df)
     else:
-        res_dl = convert_for_download(
-            st.session_state["samp"], file_format=download_format
+        _bl_df = st.session_state["samp"].with_columns(
+            pl.lit("baseline").alias("scenario")
         )
+        _dl_frames.append(_bl_df)
+
+    if st.session_state.get("prep_oral_run") and st.session_state["sim_df_prep_oral"] is not None:
+        _dl_frames.append(
+            st.session_state["sim_df_prep_oral"].with_columns(
+                pl.lit("oral_prep").alias("scenario")
+            )
+        )
+    if st.session_state.get("prep_inj_run") and st.session_state["sim_df_prep_inj"] is not None:
+        _dl_frames.append(
+            st.session_state["sim_df_prep_inj"].with_columns(
+                pl.lit("injectable_prep").alias("scenario")
+            )
+        )
+
+    _combined_df = pl.concat(_dl_frames, how="diagonal_relaxed")
+    res_dl = convert_for_download(_combined_df, file_format=download_format)
     st.sidebar.download_button(
         label="Download simulations",
         data=res_dl,
@@ -1029,13 +1317,50 @@ else:
 
     if iwp_pe is not None:
         output_container.write(
-            f"RDEs PE: {iwp_pe:.2f} ({sig_level:.0f}% {interval_label}: "
+            f"**Baseline** RDEs PE: {iwp_pe:.2f} ({sig_level:.0f}% {interval_label}: "
             f"{iwp_cri[0]:.2f} to {iwp_cri[1]:.2f}; "
             f"Range: {iwp_range[0]:.2f} to {iwp_range[1]:.2f})"
         )
 
     fig = plot_histogram(st.session_state["samp"], histnorm=plot_norm)
     output_container.plotly_chart(fig, width="stretch")
+
+    # --- PrEP RDE results ---
+    if st.session_state.get("prep_oral_run"):
+        iwp_pe_oral = st.session_state.get("iwp_pe_prep_oral")
+        samp_oral = st.session_state.get("samp_prep_oral")
+        if iwp_pe_oral is not None and samp_oral is not None:
+            oral_cri = (
+                samp_oral["iwp"].quantile(alpha / 2),
+                samp_oral["iwp"].quantile(1 - alpha / 2),
+            )
+            oral_range = (samp_oral["iwp"].min(), samp_oral["iwp"].max())
+            output_container.write(
+                f"**Oral PrEP** RDEs PE: {iwp_pe_oral:.2f} "
+                f"({sig_level:.0f}% {interval_label}: "
+                f"{oral_cri[0]:.2f} to {oral_cri[1]:.2f}; "
+                f"Range: {oral_range[0]:.2f} to {oral_range[1]:.2f})"
+            )
+            fig_oral = plot_histogram(samp_oral, histnorm=plot_norm)
+            output_container.plotly_chart(fig_oral, width="stretch")
+
+    if st.session_state.get("prep_inj_run"):
+        iwp_pe_inj = st.session_state.get("iwp_pe_prep_inj")
+        samp_inj = st.session_state.get("samp_prep_inj")
+        if iwp_pe_inj is not None and samp_inj is not None:
+            inj_cri = (
+                samp_inj["iwp"].quantile(alpha / 2),
+                samp_inj["iwp"].quantile(1 - alpha / 2),
+            )
+            inj_range = (samp_inj["iwp"].min(), samp_inj["iwp"].max())
+            output_container.write(
+                f"**Injectable PrEP** RDEs PE: {iwp_pe_inj:.2f} "
+                f"({sig_level:.0f}% {interval_label}: "
+                f"{inj_cri[0]:.2f} to {inj_cri[1]:.2f}; "
+                f"Range: {inj_range[0]:.2f} to {inj_range[1]:.2f})"
+            )
+            fig_inj = plot_histogram(samp_inj, histnorm=plot_norm)
+            output_container.plotly_chart(fig_inj, width="stretch")
 
     if calculate_rr:
         if iwp_pe is None or iwp_pe <= 0:
@@ -1064,12 +1389,87 @@ else:
                 alpha=alpha,
                 one_in_x=True,
             )
+            output_container.write("**Baseline residual risk**")
             output_container.write(
                 f"RR PE: {rr_pe:.5f} /million transfusions ({sig_level:.0f}% {interval_label}: {rr_cri[0]:.5f} to {rr_cri[1]:.5f})"
             )
             output_container.write(
                 f"RR PE: 1 transmission in {rr_onein_pe:,.0f} transfusions ({sig_level:.0f}% {interval_label}: {rr_onein_cri[1]:,.0f} to {rr_onein_cri[0]:,.0f})"
             )
+
+            # PrEP residual risk components
+            _rr_total_pe = rr_pe
+            _rr_total_samps = None
+
+            if st.session_state.get("prep_oral_run") and st.session_state.get("samp_prep_oral") is not None:
+                iwp_pe_oral = st.session_state.get("iwp_pe_prep_oral")
+                if iwp_pe_oral is not None and iwp_pe_oral > 0 and inc_prep_oral_perpy is not None:
+                    rr_oral_pe, rr_oral_cri, _ = rr.residual_risk_rd(
+                        iwp_pe_oral,
+                        st.session_state["samp_prep_oral"]["iwp"],
+                        inc_prep_oral_perpy,
+                        inc_prep_oral_perpy_sd,
+                        per=1e6,
+                        seed=st.session_state["seed"],
+                        alpha=alpha,
+                        one_in_x=False,
+                    )
+                    rr_oral_onein_pe, rr_oral_onein_cri, _ = rr.residual_risk_rd(
+                        iwp_pe_oral,
+                        st.session_state["samp_prep_oral"]["iwp"],
+                        inc_prep_oral_perpy,
+                        inc_prep_oral_perpy_sd,
+                        per=None,
+                        seed=st.session_state["seed"],
+                        alpha=alpha,
+                        one_in_x=True,
+                    )
+                    _rr_total_pe += rr_oral_pe
+                    output_container.write("**Oral PrEP residual risk component**")
+                    output_container.write(
+                        f"RR PE: {rr_oral_pe:.5f} /million transfusions ({sig_level:.0f}% {interval_label}: {rr_oral_cri[0]:.5f} to {rr_oral_cri[1]:.5f})"
+                    )
+                    output_container.write(
+                        f"RR PE: 1 transmission in {rr_oral_onein_pe:,.0f} transfusions ({sig_level:.0f}% {interval_label}: {rr_oral_onein_cri[1]:,.0f} to {rr_oral_onein_cri[0]:,.0f})"
+                    )
+
+            if st.session_state.get("prep_inj_run") and st.session_state.get("samp_prep_inj") is not None:
+                iwp_pe_inj = st.session_state.get("iwp_pe_prep_inj")
+                if iwp_pe_inj is not None and iwp_pe_inj > 0 and inc_prep_inj_perpy is not None:
+                    rr_inj_pe, rr_inj_cri, _ = rr.residual_risk_rd(
+                        iwp_pe_inj,
+                        st.session_state["samp_prep_inj"]["iwp"],
+                        inc_prep_inj_perpy,
+                        inc_prep_inj_perpy_sd,
+                        per=1e6,
+                        seed=st.session_state["seed"],
+                        alpha=alpha,
+                        one_in_x=False,
+                    )
+                    rr_inj_onein_pe, rr_inj_onein_cri, _ = rr.residual_risk_rd(
+                        iwp_pe_inj,
+                        st.session_state["samp_prep_inj"]["iwp"],
+                        inc_prep_inj_perpy,
+                        inc_prep_inj_perpy_sd,
+                        per=None,
+                        seed=st.session_state["seed"],
+                        alpha=alpha,
+                        one_in_x=True,
+                    )
+                    _rr_total_pe += rr_inj_pe
+                    output_container.write("**Injectable PrEP residual risk component**")
+                    output_container.write(
+                        f"RR PE: {rr_inj_pe:.5f} /million transfusions ({sig_level:.0f}% {interval_label}: {rr_inj_cri[0]:.5f} to {rr_inj_cri[1]:.5f})"
+                    )
+                    output_container.write(
+                        f"RR PE: 1 transmission in {rr_inj_onein_pe:,.0f} transfusions ({sig_level:.0f}% {interval_label}: {rr_inj_onein_cri[1]:,.0f} to {rr_inj_onein_cri[0]:,.0f})"
+                    )
+
+            # Total (additive) residual risk PE — shown only when PrEP components are present
+            if st.session_state.get("prep_oral_run") or st.session_state.get("prep_inj_run"):
+                output_container.write(
+                    f"**Total residual risk (additive) PE: {_rr_total_pe:.5f} /million transfusions**"
+                )
 
 st.sidebar.divider()
 st.sidebar.caption(f"App v{APP_VERSION} · Library v{rr.__version__}")
