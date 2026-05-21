@@ -19,9 +19,12 @@
 
 import math
 import statistics
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import numpy as np
+import polars as pl
 import scipy.stats as stats
+from scipy.integrate import quad
 
 from .core import (
     _prob_infectious_copies,
@@ -34,27 +37,17 @@ from .core import (
 
 
 def _sin_varied(t, a, b, offset):
-    from numpy import sin
-    return offset + a * sin(b * t)
-
-
-# Unused?
-def _vl_noarv(t, eclipse, C0, doubling_time):
-    from numpy import array, where
-    t = array(t)
-    concentration = where(t < eclipse, 0, C0 * 2 ** ((t - eclipse) / doubling_time))
-    return concentration
+    return offset + a * np.sin(b * t)
 
 
 def _vl_postbt_vec(t, eclipse, C0, doubling_time, set_point, a, b, offset):
-    from numpy import append, array, where
-    t = array(t)
-    concentration = where(t < eclipse, 0, C0 * 2 ** ((t - eclipse) / doubling_time))
-    idx = array([where(concentration > set_point)]).min()
+    t = np.asarray(t)
+    concentration = np.where(t < eclipse, 0, C0 * 2 ** ((t - eclipse) / doubling_time))
+    idx = np.array([np.where(concentration > set_point)]).min()
     tval = t[idx]
     newt = t[idx:] - tval
     conc_attenuated = concentration[concentration <= set_point]
-    conc_attenuated = append(
+    conc_attenuated = np.append(
         conc_attenuated,
         set_point * _sin_varied(t=newt, a=a, b=b, offset=offset),
     )
@@ -85,9 +78,8 @@ def _prob_infectious_prep(
     k,
     copies_per_virion=2.0,
 ):
-    from numpy import arange
     tmp, tcrit = _vl_postbt_vec(
-        t=arange(0, 265, 0.1),
+        t=np.arange(0, 265, 0.1),
         eclipse=eclipse,
         C0=C0,
         doubling_time=doubling_time,
@@ -139,9 +131,8 @@ def _prob_nondetection_prep(
     z=1.6449,
     seroconversion_delay_median=45,
 ):
-    from numpy import arange
     tmp, tcrit = _vl_postbt_vec(
-        t=arange(0, 265, 0.1),
+        t=np.arange(0, 265, 0.1),
         eclipse=eclipse,
         C0=C0,
         doubling_time=doubling_time,
@@ -259,7 +250,6 @@ def _risk_days_prep(
 ):
     # Ideally we would integrate from -np.inf to np.inf, but that causes an
     # overflow error, so we choose safe limits instead
-    from scipy.integrate import quad
     rd = quad(
         _prob_infectious_nondetection_prep,
         limits[0],
@@ -318,6 +308,7 @@ def risk_days_prep_bs(
     point_estimate="primary parameters",
     mode_precision=2,
     progress=None,
+    return_sim_df=False,
 ):
     if n_bs <= 0:
         raise ValueError("n_bs must be greater than zero to perform simulations.")
@@ -355,7 +346,6 @@ def risk_days_prep_bs(
         for i in range(n_bs)
     ]
 
-    from concurrent.futures import ProcessPoolExecutor, as_completed
     rdests = []
     with ProcessPoolExecutor(max_workers=threads) as executor:
         futures = [executor.submit(_risk_days_prep, *args) for args in args_list]
@@ -374,6 +364,37 @@ def risk_days_prep_bs(
     rd_range = [np.min(rdests), np.max(rdests)]
     rd_cri = np.quantile(rdests, (alpha / 2, 1 - alpha / 2))
 
+    if return_sim_df:
+        _col_names = [
+            "copies_per_virion",
+            "C0",
+            "doubling_time",
+            "set_point",
+            "eclipse",
+            "a",
+            "b",
+            "offset",
+            "volume_transfused",
+            "k",
+            "pool_size",
+            "lod50",
+            "lod95_lod50_ratio",
+            "retests",
+            "ser_min",
+            "ser_max",
+            "ser_alpha",
+            "ser_beta",
+            "z",
+            "limits",
+        ]
+        sim_df = pl.DataFrame(
+            {name: list(col) for name, col in zip(_col_names, zip(*args_list))}
+        ).with_columns(
+            (pl.col("lod50") * pl.col("lod95_lod50_ratio")).alias("lod95"),
+            pl.Series("iwp", rdests),
+            pl.lit(seed).alias("random_seed"),
+        )
+
     if point_estimate == "primary parameters":
         rd_pe = _risk_days_prep(
             copies_per_virion, C0, doubling_time, set_point, eclipse,
@@ -390,4 +411,7 @@ def risk_days_prep_bs(
     else:
         rd_pe = None
 
-    return (rd_pe, rd_cri, rd_range, rdests)
+    if return_sim_df:
+        return (rd_pe, rd_cri, rd_range, rdests, sim_df)
+    else:
+        return (rd_pe, rd_cri, rd_range, rdests, None)

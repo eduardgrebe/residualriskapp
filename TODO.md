@@ -4,16 +4,52 @@
 
 ### PrEP model — `feature_prep_model` branch
 
-- [ ] Wire `residualrisk.prep.risk_days_prep_bs()` into the app runner.
-      Clicking **Run simulations** with "Mechanistic model with PrEP"
-      selected is currently a silent no-op: the PrEP parameter widgets
-      render but the sidebar button block in `app.py`
-      (`if rde_method == "Mechanistic model":` at line ~813) only
-      dispatches the non-PrEP path. Add a parallel
-      `elif rde_method == "Mechanistic model with PrEP":` branch that
-      reads the PrEP widgets and calls `rrprep.risk_days_prep_bs(...)`,
-      then writes results into `st.session_state["samp"]` / `["iwp_pe"]` /
-      `["sim_df"]` so the existing results-rendering block picks them up.
+- [x] **Design decision: oPrEP vs iPrEP scenario handling.** *(Resolved 2026-05-21.)*
+      User selects one of three modes: **oral only**, **injectable only**, or
+      **both**. `risk_days_prep_bs()` remains a single-scenario function.
+      When "both" is selected the app runs two independent bootstraps (oPrEP
+      and iPrEP) and presents results side-by-side, plus a combined additive
+      total (populations don't overlap → risk is additive).
+
+- [ ] **Design decision: PrEP as additive layer on baseline risk.** PrEP
+      breakthrough risk is *on top of* the standard window-period donation
+      risk (from non-PrEP incident infections). The tool should allow
+      modelling the baseline risk alone (standard mechanistic model), or
+      layering oPrEP, iPrEP, or both on top. This affects how the UI
+      presents the PrEP option — it may be an "add PrEP layer" toggle
+      within the mechanistic model rather than a separate RDE method, and
+      the total residual risk = baseline + PrEP components. Needs further
+      design work on UI flow and results presentation.
+
+- [ ] **Wire PrEP into the app runner.** Add PrEP dispatch in the button
+      block in `app.py`. Add a PrEP-modality radio (oral / injectable /
+      both). For oral-only or injectable-only: single bootstrap call. For
+      "both": two calls, combine additively, show side-by-side + total.
+      Populate session state for results rendering. Design must account
+      for the additive-layer model (baseline + PrEP components).
+
+- [x] **Add `return_sim_df` support to `risk_days_prep_bs()`.** *(Done 2026-05-21.)*
+      Returns a per-iteration Polars DataFrame including PrEP-specific columns
+      (set_point, eclipse, ser_*, a, b, offset) alongside standard columns.
+
+- [x] **Code cleanup in `prep.py`:** *(Done 2026-05-21.)*
+      Removed dead `_vl_noarv()`. Moved all inline imports to top-level.
+      Integration limits `(-100, 500)` kept — sufficient for 265-day dynamics.
+
+- [ ] **Design decision: bootstrapping `a`, `b`, `offset`.** The sinusoidal
+      set-point oscillation parameters are currently fixed across all bootstrap
+      iterations. Decide whether to add uncertainty distributions (e.g. uniform
+      ranges) or keep them fixed. Scientific decision.
+
+- [ ] **Integration tests for `risk_days_prep_bs()`.** Full bootstrap tests
+      exercising each k-distribution path. Unit tests for `_sample_k()` already
+      exist in `tests/test_prep_k_distributions.py`.
+
+### Deferred (post-initial-release)
+
+- [ ] **Go acceleration for PrEP model.** No PrEP code exists in `go/`. Without
+      it the PrEP bootstrap is ~10-50× slower than the standard model. Porting
+      requires: viral dynamics, serology non-detection, integration → Go.
 
 ### Pre-existing on `main` (file against `main`, not this branch)
 
@@ -23,9 +59,15 @@
 
 ## Completed
 
+### PrEP model
+
+- [x] k-distribution parity — extract shared `_sample_k()` helper in `core.py`; add InvGamma + LN-mixture kwargs to `risk_days_prep_bs()`; 9 unit tests in `tests/test_prep_k_distributions.py` (2026-05-21)
+- [x] PrEP UI widgets — eclipse, oPrEP/iPrEP set points + ranges, oPrEP/iPrEP seroconversion Weibull params (2026-05-20)
+- [x] Initial `residualrisk/prep.py` module — viral dynamics, infectivity, non-detection, bootstrap (2026-05-20)
+
+### Standard mechanistic model
+
 - [x] Plot histogram does not render after a successful **Mechanistic model** run — confirmed working (2026-05-20)
-
-
 - [x] Implement Inverse Gamma sampling in Go (`go/riskdays/random.go`)
 - [x] Native InvGamma sampling in Python backend — `k_invgamma_alpha` / `k_invgamma_beta` / `k_invgamma_mode` kwargs in `core.py` and `_go.py`
 - [x] Rename `sample_invgamma` params from `a`/`scale` to `alpha`/`beta` throughout
