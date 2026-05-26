@@ -81,6 +81,135 @@
       Python and Go implementations. The code passes unit/integration tests, but
       scientific validity requires reproducing known results with known inputs.
 
+### Code review findings (2026-05-26)
+
+From a review of the 14 PrEP commits in range `6a7f233..722ab36` (~3280 LOC).
+Priority order, highest first.
+
+#### High severity
+
+- [ ] **H1 — Lookback path doesn't reset `prep_oral_run` / `prep_inj_run`.**
+      `app.py:1184–1219` (the `elif rde_method == "Lookback data":` branch in
+      the button handler) sets `sims_run`, `rde_method_run`, `bs`, `samp`,
+      `sim_df` but leaves the PrEP session keys untouched. After a
+      Mechanistic+PrEP run followed by a Lookback run, the results section
+      (`app.py:1333, 1351`) still renders the stale oPrEP / iPrEP RDE
+      histograms, and the residual-risk section (`app.py:1408, 1440`) adds
+      stale PrEP components into `_rr_total_pe` — so "Total residual risk
+      (additive)" reports the wrong number.
+      Fix: in the Lookback branch, set
+      `st.session_state["prep_oral_run"] = False` and
+      `st.session_state["prep_inj_run"] = False` (and ideally clear
+      `iwp_pe_prep_*` / `samp_prep_*` / `sim_df_prep_*`).
+
+- [ ] **H2 — Python PrEP integrand crashes with `TypeError` when `a > offset`.**
+      `_prob_nondetection_prep` in `residualrisk/prep.py:147–158` falls through
+      both `if Cc == 0.0` and `elif Cc > 0.0` and returns `None` when `Cc < 0`.
+      `Cc < 0` whenever `offset + a·sin(b·(t−tcrit)) < 0`, i.e. `a > offset`.
+      The UI permits `prep_a ∈ [0, 2]` and `prep_offset ∈ [0, 2]`
+      (`app.py:757–783`), so this is reachable. Verified by direct call:
+      at `a=2.0, offset=1.0, t=32.24`, `_vl_postbt → −336`, the integrand
+      raises `TypeError: unsupported operand type(s) for *: 'float' and 'NoneType'`.
+      Go does not crash but `ProbInfectiousCopies(negative_n_copies, k) =
+      1 − exp(positive) < 0` produces a negative probability.
+      Fix options (cleanest first): (a) constrain UI so `a ≤ offset`;
+      (b) clamp `Cv = max(Cv, 0)` in `_vl_postbt` / `VLPostBT`;
+      (c) make `_prob_nondetection_prep` explicit on the negative branch.
+
+#### Medium severity
+
+- [ ] **M1 — Go `SetDefaults` PrEP serology defaults don't match Python.**
+      `go/riskdays/models.go:153–186` uses `SerMin=10, SerMax=500,
+      SerAlpha=9.1, SerBeta=5.2`. Python `risk_days_prep_bs` (and the
+      `risk_days_prep_bs_go` bridge, and the app UI) uses
+      `ser_min=28.7, ser_max=250, ser_alpha=50.49434, ser_beta=1.15062`.
+      Latent in production (bridge always passes explicit values from its own
+      Python-matching defaults) but a direct CLI caller that omits these
+      gets silently wrong defaults. Also: `SetPointDistUniform` and
+      `EclipseDistUniform` have no defaults at all → direct caller omitting
+      them gets degenerate (zero-width) sampling.
+      Fix: align `SetDefaults` PrEP block with Python production defaults;
+      add defaults (or `Validate()` errors) for the uniform-range fields.
+
+- [ ] **M2 — `test_prep_go_parity.py` doesn't actually cross-validate Python vs Go.**
+      Despite the filename and docstring ("Cross-validate Python and Go PrEP
+      bootstrap results"), none of the five tests compares a Python-computed
+      number to a Go-computed number — they are all Go-only sanity /
+      reproducibility / dispatch checks. The baseline suite has a real
+      `TestPythonGoAgreement` in `tests/test_residualrisk.py` (medians / PE
+      within tolerance); the PrEP suite has no equivalent.
+      Combined with M3 below, the Go PrEP implementation has never been
+      numerically validated against the Python reference at production params.
+      Fix: add `TestPrepPythonGoAgreement` modeled on the baseline (PE /
+      median / quantiles within tolerance over a few hundred bootstraps at
+      production serology defaults).
+
+- [ ] **M3 — Go PrEP golden values use non-production serology params.**
+      `go/riskdays/prep_test.go:25–48` `defaultPrepParams` uses
+      `SerMin=10, SerMax=500, SerAlpha=9.1, SerBeta=5.2` (same numbers as M1).
+      The "cross-validated against Python" golden values
+      (`TestRiskDaysPrep_GoldenValue → 1.0086`,
+      `TestProbInfectiousNondetectionPrep_CrossValidate → 4.153e-2`,
+      `TestProbNondetectionSerology_InWindow → 0.9565`) are therefore
+      validated at serology params the production code never uses. The
+      production params (`α=50.49, β=1.15`) give a much wider, slower-decaying
+      active integration window than the test params (`β=5.2` cuts sharply
+      around t≈15–25 days). `quad.Fixed(integrand, -100, 500, 1000, nil, 0)`
+      is only demonstrated to agree with Python Simpson within 1% in the
+      narrow-window case.
+      Fix: keep the existing golden value with an updated comment, and add a
+      second golden value computed at production serology params.
+
+#### Low severity
+
+- [ ] **L1 — `point_estimate="mode"` differs between Python and Go.**
+      `riskDaysBSPrep case "mode"` uses `KDEModeLog(rdests, 1_000_000, 0,
+      input.Threads)` (`go/riskdays/riskdays.go:349–350`); Python
+      `risk_days_prep_bs` uses `mode_rounded(rdests,
+      precision=mode_precision)` (`residualrisk/prep.py:493`).
+      `mode_precision` is sent to Go but ignored. PrEP faithfully mirrors
+      baseline Go (`riskdays.go:187–188`) — so it is consistent with the
+      pre-existing baseline pattern, but the cross-impl PE discrepancy is real
+      for any user who picks "mode" and toggles Go/Python.
+      Decide on one mode algorithm for both sides, or document that "mode"
+      PE is implementation-dependent.
+
+- [ ] **L2 — Python `_vl_postbt_vec` can raise on empty `argmin`.**
+      `residualrisk/prep.py:43–54`:
+      `idx = np.array([np.where(concentration > set_point)]).min()` raises
+      `ValueError: zero-size array to reduction operation minimum` if
+      exponential growth never exceeds `set_point` within
+      `np.arange(0, 265, 0.1)`. In practice the sampled
+      `(set_point, doubling_time, eclipse)` ranges keep `tcrit < 265`, so this
+      is unreachable through the UI today, but the failure mode is silent.
+      Go's analytic `FindTcrit` handles arbitrarily large `tcrit` gracefully.
+      Either switch Python to the analytic formula (which is also L4 — a
+      large perf win) or guard with `if not idx_arr.size: raise ValueError(...)`.
+
+- [ ] **L4 — Python PrEP path needlessly slow (`_vl_postbt_vec` per-eval).**
+      `_prob_infectious_prep` and `_prob_nondetection_prep` each rebuild a
+      2650-element grid + sine array (`_vl_postbt_vec` with
+      `np.arange(0, 265, 0.1)`) on every integrand evaluation just to extract
+      `tcrit`. `_prob_infectious_nondetection_prep` calls both → tcrit is
+      recomputed twice per evaluation, then discarded; the `conc_attenuated`
+      (`tmp`) return value is never read anywhere. Replacing with the
+      analytic `tcrit = eclipse + dt*log2(set_point/C0)` (as Go does) would
+      cut Python PrEP integration time by a large factor and let
+      `_vl_postbt_vec` be deleted. Also fixes L2.
+
+- [ ] **L5 — Misc nits.**
+      - `go/riskdays/version.go` not bumped despite adding the entire PrEP
+        path to the Go binary (per `CLAUDE.md` versioning rules).
+      - `app.py:1062` comment says "PrEP bootstrap runs (Python-only)" but
+        the calls pass `use_go=use_go_acceleration`. Stale.
+      - `tests/test_prep_go_parity.py` carries the abbreviated AGPL header
+        instead of the full header used elsewhere (per `CLAUDE.md`
+        "All new Python files must include the AGPL v3.0 license header").
+      - `go/riskdays/integration.go:39` comment still says
+        "adaptive quadrature / Equivalent to scipy.integrate.quad" but
+        `quad.Fixed` is fixed-order Gauss-Legendre. Pre-existing, unrelated
+        to PrEP, but worth fixing while in the area.
+
 ### Pre-existing on `main` (file against `main`, not this branch)
 
 
