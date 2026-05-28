@@ -2,48 +2,31 @@
 
 ## Open
 
-### SESSION STATE (2026-05-28, post-merge)
+### SESSION STATE (2026-05-28)
 
-`main`'s baseline integration fix (branch `fix_integration_quadrature`) is
-**merged into `feature_prep_model`**; all three versions aligned to
-`1.1.0.dev0` (library, Go, app). H1/H2/M1 are committed. Remaining before the
-PrEP release: the PrEP integrator fix (next item), then M2/M3, the
-`a`/`b`/`offset` design decision, and end-to-end validation.
-(Agents can't commit/push — provide the user the exact git commands.)
+`main`'s baseline integration fix is merged into `feature_prep_model`; all three
+versions at `1.1.0.dev0`. H1/H2/M1 committed. **The PrEP integrator fix is now
+DONE but UNCOMMITTED** (see Completed → "PrEP integrator fix"); 3 files changed:
+`residualrisk/prep.py`, `tests/test_prep_bootstrap.py`, `AGENTS.md`. Remaining
+before the PrEP release: M2/M3 (next item), the `a`/`b`/`offset` design decision,
+and end-to-end validation. (Agents can't commit/push — give the user the exact
+git commands.)
 
-### ⚠️ Apply the Gauss-Legendre integrator fix to PrEP `_risk_days_prep`
+### ⚠️ M2/M3 — PrEP Go golden + real Python↔Go parity test
 
-**Status:** OPEN. The baseline half is done & merged (see Completed). This is the
-half that is a genuine **correctness** fix, not just parity/future-proofing.
+**Status:** OPEN. Now unblocked by the PrEP integrator fix (GL on both sides).
 
-**Why PrEP genuinely needs it:** SciPy adaptive `quad(integrand, -100, 500)`
-silently returns ~0 on **compact-support** integrands (exactly zero outside a
-narrow window) when its initial Gauss–Kronrod nodes miss the active window. The
-PrEP integrand HAS compact support (exactly 0 before `eclipse` and after
-`ser_max`); the baseline integrand does NOT (exponential tails), which is why
-baseline quad was robust and PrEP quad is not.
-
-**Evidence (single deterministic `_risk_days_prep` call):**
-
-| params | true (Simpson 0.01) | Go (fixed 1000-pt GL) | Python `quad` |
-|---|---|---|---|
-| old/test serology (α=9.1, β=5.2); window ~[8.7, 22.5] | 1.008635 | 1.0086 ✓ | **5.0e-18 ✗** |
-| production serology (α=50.49434, β=1.15062); window ~[10, 169] | 3.091868 | 3.09188 ✓ | 3.091867 ✓ |
-
-**Production is currently SAFE** (serology fixed at production keeps the window
-wide for every bootstrap draw; scan of 150 draws worst rel err 4.7e-5) — but it's
-a latent landmine for any narrower serology window.
-
-**The fix (mirror the merged baseline change):** give `_risk_days_prep` /
-`risk_days_prep_bs` the same `integration_method` kwarg defaulting to
-`"gauss-legendre"` (fixed 1000-pt GL, matches Go), `"quad"` selectable on the
-Python path. Reuse `_integrate_gauss_legendre` + `_gauss_legendre_rule` from
-`core.py`. (PrEP `_vl_postbt` already clamps VL ≥ 0 from H2.) Then finish M2/M3:
-- **M3:** keep the 1.0086 Go golden with a corrected comment ("vs Simpson/Go
-  truth, NOT vs Python quad, which mis-integrates this narrow window"); add a
-  production-param golden (≈3.0919).
-- **M2:** real Python↔Go parity test; with GL on both sides it should agree at
-  narrow AND wide serology.
+- **M3 (Go test, `go/riskdays/prep_test.go`):** keep the 1.0086 golden but
+  correct its comment — it was validated vs Python *Simpson* / Go, NOT vs Python
+  `quad` (which returns 5e-18 at those narrow-window params). Add a second golden
+  at production serology (≈3.0919, where all methods agree).
+- **M2 (Python↔Go parity, `tests/test_prep_go_parity.py`):** add a real
+  `risk_days_prep_bs(use_go=False)` vs `use_go=True` comparison (median / CrI
+  within tolerance). NOTE: Python and Go agree only to **~1e-5** for PrEP, not
+  machine precision, because Python still computes `tcrit` on a 0.1-day grid
+  (`_vl_postbt_vec`) while Go uses the analytic `tcrit` (the open L2/L4 item).
+  Use a tolerance like rel=1e-3, or do L2/L4 first for machine-precision parity.
+  Requires ProcessPoolExecutor → run outside the sandbox.
 
 ### PrEP model — `feature_prep_model` branch
 
@@ -291,6 +274,32 @@ Priority order, highest first.
 ---
 
 ## Completed
+
+### PrEP integrator fix (2026-05-28, `feature_prep_model`) — UNCOMMITTED
+
+- [x] **Gauss-Legendre default for the PrEP integrand.** `_risk_days_prep` and
+      `risk_days_prep_bs` now take `integration_method` (`"gauss-legendre"`
+      default | `"quad"`), mirroring the baseline. GL via the shared
+      `_integrate_gauss_legendre` from `core.py`; `"quad"` preserves the
+      historical `limit=500`; invalid value raises `ValueError`. Threaded through
+      the bootstrap (`partial(_risk_days_prep, integration_method=…)`) and the
+      primary-parameters PE call; `use_go=True` + `"quad"` raises (Go is always
+      GL — not passed to the bridge). This is a genuine **correctness** fix: the
+      PrEP integrand has compact support, so at a narrow serology window quad
+      returns ~0 while GL recovers the true value:
+      - narrow (α=9.1, β=5.2): GL **1.00865** (truth 1.00864) vs quad **5e-18**.
+      - production (α=50.49434, β=1.15062): GL 3.09185 vs quad 3.09187 → **no
+        production shift** (rel 6e-6).
+      5 new sandbox-safe tests in `TestPrepIntegrationMethod`
+      (`tests/test_prep_bootstrap.py`); also removed a pre-existing unused
+      `import math` there. AGENTS.md public-API note added (and
+      `risk_days_prep_bs` listed). No version bump (already `1.1.0.dev0`; no Go
+      change — Go already uses GL). Python↔Go agree to ~1e-5 for PrEP (Python
+      still uses grid `tcrit`; see L2/L4). *Files:* `residualrisk/prep.py`,
+      `tests/test_prep_bootstrap.py`, `AGENTS.md`. *Verified in-sandbox:* 5 new +
+      8 baseline integration tests pass, ruff clean, Go tests pass; the 69
+      full-suite failures are all the known `ProcessPoolExecutor` SemLock
+      `PermissionError` (run `pytest` outside the sandbox to confirm those).
 
 ### Baseline integration robustness (merged from `main` 2026-05-28)
 

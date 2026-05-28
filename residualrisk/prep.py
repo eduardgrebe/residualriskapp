@@ -20,6 +20,7 @@
 import math
 import statistics
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from functools import partial
 
 import numpy as np
 import polars as pl
@@ -27,6 +28,7 @@ import scipy.stats as stats
 from scipy.integrate import quad
 
 from .core import (
+    _integrate_gauss_legendre,
     _prob_infectious_copies,
     _prob_neg_retest,
     _prob_pos_init,
@@ -251,21 +253,41 @@ def _risk_days_prep(
     ser_beta,
     z,
     limits=(-100, 500),
+    integration_method="gauss-legendre",
 ):
     # Ideally we would integrate from -np.inf to np.inf, but that causes an
-    # overflow error, so we choose safe limits instead
-    rd = quad(
-        _prob_infectious_nondetection_prep,
-        limits[0],
-        limits[1],
-        limit=500,
-        args=(
-            eclipse, C0, doubling_time, set_point, a, b, offset,
-            volume_transfused, k, copies_per_virion, pool_size,
-            lod50, lod95_lod50_ratio, retests, ser_min, ser_max,
-            ser_alpha, ser_beta,
-        ),
-    )[0]
+    # overflow error, so we choose safe limits instead.
+    args = (
+        eclipse, C0, doubling_time, set_point, a, b, offset,
+        volume_transfused, k, copies_per_virion, pool_size,
+        lod50, lod95_lod50_ratio, retests, ser_min, ser_max,
+        ser_alpha, ser_beta,
+    )
+    if integration_method == "gauss-legendre":
+        # Fixed 1000-point Gauss-Legendre, matching the Go backend. The default:
+        # the PrEP integrand has compact support (it is exactly zero before the
+        # eclipse phase and after the serology cutoff), so adaptive quad can
+        # silently miss the active window and return ~0 — the GL rule samples
+        # the whole interval and cannot.
+        rd = _integrate_gauss_legendre(
+            _prob_infectious_nondetection_prep, limits[0], limits[1], args
+        )
+    elif integration_method == "quad":
+        # Adaptive Gauss-Kronrod (scipy). Retained so prior analyses computed
+        # with quad can be reproduced exactly via the Python API. limit=500
+        # matches the historical PrEP call.
+        rd = quad(
+            _prob_infectious_nondetection_prep,
+            limits[0],
+            limits[1],
+            limit=500,
+            args=args,
+        )[0]
+    else:
+        raise ValueError(
+            "integration_method must be 'gauss-legendre' or 'quad', "
+            f"got {integration_method!r}"
+        )
     return rd
 
 
@@ -314,7 +336,13 @@ def risk_days_prep_bs(
     progress=None,
     return_sim_df=False,
     use_go=False,
+    integration_method="gauss-legendre",
 ):
+    if use_go and integration_method != "gauss-legendre":
+        raise ValueError(
+            "Go acceleration only implements 'gauss-legendre' integration; "
+            "set use_go=False to use integration_method='quad'."
+        )
     if use_go:
         try:
             from ._go import risk_days_prep_bs_go
@@ -404,8 +432,9 @@ def risk_days_prep_bs(
     ]
 
     rdests = []
+    _rd = partial(_risk_days_prep, integration_method=integration_method)
     with ProcessPoolExecutor(max_workers=threads) as executor:
-        futures = [executor.submit(_risk_days_prep, *args) for args in args_list]
+        futures = [executor.submit(_rd, *args) for args in args_list]
         completed_count = 0
         for future in as_completed(futures):
             rdests.append(future.result())
@@ -458,6 +487,7 @@ def risk_days_prep_bs(
             a, b, offset, volume_transfused, k, pool_size, lod50,
             lod95_lod50_ratio, retests, ser_min, ser_max, ser_alpha, ser_beta, z,
             (-100, 500),
+            integration_method=integration_method,
         )
     elif point_estimate == "median":
         rd_pe = statistics.median(rdests)

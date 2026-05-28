@@ -29,7 +29,6 @@ sandbox with PermissionError.  Run outside the sandbox:
     pytest tests/test_prep_bootstrap.py -v
 """
 
-import math
 import unittest
 
 import numpy as np
@@ -37,7 +36,7 @@ import polars as pl
 import pytest
 
 from residualrisk._go import find_go_binary
-from residualrisk.prep import risk_days_prep_bs
+from residualrisk.prep import _risk_days_prep, risk_days_prep_bs
 
 
 # ---------------------------------------------------------------------------
@@ -474,6 +473,109 @@ class TestPrepBsGoDispatch(unittest.TestCase):
         )
         self.assertGreater(rd_pe, 0)
         self.assertEqual(len(rdests), PREP_BS_KWARGS["n_bs"])
+
+
+# ---------------------------------------------------------------------------
+# Integration method (gauss-legendre default vs quad)
+# ---------------------------------------------------------------------------
+
+# Standard single-call PrEP params for _risk_days_prep. Serology is supplied
+# per-test so the two regimes (narrow vs wide active window) can be contrasted.
+_PREP_SINGLE = dict(
+    copies_per_virion=2,
+    C0=0.00025,
+    doubling_time=0.8542,
+    set_point=336,
+    eclipse=7.0,
+    a=0.7,
+    b=0.6,
+    offset=1.0,
+    volume_transfused=200.0,
+    k=0.000673,
+    pool_size=16,
+    lod50=2.73,
+    lod95_lod50_ratio=3.5,
+    retests=1,
+    z=1.6449,
+)
+# Narrow active window (~[8.7, 22.5] days): sharp Weibull serology cutoff. This
+# is the regime where adaptive quad silently misses the peak and returns ~0.
+_SER_NARROW = dict(ser_min=10, ser_max=500, ser_alpha=9.1, ser_beta=5.2)
+# Wide active window (~[10, 169] days): the production serology defaults, where
+# quad already integrates correctly.
+_SER_PROD = dict(ser_min=28.7, ser_max=250, ser_alpha=50.49434, ser_beta=1.15062)
+
+# Fine-grid Simpson reference values (0.01-day grid over [-100, 500]).
+_TRUTH_NARROW = 1.00864
+_TRUTH_PROD = 3.09187
+
+
+class TestPrepIntegrationMethod(unittest.TestCase):
+    """PrEP risk-days integration defaults to a fixed 1000-point Gauss-Legendre
+    rule (matching the Go backend), with adaptive scipy quad selectable for
+    reproducing prior analyses.
+
+    Unlike the baseline integrand, the PrEP integrand has *compact support* (it
+    is exactly zero before the eclipse phase and after the serology cutoff), so
+    adaptive quad can silently miss a narrow active window and return ~0 — which
+    Gauss-Legendre fixes.
+
+    These call _risk_days_prep directly (a single deterministic integration), so
+    they run without ProcessPoolExecutor and are safe inside the sandbox.
+    """
+
+    def test_default_is_gauss_legendre(self):
+        self.assertEqual(
+            _risk_days_prep(**_PREP_SINGLE, **_SER_PROD),
+            _risk_days_prep(
+                **_PREP_SINGLE, **_SER_PROD, integration_method="gauss-legendre"
+            ),
+        )
+
+    def test_gl_recovers_narrow_window_where_quad_fails(self):
+        # The key regression: at narrow serology GL recovers the true ~1.0086,
+        # while quad collapses to ~0 (the silent compact-support failure).
+        gl = _risk_days_prep(
+            **_PREP_SINGLE, **_SER_NARROW, integration_method="gauss-legendre"
+        )
+        qd = _risk_days_prep(
+            **_PREP_SINGLE, **_SER_NARROW, integration_method="quad"
+        )
+        assert gl == pytest.approx(_TRUTH_NARROW, rel=1e-3)
+        self.assertGreater(gl, 1.0)
+        # quad is catastrophically wrong here (orders of magnitude below truth)
+        self.assertLess(qd, 1e-3)
+
+    def test_gl_matches_quad_at_production(self):
+        # At production serology the window is wide; GL and quad agree and both
+        # match the Simpson reference — confirming the default switch does not
+        # shift standard-scenario results.
+        gl = _risk_days_prep(
+            **_PREP_SINGLE, **_SER_PROD, integration_method="gauss-legendre"
+        )
+        qd = _risk_days_prep(
+            **_PREP_SINGLE, **_SER_PROD, integration_method="quad"
+        )
+        assert gl == pytest.approx(qd, rel=1e-3)
+        assert gl == pytest.approx(_TRUTH_PROD, rel=1e-3)
+
+    def test_invalid_method_raises(self):
+        with self.assertRaises(ValueError):
+            _risk_days_prep(
+                **_PREP_SINGLE, **_SER_PROD, integration_method="simpson"
+            )
+
+    def test_use_go_with_quad_raises(self):
+        # Conflict guard: the Go backend only implements gauss-legendre. Raises
+        # before any bootstrap runs, so this is sandbox-safe.
+        with self.assertRaises(ValueError):
+            risk_days_prep_bs(
+                **PREP_BS_KWARGS,
+                k_invgamma_alpha=2.0,
+                k_invgamma_beta=0.002019,
+                use_go=True,
+                integration_method="quad",
+            )
 
 
 if __name__ == "__main__":
