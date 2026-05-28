@@ -42,18 +42,20 @@ def _sin_varied(t, a, b, offset):
     return offset + a * np.sin(b * t)
 
 
-def _vl_postbt_vec(t, eclipse, C0, doubling_time, set_point, a, b, offset):
-    t = np.asarray(t)
-    concentration = np.where(t < eclipse, 0, C0 * 2 ** ((t - eclipse) / doubling_time))
-    idx = np.array([np.where(concentration > set_point)]).min()
-    tval = t[idx]
-    newt = t[idx:] - tval
-    conc_attenuated = concentration[concentration <= set_point]
-    conc_attenuated = np.append(
-        conc_attenuated,
-        set_point * _sin_varied(t=newt, a=a, b=b, offset=offset),
-    )
-    return (conc_attenuated, tval)
+def _find_tcrit(eclipse, C0, doubling_time, set_point):
+    """Time at which exponential growth first reaches the set-point.
+
+    Closed-form solution of ``C0 * 2**((t - eclipse) / doubling_time) = set_point``:
+
+        tcrit = eclipse + doubling_time * log2(set_point / C0)
+
+    Mirrors the Go backend's ``FindTcrit`` (``go/riskdays/prep.go``) exactly, so
+    the two implementations agree to machine precision. Replaces the former
+    grid-search ``_vl_postbt_vec`` — this is exact (not rounded to a 0.1-day
+    grid), O(1), and immune to the empty-``argmin`` crash that occurred when
+    ``tcrit`` exceeded the search grid.
+    """
+    return eclipse + doubling_time * math.log2(set_point / C0)
 
 
 def _vl_postbt(t, eclipse, C0, doubling_time, set_point, a, b, offset, tcrit):
@@ -84,16 +86,7 @@ def _prob_infectious_prep(
     k,
     copies_per_virion=2.0,
 ):
-    tmp, tcrit = _vl_postbt_vec(
-        t=np.arange(0, 265, 0.1),
-        eclipse=eclipse,
-        C0=C0,
-        doubling_time=doubling_time,
-        set_point=set_point,
-        a=a,
-        b=b,
-        offset=offset,
-    )
+    tcrit = _find_tcrit(eclipse, C0, doubling_time, set_point)
     C = _vl_postbt(
         t=t,
         eclipse=eclipse,
@@ -137,16 +130,7 @@ def _prob_nondetection_prep(
     z=1.6449,
     seroconversion_delay_median=45,
 ):
-    tmp, tcrit = _vl_postbt_vec(
-        t=np.arange(0, 265, 0.1),
-        eclipse=eclipse,
-        C0=C0,
-        doubling_time=doubling_time,
-        set_point=set_point,
-        a=a,
-        b=b,
-        offset=offset,
-    )
+    tcrit = _find_tcrit(eclipse, C0, doubling_time, set_point)
     Cv = _vl_postbt(
         t=t,
         eclipse=eclipse,

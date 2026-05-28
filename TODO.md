@@ -6,13 +6,12 @@
 
 `main`'s baseline integration fix is merged into `feature_prep_model`; all three
 versions at `1.1.0.dev0`. Committed: H1/H2/M1, the PrEP GL integrator fix
-(82bab58), and the test-runner marker/dedup/threads work (01226b8).
-**UNCOMMITTED:** the M2/M3 work (`go/riskdays/prep_test.go`,
-`tests/test_prep_go_parity.py`) + this TODO. Remaining before the PrEP release:
-the `a`/`b`/`offset` design decision, the L2/L4 analytic-tcrit cleanup (optional;
-would make Python↔Go PrEP parity machine-precise), and end-to-end validation
-against prior analyses. (Agents can't commit/push — give the user the exact git
-commands.)
+(82bab58), the test-runner marker/dedup/threads work (01226b8), and M2/M3
+(1f1e6b3). **UNCOMMITTED:** the L2/L4 analytic-`tcrit` cleanup — `residualrisk/prep.py`
+(analytic `tcrit`, delete grid `_vl_postbt_vec`), `tests/test_prep_go_parity.py`
+(M2 PE tolerance 1e-3 → 1e-9), + this TODO. Remaining before the PrEP release:
+the `a`/`b`/`offset` design decision and end-to-end validation against prior
+analyses. (Agents can't commit/push — give the user the exact git commands.)
 
 ### PrEP model — `feature_prep_model` branch
 
@@ -212,28 +211,22 @@ Priority order, highest first.
       Decide on one mode algorithm for both sides, or document that "mode"
       PE is implementation-dependent.
 
-- [ ] **L2 — Python `_vl_postbt_vec` can raise on empty `argmin`.**
-      `residualrisk/prep.py:43–54`:
-      `idx = np.array([np.where(concentration > set_point)]).min()` raises
-      `ValueError: zero-size array to reduction operation minimum` if
-      exponential growth never exceeds `set_point` within
-      `np.arange(0, 265, 0.1)`. In practice the sampled
-      `(set_point, doubling_time, eclipse)` ranges keep `tcrit < 265`, so this
-      is unreachable through the UI today, but the failure mode is silent.
-      Go's analytic `FindTcrit` handles arbitrarily large `tcrit` gracefully.
-      Either switch Python to the analytic formula (which is also L4 — a
-      large perf win) or guard with `if not idx_arr.size: raise ValueError(...)`.
-
-- [ ] **L4 — Python PrEP path needlessly slow (`_vl_postbt_vec` per-eval).**
-      `_prob_infectious_prep` and `_prob_nondetection_prep` each rebuild a
-      2650-element grid + sine array (`_vl_postbt_vec` with
-      `np.arange(0, 265, 0.1)`) on every integrand evaluation just to extract
-      `tcrit`. `_prob_infectious_nondetection_prep` calls both → tcrit is
-      recomputed twice per evaluation, then discarded; the `conc_attenuated`
-      (`tmp`) return value is never read anywhere. Replacing with the
-      analytic `tcrit = eclipse + dt*log2(set_point/C0)` (as Go does) would
-      cut Python PrEP integration time by a large factor and let
-      `_vl_postbt_vec` be deleted. Also fixes L2.
+- [x] **L2 + L4 — analytic `tcrit`; delete grid `_vl_postbt_vec`.**
+      *(DONE 2026-05-29 — UNCOMMITTED. Replaced the grid-search `_vl_postbt_vec`
+      with `_find_tcrit(eclipse, C0, doubling_time, set_point) = eclipse +
+      doubling_time*log2(set_point/C0)`, mirroring Go's `FindTcrit`. Swapped the
+      two call sites in `_prob_infectious_prep` / `_prob_nondetection_prep` and
+      deleted `_vl_postbt_vec` (no other callers). Outcomes, all verified:
+      fixes the L2 empty-argmin crash (dt=15 → tcrit≈312d now returns finite,
+      was ValueError); ~4× faster Python PrEP path (115→28 ms/`_risk_days_prep`
+      call — the grid was rebuilt twice per integrand eval and discarded); and
+      Python now equals Go to machine precision — production primary-params PE
+      3.091880263679 vs Go 3.091880263679, rel **9.31e-14** (was 1.05e-5 with the
+      grid). NB: this is a real +1.05e-5 shift in Python PrEP results, toward the
+      exact crossover (grid rounded tcrit up to the next 0.1-day point) — an
+      accuracy improvement, not a correctness fix; standard scenarios move only
+      at the 6th sig fig. Accordingly tightened the M2 `test_primary_parameters_pe_agree`
+      tolerance from 1e-3 → 1e-9.)*
 
 - [ ] **L5 — Misc nits.**
       - `go/riskdays/version.go` not bumped despite adding the entire PrEP
@@ -304,8 +297,10 @@ Priority order, highest first.
       (`tests/test_prep_bootstrap.py`); also removed a pre-existing unused
       `import math` there. AGENTS.md public-API note added (and
       `risk_days_prep_bs` listed). No version bump (already `1.1.0.dev0`; no Go
-      change — Go already uses GL). Python↔Go agree to ~1e-5 for PrEP (Python
-      still uses grid `tcrit`; see L2/L4). *Files:* `residualrisk/prep.py`,
+      change — Go already uses GL). (At the time of this fix Python↔Go agreed to
+      ~1e-5 for PrEP because Python still used grid `tcrit`; the subsequent L2/L4
+      analytic-`tcrit` change tightened that to machine precision.) *Files:*
+      `residualrisk/prep.py`,
       `tests/test_prep_bootstrap.py`, `AGENTS.md`. *Verified in-sandbox:* 5 new +
       8 baseline integration tests pass, ruff clean, Go tests pass; the 69
       full-suite failures are all the known `ProcessPoolExecutor` SemLock

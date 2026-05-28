@@ -143,12 +143,13 @@ class TestPrepPythonGoAgreement(unittest.TestCase):
         cls.go = risk_days_prep_bs(**kwargs, use_go=True)
 
     def test_primary_parameters_pe_agree(self):
-        # Deterministic single integration on both sides (fixed 1000-pt
-        # Gauss-Legendre). The only systematic difference is Python's grid-based
-        # tcrit vs Go's analytic tcrit (~1e-5; the open L2/L4 item) — not machine
-        # precision — so 1e-3 is comfortable and still catches any real
-        # integration discrepancy (e.g. a quad-style missed-window collapse).
-        self.assertAlmostEqual(self.py[0], self.go[0], delta=abs(self.go[0]) * 1e-3)
+        # Deterministic single integration on both sides: identical analytic
+        # tcrit (Go FindTcrit / Python _find_tcrit) + a fixed 1000-point
+        # Gauss-Legendre rule, so they agree to machine precision (residual
+        # ~1e-13, limited only by numpy-vs-gonum GL node/weight roundoff). The
+        # 1e-9 bound locks that in while still catching any real integration
+        # discrepancy (e.g. a quad-style missed-window collapse).
+        self.assertAlmostEqual(self.py[0], self.go[0], delta=abs(self.go[0]) * 1e-9)
 
     def test_medians_agree(self):
         # Independent RNGs → compare the bootstrap median within tolerance.
