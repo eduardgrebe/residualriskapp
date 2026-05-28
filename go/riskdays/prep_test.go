@@ -47,6 +47,19 @@ var defaultPrepParams = PrepInnerParams{
 	LimitMax:         500,
 }
 
+// productionPrepParams mirrors defaultPrepParams but with the production
+// serology defaults used by risk_days_prep_bs / the _go.py bridge / the app.
+// These give a much wider, slower-decaying active integration window (~[10, 169]
+// days) than the narrow defaultPrepParams window (~[8.7, 22.5] days).
+var productionPrepParams = func() PrepInnerParams {
+	p := defaultPrepParams
+	p.SerMin = 28.7
+	p.SerMax = 250
+	p.SerAlpha = 50.49434
+	p.SerBeta = 1.15062
+	return p
+}()
+
 // --- SinVaried ---
 
 func TestSinVaried_Zero(t *testing.T) {
@@ -220,14 +233,35 @@ func TestProbInfectiousNondetectionPrep_CrossValidate(t *testing.T) {
 // --- RiskDaysPrep ---
 
 func TestRiskDaysPrep_GoldenValue(t *testing.T) {
-	// Cross-validated against Python Simpson integration (100k points):
-	// risk_days_prep ≈ 1.0086
+	// defaultPrepParams uses a NARROW serology window (ser_alpha=9.1, ser_beta=5.2):
+	// the integrand has compact support over ~[8.7, 22.5] days. Cross-validated
+	// against Python Simpson integration (100k points): risk_days_prep ≈ 1.0086.
+	//
+	// This is precisely the regime where scipy's adaptive quad silently misses
+	// the peak and returns ~0 (≈5e-18); Go's fixed Gauss-Legendre — and Python's
+	// "gauss-legendre" default — integrate it correctly. The golden is therefore
+	// validated against the Simpson/GL truth, NOT against Python quad.
+	// See TestRiskDaysPrep_GoldenValue_Production for the wide-window case.
 	rd := RiskDaysPrep(defaultPrepParams)
 	expected := 1.0086
 	relErr := math.Abs(rd-expected) / expected
 	// Allow 1% tolerance (fixed quadrature vs Simpson)
 	if relErr > 0.01 {
 		t.Errorf("RiskDaysPrep = %v, want ~%v (relErr=%v)", rd, expected, relErr)
+	}
+}
+
+func TestRiskDaysPrep_GoldenValue_Production(t *testing.T) {
+	// Production serology defaults (wide active window ~[10, 169] days) — the
+	// params the production code actually uses. Cross-validated against Python
+	// Simpson integration (0.01-day grid): risk_days_prep ≈ 3.091868. Here Go GL
+	// (3.091880) and Python GL (3.09185) agree with Simpson to ~1e-5, and even
+	// scipy quad integrates correctly (wide window) — so all three concur.
+	rd := RiskDaysPrep(productionPrepParams)
+	expected := 3.091868
+	relErr := math.Abs(rd-expected) / expected
+	if relErr > 0.001 {
+		t.Errorf("RiskDaysPrep(production) = %v, want ~%v (relErr=%v)", rd, expected, relErr)
 	}
 }
 

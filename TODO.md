@@ -2,31 +2,17 @@
 
 ## Open
 
-### SESSION STATE (2026-05-28)
+### SESSION STATE (2026-05-29)
 
 `main`'s baseline integration fix is merged into `feature_prep_model`; all three
-versions at `1.1.0.dev0`. H1/H2/M1 committed. **The PrEP integrator fix is now
-DONE but UNCOMMITTED** (see Completed → "PrEP integrator fix"); 3 files changed:
-`residualrisk/prep.py`, `tests/test_prep_bootstrap.py`, `AGENTS.md`. Remaining
-before the PrEP release: M2/M3 (next item), the `a`/`b`/`offset` design decision,
-and end-to-end validation. (Agents can't commit/push — give the user the exact
-git commands.)
-
-### ⚠️ M2/M3 — PrEP Go golden + real Python↔Go parity test
-
-**Status:** OPEN. Now unblocked by the PrEP integrator fix (GL on both sides).
-
-- **M3 (Go test, `go/riskdays/prep_test.go`):** keep the 1.0086 golden but
-  correct its comment — it was validated vs Python *Simpson* / Go, NOT vs Python
-  `quad` (which returns 5e-18 at those narrow-window params). Add a second golden
-  at production serology (≈3.0919, where all methods agree).
-- **M2 (Python↔Go parity, `tests/test_prep_go_parity.py`):** add a real
-  `risk_days_prep_bs(use_go=False)` vs `use_go=True` comparison (median / CrI
-  within tolerance). NOTE: Python and Go agree only to **~1e-5** for PrEP, not
-  machine precision, because Python still computes `tcrit` on a 0.1-day grid
-  (`_vl_postbt_vec`) while Go uses the analytic `tcrit` (the open L2/L4 item).
-  Use a tolerance like rel=1e-3, or do L2/L4 first for machine-precision parity.
-  Requires ProcessPoolExecutor → run outside the sandbox.
+versions at `1.1.0.dev0`. Committed: H1/H2/M1, the PrEP GL integrator fix
+(82bab58), and the test-runner marker/dedup/threads work (01226b8).
+**UNCOMMITTED:** the M2/M3 work (`go/riskdays/prep_test.go`,
+`tests/test_prep_go_parity.py`) + this TODO. Remaining before the PrEP release:
+the `a`/`b`/`offset` design decision, the L2/L4 analytic-tcrit cleanup (optional;
+would make Python↔Go PrEP parity machine-precise), and end-to-end validation
+against prior analyses. (Agents can't commit/push — give the user the exact git
+commands.)
 
 ### PrEP model — `feature_prep_model` branch
 
@@ -169,15 +155,13 @@ Priority order, highest first.
       Fix: align `SetDefaults` PrEP block with Python production defaults;
       add defaults (or `Validate()` errors) for the uniform-range fields.
 
-- [ ] **M2 — `test_prep_go_parity.py` doesn't actually cross-validate Python vs Go.**
-      *(NOT STARTED — 2026-05-28. Plan: add `TestPrepPythonGoAgreement` comparing
-      `risk_days_prep_bs(use_go=False)` vs `use_go=True` on median/CrI within
-      tolerance at PRODUCTION serology params, modeled on baseline
-      `TestPythonGoAgreement`. At production params Python≡Go already holds
-      (~3.09), so this test will PASS. A narrow-window parity case would expose
-      the integration bug below and will only pass AFTER the quad→Gauss-Legendre
-      fix — add it as part of that fix, not before. NOTE: Python PrEP path needs
-      ProcessPoolExecutor → can't run inside the macOS sandbox; verify outside.)*
+- [x] **M2 — `test_prep_go_parity.py` doesn't actually cross-validate Python vs Go.**
+      *(DONE 2026-05-29 — UNCOMMITTED. Added `TestPrepPythonGoAgreement` (marked
+      `@pytest.mark.multiprocessing`): primary-parameters PE agreement (rel 1e-3
+      — the genuine numerical cross-validation; Python GL 3.091848 vs Go GL
+      3.091880, rel 1.05e-5, spot-checked in-sandbox) plus median (20%) / CrI
+      (25%) distributional agreement under independent RNGs. Fixed the misleading
+      class/module docstrings. Runs outside the sandbox only — VERIFY THERE.)*
       Despite the filename and docstring ("Cross-validate Python and Go PrEP
       bootstrap results"), none of the five tests compares a Python-computed
       number to a Go-computed number — they are all Go-only sanity /
@@ -190,18 +174,15 @@ Priority order, highest first.
       median / quantiles within tolerance over a few hundred bootstraps at
       production serology defaults).
 
-- [ ] **M3 — Go PrEP golden values use non-production serology params.**
-      *(IN PROGRESS — 2026-05-28. Reference values computed (below); Go test not
-      yet edited. `RiskDaysPrep` single-call at the standard non-serology params
-      with serology varied:*
-      *- OLD/test serology (α=9.1, β=5.2): Simpson truth = 1.008635, Go = 1.0086,
-        Python `quad` = **5.0e-18** (quad fails — see integration bug above).*
-      *- PRODUCTION serology (α=50.49434, β=1.15062): Simpson truth = 3.091868,
-        Go = 3.09188, Python `quad` = 3.091867 (all agree).*
-      *Plan: keep the 1.0086 golden with a CORRECTED comment ("validated vs
-      Simpson/Go truth, NOT vs Python `quad`, which mis-integrates this narrow
-      window") and add a second golden at production params (≈3.0919). Do this
-      together with / after the integration fix.)*
+- [x] **M3 — Go PrEP golden values use non-production serology params.**
+      *(DONE 2026-05-29 — UNCOMMITTED. Kept the narrow-window `defaultPrepParams`
+      golden (1.0086) — valuable compact-support coverage — and enhanced its
+      comment to spell out that it is validated vs the Simpson/GL truth (the
+      regime where adaptive quad collapses to ~5e-18). Added `productionPrepParams`
+      + `TestRiskDaysPrep_GoldenValue_Production` cross-validated against the
+      Python Simpson truth 3.091868 (0.1% tol; Go GL = 3.091880). Reference values:
+      OLD/test serology → Simpson 1.008635, Go 1.0086; PRODUCTION serology →
+      Simpson 3.091868, Go 3.091880, Python GL 3.091848. Full Go suite passes.)*
       `go/riskdays/prep_test.go:25–48` `defaultPrepParams` uses
       `SerMin=10, SerMax=500, SerAlpha=9.1, SerBeta=5.2` (same numbers as M1).
       The "cross-validated against Python" golden values
@@ -275,7 +256,7 @@ Priority order, highest first.
 
 ## Completed
 
-### Test runner: marker-based sandbox filter + dedup + thread tuning (2026-05-29, `feature_prep_model`) — UNCOMMITTED
+### Test runner: marker-based sandbox filter + dedup + thread tuning (2026-05-29, `feature_prep_model`, commit 01226b8)
 
 - [x] **`scripts/run_tests.sh fast` now reliable.** The old `fast` mode used a
       fragile `-k` name-substring filter (`not (Python or Agreement or Bootstrap
@@ -304,7 +285,7 @@ Priority order, highest first.
       the main process; reduction is order-independent). Also removed two
       pre-existing unused imports (`scipy.stats`, `math`) flagged by ruff.
 
-### PrEP integrator fix (2026-05-28, `feature_prep_model`) — UNCOMMITTED
+### PrEP integrator fix (2026-05-28, `feature_prep_model`, commit 82bab58)
 
 - [x] **Gauss-Legendre default for the PrEP integrand.** `_risk_days_prep` and
       `risk_days_prep_bs` now take `integration_method` (`"gauss-legendre"`

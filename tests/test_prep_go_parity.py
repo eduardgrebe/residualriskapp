@@ -18,6 +18,7 @@ Run outside the sandbox: pytest tests/test_prep_go_parity.py -v
 import unittest
 
 import numpy as np
+import pytest
 
 from residualrisk._go import find_go_binary, risk_days_prep_bs_go
 from residualrisk.prep import risk_days_prep_bs
@@ -56,7 +57,12 @@ COMMON_KWARGS = dict(
 
 @unittest.skipIf(find_go_binary() is None, "Go binary not available")
 class TestPrepGoParity(unittest.TestCase):
-    """Cross-validate Python and Go PrEP bootstrap results."""
+    """Go-side sanity, reproducibility, and dispatch checks.
+
+    These exercise only the Go path (binary subprocess), so they are
+    sandbox-safe. The actual numerical Python↔Go cross-validation lives in
+    TestPrepPythonGoAgreement below.
+    """
 
     def test_go_prep_returns_valid(self):
         """Go PrEP wrapper returns valid results."""
@@ -112,6 +118,51 @@ class TestPrepGoParity(unittest.TestCase):
         rd_pe, _, _, rdests, _ = risk_days_prep_bs_go(**kw)
         self.assertGreater(rd_pe, 0)
         self.assertEqual(len(rdests), 100)
+
+
+@pytest.mark.multiprocessing
+@unittest.skipIf(find_go_binary() is None, "Go binary not available")
+class TestPrepPythonGoAgreement(unittest.TestCase):
+    """Numerically cross-validate the Python and Go PrEP bootstrap.
+
+    Modeled on the baseline TestPythonGoAgreement. The Python path uses
+    ProcessPoolExecutor (hence @pytest.mark.multiprocessing — excluded from
+    sandboxed/fast runs; run outside the sandbox). Python and Go use
+    independent RNGs, so sampled-parameter draws differ and we compare
+    distributional summaries within tolerance; the deterministic
+    primary-parameters point estimate agrees far more tightly.
+
+    Both sides run once in setUpClass with point_estimate="primary parameters",
+    which returns the deterministic PE plus the full per-iteration sample.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        kwargs = {**COMMON_KWARGS, "point_estimate": "primary parameters"}
+        cls.py = risk_days_prep_bs(**kwargs, use_go=False)
+        cls.go = risk_days_prep_bs(**kwargs, use_go=True)
+
+    def test_primary_parameters_pe_agree(self):
+        # Deterministic single integration on both sides (fixed 1000-pt
+        # Gauss-Legendre). The only systematic difference is Python's grid-based
+        # tcrit vs Go's analytic tcrit (~1e-5; the open L2/L4 item) — not machine
+        # precision — so 1e-3 is comfortable and still catches any real
+        # integration discrepancy (e.g. a quad-style missed-window collapse).
+        self.assertAlmostEqual(self.py[0], self.go[0], delta=abs(self.go[0]) * 1e-3)
+
+    def test_medians_agree(self):
+        # Independent RNGs → compare the bootstrap median within tolerance.
+        py_median = float(np.median(self.py[3]))
+        go_median = float(np.median(self.go[3]))
+        self.assertAlmostEqual(py_median, go_median, delta=go_median * 0.20)
+
+    def test_cri_bounds_agree(self):
+        # 95% credible-interval bounds within a (wider) RNG-driven tolerance.
+        for bound in (0, 1):
+            self.assertAlmostEqual(
+                self.py[1][bound], self.go[1][bound],
+                delta=abs(self.go[1][bound]) * 0.25,
+            )
 
 
 if __name__ == "__main__":
