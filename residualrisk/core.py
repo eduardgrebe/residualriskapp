@@ -441,6 +441,27 @@ def sample_lnmix(n, w, mu1, sigma1, mu2, sigma2, seed=None):
     return np.where(component, comp1, comp2)
 
 
+def _sample_positive_normal(mean, sd, n):
+    """Sample ``n`` values from Normal(``mean``, ``sd``) truncated to positive
+    values (> 0).
+
+    Matches the Go backend's ``GenerateTruncatedNormal`` (truncation at 0).
+
+    NOTE the ``scipy.stats.truncnorm`` convention: its ``a``/``b`` bounds are in
+    *standard deviations from* ``loc``, so the lower truncation point 0 maps to
+    ``a = (0 - mean) / sd`` — **not** ``a = 0``, which truncates at the mean.
+    Passing ``a = 0`` (the long-standing bug this helper replaces) discards the
+    entire lower half of the distribution and inflates the sampled mean by
+    ``≈ 0.8 * sd``.
+
+    Uses the legacy NumPy global RNG state (seeded by the caller) for
+    reproducibility, consuming ``n`` draws regardless of the truncation point.
+    """
+    if sd <= 0:
+        return np.full(n, float(mean))
+    return stats.truncnorm.rvs(-mean / sd, np.inf, mean, sd, n)
+
+
 def _risk_days_bs_python(
     k,
     doubling_time,
@@ -510,10 +531,8 @@ def _risk_days_bs_python(
         raise ValueError(
             "k_posterior_sample and k_gamma parameters must not both be 'None'."
         )
-    doubling_times = stats.truncnorm.rvs(
-        0, np.inf, doubling_time, doubling_time_norm_sd, n_bs
-    )
-    lod50s = stats.truncnorm.rvs(0, np.inf, lod50, lod50_sd, n_bs)
+    doubling_times = _sample_positive_normal(doubling_time, doubling_time_norm_sd, n_bs)
+    lod50s = _sample_positive_normal(lod50, lod50_sd, n_bs)
     volumes_transfused = np.random.uniform(
         volume_transfused_range[0], volume_transfused_range[1], n_bs
     )
@@ -858,7 +877,7 @@ def residual_risk_rd(
         rr_pe = incidence * iwp_pe / 365.25 * per
     n_bs = len(iwp_bs)
     np.random.seed(seed)
-    incidence_draws = stats.truncnorm.rvs(0, np.inf, incidence, incidence_norm_sd, n_bs)
+    incidence_draws = _sample_positive_normal(incidence, incidence_norm_sd, n_bs)
     rr = []
     for i in range(n_bs):
         # Skip iterations where the product would be zero or negative

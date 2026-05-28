@@ -2,6 +2,26 @@
 
 ## Completed
 
+- [x] **truncnorm positivity fix (2026-05-29, `fix_truncnorm_positivity`).**
+      `stats.truncnorm.rvs(0, np.inf, mean, sd)` truncates at the **mean**, not
+      at 0 — scipy's `a`/`b` bounds are in *standard deviations from* `loc`, so
+      `a=0` maps to the lower bound `loc`. This discarded the lower half of the
+      intended distribution and inflated sampled means by ≈`0.8*sd`. Affected
+      `_risk_days_bs_python` (`doubling_time`, `lod50`) and `residual_risk_rd`
+      (`incidence`). Fixed via a shared `_sample_positive_normal(mean, sd, n)`
+      helper (`a = -mean/sd`, truncating at 0, matching Go's
+      `GenerateTruncatedNormal`). Effect at standard baseline params: RDE median
+      **−8.3%** (1.355 → 1.243), now matching Go to **0.6%** (was an ~8% gap);
+      sampled doubling_time 0.898 → 0.854 (nominal), lod50 2.88 → 2.74 (nominal).
+      Current (buggy) results were biased conservative (high). Library version
+      0.9.5 → 0.9.6 (calculation change; no Go change — Go was already correct).
+      Regression guard: `TestSamplePositiveNormal`. *Surfaced by* the new PrEP M2
+      Python↔Go
+      agreement test on `feature_prep_model` (the first numerical Python↔Go PrEP
+      *distribution* comparison); the bug is pre-existing since the original code.
+      **PrEP (`prep.py`) has the same two sites — fixed separately on
+      `feature_prep_model` after this merges to `main`.**
+
 - [x] **Integration robustness (2026-05-28, `fix_integration_quadrature`).**
       Baseline `_risk_days` now defaults to a fixed 1000-point Gauss-Legendre
       rule (`integration_method="gauss-legendre"`), matching the Go backend to
