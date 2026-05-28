@@ -1215,6 +1215,11 @@ if st.sidebar.button(button_label):
                 st.session_state["sim_df"] = st.session_state["samp"]
                 st.session_state["sims_run"] = True
                 st.session_state["rde_method_run"] = "Lookback data"
+                # PrEP breakthrough risk is not applicable to the lookback
+                # method; clear any stale PrEP run state so its results and
+                # residual-risk components don't leak into the lookback display.
+                st.session_state["prep_oral_run"] = False
+                st.session_state["prep_inj_run"] = False
             except ValueError as e:
                 st.sidebar.error(f"Error: {e}")
 

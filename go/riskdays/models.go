@@ -154,13 +154,21 @@ func (input *RiskDaysInput) SetDefaults() {
 		input.ModePrecision = 2
 	}
 
-	// PrEP defaults
+	// PrEP defaults — must mirror Python risk_days_prep_bs() production
+	// defaults so a direct CLI caller that omits them gets the same model as
+	// the Python reference (the _go.py bridge always passes explicit values).
 	if input.PrepMode {
 		if input.SetPoint == 0 {
 			input.SetPoint = 336
 		}
+		if input.SetPointDistUniform == ([2]float64{}) {
+			input.SetPointDistUniform = [2]float64{19.1, 2265}
+		}
 		if input.Eclipse == 0 {
 			input.Eclipse = 7
+		}
+		if input.EclipseDistUniform == ([2]float64{}) {
+			input.EclipseDistUniform = [2]float64{4.0, 10.0}
 		}
 		if input.A == 0 {
 			input.A = 0.7
@@ -172,16 +180,16 @@ func (input *RiskDaysInput) SetDefaults() {
 			input.Offset = 1.0
 		}
 		if input.SerMin == 0 {
-			input.SerMin = 10
+			input.SerMin = 28.7
 		}
 		if input.SerMax == 0 {
-			input.SerMax = 500
+			input.SerMax = 250
 		}
 		if input.SerAlpha == 0 {
-			input.SerAlpha = 9.1
+			input.SerAlpha = 50.49434
 		}
 		if input.SerBeta == 0 {
-			input.SerBeta = 5.2
+			input.SerBeta = 1.15062
 		}
 	}
 }

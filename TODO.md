@@ -2,6 +2,77 @@
 
 ## Open
 
+### SESSION STATE & BRANCH PLAN (2026-05-28)
+
+**Where we are:** on `feature_prep_model`, with H1/H2/M1 fixes done but
+**UNCOMMITTED** in 4 files: `app.py`, `residualrisk/prep.py`,
+`go/riskdays/prep.go`, `go/riskdays/models.go`. These are PrEP-specific and
+belong on `feature_prep_model`. They will block a clean `git checkout main`,
+so **commit (or stash) them on `feature_prep_model` first** before switching.
+
+**User-directed workflow:** the integration-robustness bug (below) lives in the
+BASELINE model on `main`, so fix it at its proper level:
+1. Commit the current H1/H2/M1 PrEP work on `feature_prep_model`.
+2. `git checkout main`; branch off (e.g. `fix_integration_quadrature`).
+3. Fix the baseline `_risk_days` integrator there; merge into `main`.
+4. Merge `main` back into `feature_prep_model`; apply the analogous fix to the
+   PrEP `_risk_days_prep`; then finish M2/M3.
+
+(Agents cannot commit/push — provide the user the exact git commands to run.)
+
+### ⚠️ Integration robustness bug — `quad` misses narrow windows (discovered 2026-05-28)
+
+**Status:** Confirmed & characterised. NOT fixed. **Dormant in production** but a
+real latent landmine. **User approved fixing it (PrEP + baseline).**
+
+**What:** Both `residualrisk/core.py::_risk_days` (~line 185, BASELINE) and
+`residualrisk/prep.py::_risk_days_prep` (~line 253, PrEP) integrate with SciPy
+adaptive `quad(integrand, -100, 500, limit=500)`. When the integrand's active
+window is NARROW relative to [-100, 500], `quad`'s initial Gauss–Kronrod nodes
+can miss the peak entirely; it then returns ~0 with a small (under-)estimated
+error and terminates early. Silent, catastrophic.
+
+**Evidence (PrEP integrand, single deterministic `_risk_days_prep` call):**
+
+| params | true (Simpson, 0.01 grid) | Go (fixed 1000-pt Gauss–Legendre) | Python `quad` |
+|---|---|---|---|
+| old/test serology (α=9.1, β=5.2); active window ~[8.7, 22.5] | 1.008635 | 1.0086 ✓ | **5.0e-18 ✗** |
+| production serology (α=50.49434, β=1.15062); window ~[10, 169] | 3.091868 | 3.09188 ✓ | 3.091867 ✓ |
+
+**Why production is currently SAFE:** in the bootstrap, serology is FIXED at
+production values (only set_point/eclipse/doubling_time/lod50/k vary). Production
+serology (ser_max=250, slow β=1.15) keeps the active window wide (~[10,169]) for
+every sampled combo. Scan of 150 production-param draws: worst quad-vs-Simpson
+rel error = 4.7e-5; none > 1%. **Today's published-style results are correct.**
+
+**Why it's a landmine:** any change narrowing the active window — sharper/earlier
+serology cutoff, exposing serology to narrow-range sampling, small ser_max —
+would silently yield ~0 risk days with no error. Go is immune (fixed 1000-point
+Gauss–Legendre samples the whole interval uniformly).
+
+**Baseline is affected too:** `core.py::_risk_days` uses the identical
+`quad(-100,500)` pattern. Baseline production parity currently passes
+(`TestPythonGoAgreement`), so it is also dormant, but carries the same risk.
+
+**Implication for M3 golden:** the existing 1.0086 Go golden was cross-validated
+vs Python *Simpson*, NOT vs Python's production `quad` (5e-18 there). So Go and
+Python's `_risk_days_prep` currently disagree by 18 orders of magnitude at the
+old/test params.
+
+**Chosen fix (user-approved): replace adaptive `quad` with a FIXED 1000-point
+Gauss–Legendre rule over [-100, 500]** in both `_risk_days` and
+`_risk_days_prep`, matching Go exactly. Robust at narrow AND wide windows (table);
+makes Python ≡ Go by construction (modulo independent RNGs for sampled params).
+
+**Open questions the user wants answered ON the fix branch BEFORE merging:**
+1. Characterise precisely *when* `quad` fails (active-window width/position vs the
+   [-100,500] interval) with ad-hoc tests.
+2. Explain 1000-point Gauss–Legendre vs adaptive Gauss–Kronrod `quad` in detail
+   (user is more familiar with adaptive quadrature).
+3. Confirm that for STANDARD baseline scenarios the switch does NOT materially
+   change results (regression vs current `quad` at production params; expect
+   agreement to ~5 sig figs where quad is already correct).
+
 ### PrEP model — `feature_prep_model` branch
 
 - [x] **Design decision: oPrEP vs iPrEP scenario handling.** *(Resolved 2026-05-21.)*
@@ -88,7 +159,10 @@ Priority order, highest first.
 
 #### High severity
 
-- [ ] **H1 — Lookback path doesn't reset `prep_oral_run` / `prep_inj_run`.**
+- [x] **H1 — Lookback path doesn't reset `prep_oral_run` / `prep_inj_run`.**
+      *(Done 2026-05-28 — Lookback branch in `app.py` now sets both
+      `prep_oral_run` and `prep_inj_run` to `False` on a successful run.
+      UNCOMMITTED.)*
       `app.py:1184–1219` (the `elif rde_method == "Lookback data":` branch in
       the button handler) sets `sims_run`, `rde_method_run`, `bs`, `samp`,
       `sim_df` but leaves the PrEP session keys untouched. After a
@@ -102,7 +176,11 @@ Priority order, highest first.
       `st.session_state["prep_inj_run"] = False` (and ideally clear
       `iwp_pe_prep_*` / `samp_prep_*` / `sim_df_prep_*`).
 
-- [ ] **H2 — Python PrEP integrand crashes with `TypeError` when `a > offset`.**
+- [x] **H2 — Python PrEP integrand crashes with `TypeError` when `a > offset`.**
+      *(Done 2026-05-28 — chose fix option (b): clamp `max(0.0, Cv)` in Python
+      `_vl_postbt` and Go `VLPostBT`. Physically correct (VL can't be negative),
+      keeps full UI range, and fixes the Go negative-probability bug too.
+      UNCOMMITTED.)*
       `_prob_nondetection_prep` in `residualrisk/prep.py:147–158` falls through
       both `if Cc == 0.0` and `elif Cc > 0.0` and returns `None` when `Cc < 0`.
       `Cc < 0` whenever `offset + a·sin(b·(t−tcrit)) < 0`, i.e. `a > offset`.
@@ -118,7 +196,12 @@ Priority order, highest first.
 
 #### Medium severity
 
-- [ ] **M1 — Go `SetDefaults` PrEP serology defaults don't match Python.**
+- [x] **M1 — Go `SetDefaults` PrEP serology defaults don't match Python.**
+      *(Done 2026-05-28 — serology defaults aligned to production
+      `ser_min=28.7, ser_max=250, ser_alpha=50.49434, ser_beta=1.15062`; added
+      `SetPointDistUniform=(19.1,2265)` and `EclipseDistUniform=(4.0,10.0)`
+      defaults so a direct CLI caller matches Python. Go tests still pass.
+      UNCOMMITTED.)*
       `go/riskdays/models.go:153–186` uses `SerMin=10, SerMax=500,
       SerAlpha=9.1, SerBeta=5.2`. Python `risk_days_prep_bs` (and the
       `risk_days_prep_bs_go` bridge, and the app UI) uses
@@ -132,6 +215,14 @@ Priority order, highest first.
       add defaults (or `Validate()` errors) for the uniform-range fields.
 
 - [ ] **M2 — `test_prep_go_parity.py` doesn't actually cross-validate Python vs Go.**
+      *(NOT STARTED — 2026-05-28. Plan: add `TestPrepPythonGoAgreement` comparing
+      `risk_days_prep_bs(use_go=False)` vs `use_go=True` on median/CrI within
+      tolerance at PRODUCTION serology params, modeled on baseline
+      `TestPythonGoAgreement`. At production params Python≡Go already holds
+      (~3.09), so this test will PASS. A narrow-window parity case would expose
+      the integration bug below and will only pass AFTER the quad→Gauss-Legendre
+      fix — add it as part of that fix, not before. NOTE: Python PrEP path needs
+      ProcessPoolExecutor → can't run inside the macOS sandbox; verify outside.)*
       Despite the filename and docstring ("Cross-validate Python and Go PrEP
       bootstrap results"), none of the five tests compares a Python-computed
       number to a Go-computed number — they are all Go-only sanity /
@@ -145,6 +236,17 @@ Priority order, highest first.
       production serology defaults).
 
 - [ ] **M3 — Go PrEP golden values use non-production serology params.**
+      *(IN PROGRESS — 2026-05-28. Reference values computed (below); Go test not
+      yet edited. `RiskDaysPrep` single-call at the standard non-serology params
+      with serology varied:*
+      *- OLD/test serology (α=9.1, β=5.2): Simpson truth = 1.008635, Go = 1.0086,
+        Python `quad` = **5.0e-18** (quad fails — see integration bug above).*
+      *- PRODUCTION serology (α=50.49434, β=1.15062): Simpson truth = 3.091868,
+        Go = 3.09188, Python `quad` = 3.091867 (all agree).*
+      *Plan: keep the 1.0086 golden with a CORRECTED comment ("validated vs
+      Simpson/Go truth, NOT vs Python `quad`, which mis-integrates this narrow
+      window") and add a second golden at production params (≈3.0919). Do this
+      together with / after the integration fix.)*
       `go/riskdays/prep_test.go:25–48` `defaultPrepParams` uses
       `SerMin=10, SerMax=500, SerAlpha=9.1, SerBeta=5.2` (same numbers as M1).
       The "cross-validated against Python" golden values

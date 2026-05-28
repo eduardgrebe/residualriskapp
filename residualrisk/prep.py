@@ -60,9 +60,13 @@ def _vl_postbt(t, eclipse, C0, doubling_time, set_point, a, b, offset, tcrit):
     else:
         concentration = C0 * 2 ** ((t - eclipse) / doubling_time)
     if t <= tcrit:
-        return concentration
-    elif t > tcrit:
-        return set_point * _sin_varied(t=t - tcrit, a=a, b=b, offset=offset)
+        vl = concentration
+    else:
+        vl = set_point * _sin_varied(t=t - tcrit, a=a, b=b, offset=offset)
+    # Modelled viral load can dip below zero when the sinusoidal set-point
+    # oscillation amplitude exceeds its offset (a > offset); clamp to a
+    # physical floor of zero.
+    return max(0.0, vl)
 
 
 def _prob_infectious_prep(

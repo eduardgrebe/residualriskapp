@@ -55,7 +55,10 @@ func VLPostBT(t, eclipse, C0, doublingTime, setPoint, a, b, offset, tcrit float6
 	if t <= tcrit {
 		return C0 * math.Pow(2, (t-eclipse)/doublingTime)
 	}
-	return setPoint * SinVaried(t-tcrit, a, b, offset)
+	// Modelled viral load can dip below zero when the sinusoidal set-point
+	// oscillation amplitude exceeds its offset (a > offset); clamp to a
+	// physical floor of zero.
+	return math.Max(0.0, setPoint*SinVaried(t-tcrit, a, b, offset))
 }
 
 // ProbInfectiousPrep calculates the probability that a transfusion is infectious
