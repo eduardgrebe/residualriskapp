@@ -77,6 +77,7 @@ PREP_BS_KWARGS = dict(
 # Result structure & statistics
 # ---------------------------------------------------------------------------
 
+@pytest.mark.multiprocessing
 class TestPrepBsResultStructure(unittest.TestCase):
     """Verify the shape and ordering of risk_days_prep_bs() outputs."""
 
@@ -125,6 +126,7 @@ class TestPrepBsResultStructure(unittest.TestCase):
 # return_sim_df
 # ---------------------------------------------------------------------------
 
+@pytest.mark.multiprocessing
 class TestPrepBsSimDf(unittest.TestCase):
     """Verify the simulation DataFrame when return_sim_df=True."""
 
@@ -183,6 +185,7 @@ class TestPrepBsSimDf(unittest.TestCase):
 # Reproducibility
 # ---------------------------------------------------------------------------
 
+@pytest.mark.multiprocessing
 class TestPrepBsReproducibility(unittest.TestCase):
     """Same seed → same results; different seed → different results."""
 
@@ -218,6 +221,7 @@ class TestPrepBsReproducibility(unittest.TestCase):
 # Point-estimate methods
 # ---------------------------------------------------------------------------
 
+@pytest.mark.multiprocessing
 class TestPrepBsPointEstimates(unittest.TestCase):
     """Verify each point_estimate method produces sensible results."""
 
@@ -258,6 +262,7 @@ class TestPrepBsKDistPaths(unittest.TestCase):
         self.assertTrue(all(r >= 0 for r in rdests))
         self.assertLessEqual(rd_cri[0], rd_cri[1])
 
+    @pytest.mark.multiprocessing
     def test_posterior_sample(self):
         posterior = np.random.default_rng(99).exponential(0.001, size=200)
         result = risk_days_prep_bs(
@@ -266,6 +271,7 @@ class TestPrepBsKDistPaths(unittest.TestCase):
         )
         self._assert_valid(result)
 
+    @pytest.mark.multiprocessing
     def test_invgamma_alpha_beta(self):
         result = risk_days_prep_bs(
             **PREP_BS_KWARGS,
@@ -274,6 +280,7 @@ class TestPrepBsKDistPaths(unittest.TestCase):
         )
         self._assert_valid(result)
 
+    @pytest.mark.multiprocessing
     def test_invgamma_alpha_mode(self):
         result = risk_days_prep_bs(
             **PREP_BS_KWARGS,
@@ -282,6 +289,7 @@ class TestPrepBsKDistPaths(unittest.TestCase):
         )
         self._assert_valid(result)
 
+    @pytest.mark.multiprocessing
     def test_lnmix(self):
         result = risk_days_prep_bs(
             **PREP_BS_KWARGS,
@@ -293,6 +301,7 @@ class TestPrepBsKDistPaths(unittest.TestCase):
         )
         self._assert_valid(result)
 
+    @pytest.mark.multiprocessing
     def test_legacy_gamma(self):
         result = risk_days_prep_bs(
             **PREP_BS_KWARGS,
@@ -392,6 +401,7 @@ class TestPrepBsEdgeCases(unittest.TestCase):
                 k_invgamma_beta=0.002019,
             )
 
+    @pytest.mark.multiprocessing
     def test_n_bs_one(self):
         """Single bootstrap iteration should still work."""
         rd_pe, rd_cri, rd_range, rdests, _ = risk_days_prep_bs(

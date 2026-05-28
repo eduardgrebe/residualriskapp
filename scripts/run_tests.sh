@@ -53,9 +53,10 @@ run_go_tests() {
 
 # ── Python tests ──────────────────────────────────────────────────────────────
 # Tests that use ProcessPoolExecutor fail in sandboxed environments with
-# PermissionError on semaphore creation. They are identified by class/method
-# names containing: Python, Agreement, Bootstrap, or agree_with_python.
-SANDBOX_FILTER='not (Python or Agreement or Bootstrap or agree_with_python)'
+# PermissionError on semaphore creation. They carry the @pytest.mark.multiprocessing
+# marker (registered in pyproject.toml); `fast` excludes them deterministically
+# with `-m "not multiprocessing"` (no fragile name matching).
+SANDBOX_FILTER='not multiprocessing'
 
 run_python_tests() {
     local extra_args=("$@")
@@ -81,12 +82,12 @@ case "$MODE" in
         run_python_tests
         ;;
     fast)
-        # Go tests are always safe; Python filtered to exclude ProcessPoolExecutor tests
+        # Go tests are always safe; Python excludes @pytest.mark.multiprocessing tests
         run_go_tests
         rule
-        info "Skipping tests that require ProcessPoolExecutor (sandbox-incompatible)"
-        info "Filter: ${SANDBOX_FILTER}"
-        run_python_tests -k "$SANDBOX_FILTER"
+        info "Skipping @pytest.mark.multiprocessing tests (require ProcessPoolExecutor; sandbox-incompatible)"
+        info "Filter: -m '${SANDBOX_FILTER}'"
+        run_python_tests -m "$SANDBOX_FILTER"
         ;;
     all)
         run_go_tests

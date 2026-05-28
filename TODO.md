@@ -275,6 +275,35 @@ Priority order, highest first.
 
 ## Completed
 
+### Test runner: marker-based sandbox filter + dedup + thread tuning (2026-05-29, `feature_prep_model`) — UNCOMMITTED
+
+- [x] **`scripts/run_tests.sh fast` now reliable.** The old `fast` mode used a
+      fragile `-k` name-substring filter (`not (Python or Agreement or Bootstrap
+      or agree_with_python)`) that was wrong both ways: it **dropped** the new
+      sandbox-safe `TestPrepIntegrationMethod` (the whole `test_prep_bootstrap.py`
+      file matched "Bootstrap") and **leaked** 6 `ProcessPoolExecutor` tests
+      (`test_prep_k_distributions.py::TestPrepBsKDistributions`) that then failed
+      in the sandbox. Replaced with an explicit `@pytest.mark.multiprocessing`
+      marker on the 69 pool tests (10 class-level + method-level on mixed
+      classes), registered in `pyproject.toml`; `fast` now uses
+      `-m "not multiprocessing"`. Deterministic partition: **159 safe / 69 pool /
+      228 total**; the safe set now includes `TestPrepIntegrationMethod` (5) and
+      `TestIntegrationMethod` (8). `bash scripts/run_tests.sh fast` is green in
+      the sandbox (Go PASSED, Python 159 passed / 69 deselected, 0 PermissionError).
+- [x] **Deduplicated within-file test names.** Renamed the ~20 colliding
+      method occurrences across parallel backend/dist classes to be globally
+      unique (e.g. `test_sanity_checks` → `…_python` / `…_go`; `test_lnmix` →
+      `…_sampler` / `…_bootstrap`; `test_different_seeds_differ` → `…_theory` /
+      `…_go`). No within-file duplicate test names remain.
+- [x] **Thread tuning.** Added guarded `TEST_THREADS = max(1,
+      get_cpu_core_count() - 1)` to the large-`n_bs` Python-pool suites
+      (`test_residualrisk.py`, `test_invgamma_parity.py`, `test_lnmix_parity.py`)
+      so they finish quickly outside the sandbox; tiny prep suites stay at
+      `threads=1` (macOS uses `spawn`, so many workers for trivial `n_bs` would
+      add re-import overhead). Worker count never affects results (sampling is in
+      the main process; reduction is order-independent). Also removed two
+      pre-existing unused imports (`scipy.stats`, `math`) flagged by ruff.
+
 ### PrEP integrator fix (2026-05-28, `feature_prep_model`) — UNCOMMITTED
 
 - [x] **Gauss-Legendre default for the PrEP integrand.** `_risk_days_prep` and

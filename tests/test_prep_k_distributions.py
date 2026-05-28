@@ -26,7 +26,6 @@ and the PrEP bootstrap function.
 
 import numpy as np
 import pytest
-import scipy.stats as stats
 
 from residualrisk.core import _sample_k
 from residualrisk.prep import risk_days_prep_bs
@@ -61,7 +60,7 @@ COMMON_PREP_KWARGS = dict(
 class TestSampleK:
     """Tests for the shared _sample_k dispatch helper."""
 
-    def test_posterior_sample(self):
+    def test_posterior_sample_sampler(self):
         np.random.seed(0)
         posterior = np.array([0.001, 0.002, 0.003, 0.004, 0.005])
         ks = _sample_k(100, seed=0, k_posterior_sample=posterior)
@@ -99,7 +98,7 @@ class TestSampleK:
         with pytest.raises(ValueError, match="k_invgamma_alpha requires"):
             _sample_k(100, seed=0, k_invgamma_alpha=2.0)
 
-    def test_lnmix(self):
+    def test_lnmix_sampler(self):
         np.random.seed(0)
         ks = _sample_k(
             1000, seed=0,
@@ -115,7 +114,7 @@ class TestSampleK:
         with pytest.raises(ValueError, match="lnmix parameters"):
             _sample_k(100, seed=0, k_lnmix_w=0.90, k_lnmix_mu1=-7.0)
 
-    def test_no_distribution_raises(self):
+    def test_no_distribution_raises_sampler(self):
         np.random.seed(0)
         with pytest.raises(ValueError, match="At least one k-distribution"):
             _sample_k(100, seed=0)
@@ -139,7 +138,8 @@ class TestSampleK:
 class TestPrepBsKDistributions:
     """Integration tests: risk_days_prep_bs with each k-distribution path."""
 
-    def test_posterior_sample(self):
+    @pytest.mark.multiprocessing
+    def test_posterior_sample_bootstrap(self):
         posterior = np.random.default_rng(99).exponential(0.001, size=200)
         rd_pe, rd_cri, rd_range, rdests, sim_df = risk_days_prep_bs(
             **COMMON_PREP_KWARGS,
@@ -150,6 +150,7 @@ class TestPrepBsKDistributions:
         assert all(r >= 0 for r in rdests)
         assert sim_df is None  # return_sim_df=False by default
 
+    @pytest.mark.multiprocessing
     def test_invgamma(self):
         rd_pe, rd_cri, rd_range, rdests, sim_df = risk_days_prep_bs(
             **COMMON_PREP_KWARGS,
@@ -161,6 +162,7 @@ class TestPrepBsKDistributions:
         assert all(r >= 0 for r in rdests)
         assert sim_df is None
 
+    @pytest.mark.multiprocessing
     def test_invgamma_mode(self):
         rd_pe, rd_cri, rd_range, rdests, sim_df = risk_days_prep_bs(
             **COMMON_PREP_KWARGS,
@@ -171,7 +173,8 @@ class TestPrepBsKDistributions:
         assert len(rdests) == COMMON_PREP_KWARGS["n_bs"]
         assert sim_df is None
 
-    def test_lnmix(self):
+    @pytest.mark.multiprocessing
+    def test_lnmix_bootstrap(self):
         rd_pe, rd_cri, rd_range, rdests, sim_df = risk_days_prep_bs(
             **COMMON_PREP_KWARGS,
             k_lnmix_w=0.90,
@@ -185,6 +188,7 @@ class TestPrepBsKDistributions:
         assert all(r >= 0 for r in rdests)
         assert sim_df is None
 
+    @pytest.mark.multiprocessing
     def test_legacy_gamma(self):
         rd_pe, rd_cri, rd_range, rdests, sim_df = risk_days_prep_bs(
             **COMMON_PREP_KWARGS,
@@ -195,10 +199,11 @@ class TestPrepBsKDistributions:
         assert len(rdests) == COMMON_PREP_KWARGS["n_bs"]
         assert sim_df is None
 
-    def test_no_distribution_raises(self):
+    def test_no_distribution_raises_bootstrap(self):
         with pytest.raises(ValueError, match="At least one k-distribution"):
             risk_days_prep_bs(**COMMON_PREP_KWARGS)
 
+    @pytest.mark.multiprocessing
     def test_return_sim_df(self):
         """When return_sim_df=True, a Polars DataFrame with expected columns is returned."""
         import polars as pl

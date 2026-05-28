@@ -18,7 +18,6 @@ These tests are intentionally slow (they call the Go binary) but fast enough for
 the full test suite.  They are NOT in the ProcessPoolExecutor-dependent category.
 """
 
-import math
 import time
 
 import numpy as np
