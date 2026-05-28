@@ -16,7 +16,7 @@ Expected speedup: **10-50x faster** than the Python implementation.
 
 ### Prerequisites
 
-- Go 1.21 or later
+- Go 1.26 or later
 - Make (optional, for using Makefile commands)
 
 ### Build Commands

@@ -1,6 +1,6 @@
-module github.com/vitalant-research-institute/residualrisk
+module codeberg.org/eduardgrebe/residualrisk
 
-go 1.25
+go 1.26
 
 require gonum.org/v1/gonum v0.15.0
 

@@ -25,7 +25,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/vitalant-research-institute/residualrisk/riskdays"
+	"codeberg.org/eduardgrebe/residualrisk/riskdays"
 )
 
 const helpText = `riskdays_go - Residual HIV Transfusion Transmission Risk Estimation Tool
