@@ -518,6 +518,75 @@ class TestPythonGoAgreement:
 
 
 # ---------------------------------------------------------------------------
+# Integration method (gauss-legendre default vs quad) + overflow guard
+# ---------------------------------------------------------------------------
+
+
+class TestIntegrationMethod:
+    """Risk-days integration is a fixed 1000-point Gauss-Legendre rule by
+    default (matching the Go backend), with adaptive scipy quad selectable for
+    reproducing prior analyses.
+
+    These call _risk_days directly (a single deterministic integration), so
+    they run without ProcessPoolExecutor and are safe inside the sandbox.
+    """
+
+    STD = dict(
+        copies_per_virion=2,
+        C0=0.00025,
+        doubling_time=20.5 / 24,
+        volume_transfused=20,
+        k=0.013,
+        pool_size=16,
+        lod50=2.73,
+        lod95_lod50_ratio=12.33 / 2.73,
+        retests=1,
+    )
+    # Fine-grid Simpson reference for the standard params.
+    TRUTH = 3.72068
+
+    def test_default_is_gauss_legendre(self):
+        assert rr._risk_days(**self.STD) == rr._risk_days(
+            **self.STD, integration_method="gauss-legendre"
+        )
+
+    def test_gauss_legendre_matches_truth(self):
+        rd = rr._risk_days(**self.STD, integration_method="gauss-legendre")
+        assert rd == pytest.approx(self.TRUTH, rel=1e-4)
+
+    def test_quad_matches_truth(self):
+        rd = rr._risk_days(**self.STD, integration_method="quad")
+        assert rd == pytest.approx(self.TRUTH, rel=1e-4)
+
+    def test_gl_and_quad_agree_at_standard_params(self):
+        gl = rr._risk_days(**self.STD, integration_method="gauss-legendre")
+        q = rr._risk_days(**self.STD, integration_method="quad")
+        assert gl == pytest.approx(q, rel=1e-4)
+
+    def test_invalid_method_raises(self):
+        with pytest.raises(ValueError, match="gauss-legendre"):
+            rr._risk_days(**self.STD, integration_method="simpson")
+
+    def test_overflow_guard_small_doubling_time(self):
+        # Small doubling_time drives 2**(t/dt) to overflow near the upper
+        # integration limit; the guard must keep the GL path finite (it used to
+        # raise OverflowError, since GL always samples near t=500).
+        params = dict(self.STD, doubling_time=0.3)
+        rd = rr._risk_days(**params, integration_method="gauss-legendre")
+        assert np.isfinite(rd) and rd > 0
+
+    def test_concentration_capped_at_extreme(self):
+        c = rr._concentration(0.00025, 0.3, 500.0)
+        assert np.isfinite(c) and c > 0
+
+    def test_use_go_with_quad_raises(self):
+        # Conflict guard: the Go backend only implements gauss-legendre. Raises
+        # before any bootstrap runs, so this is sandbox-safe.
+        with pytest.raises(ValueError, match="gauss-legendre"):
+            rr.risk_days_bs(**BS_KWARGS, use_go=True, integration_method="quad")
+
+
+# ---------------------------------------------------------------------------
 # mode_kde
 # ---------------------------------------------------------------------------
 

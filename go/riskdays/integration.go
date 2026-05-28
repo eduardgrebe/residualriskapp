@@ -35,8 +35,11 @@ func RiskDays(params RiskDaysInnerParams) (float64, error) {
 		return prob
 	}
 
-	// Perform numerical integration using adaptive quadrature
-	// Equivalent to scipy.integrate.quad(integrand, limits[0], limits[1])
+	// Numerical integration via a fixed 1000-point Gauss-Legendre rule
+	// (gonum quad.Fixed). Unlike scipy's adaptive quad, the fixed rule samples
+	// the whole interval and cannot silently miss a narrow / compact-support
+	// peak. The Python backend's default integration_method="gauss-legendre"
+	// mirrors this rule and agrees to machine precision.
 	result := quad.Fixed(integrand, params.LimitMin, params.LimitMax, 1000, nil, 0)
 
 	return result, nil
