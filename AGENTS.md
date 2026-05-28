@@ -49,6 +49,7 @@ residualriskapp/
 `residualrisk` is a proper installable package. `uv sync` (or `uv pip install -e .`) installs it into `.venv` so `import residualrisk` resolves from anywhere. The public surface — defined in `residualrisk/__init__.py` — is:
 
 - `risk_days_bs`, `iwp_from_lookback_data`, `residual_risk_rd` — top-level estimation functions
+  - `risk_days_bs` accepts `integration_method` (`"gauss-legendre"` default, or `"quad"`). The default is a fixed 1000-point Gauss-Legendre rule matching the Go backend (robust; immune to the adaptive-quad "missed peak" failure on compact-support integrands). `"quad"` selects scipy adaptive Gauss-Kronrod and is **Python-path only** (`use_go=False`) — provided for reproducing prior analyses computed with quad. `use_go=True` with `integration_method="quad"` raises `ValueError`.
 - `get_cpu_core_count`, `mode_rounded` — utility helpers used by the UI
 - `mode_kde` — estimate the mode of a positive posterior via KDE on the log scale (pure-Python, slow on large posteriors; kept as fallback)
 - `mode_kde_go` — fast Go-backed KDE mode estimation via the `--kde-mode` subcommand; `cap=40_000, n_grid=5_000` by default (< 0.1% error, ~0.9s for all three posteriors); used by `app.py` at load time with Python fallback to hardcoded values

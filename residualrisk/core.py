@@ -17,15 +17,26 @@
 
 import math
 import statistics
+from functools import lru_cache
 
 import numpy as np
 import polars as pl
 import scipy.stats as stats
 
+# Cap the viral-growth exponent to avoid float OverflowError when t is large
+# relative to a small doubling_time. 2**700 (~5e210) is well within the float64
+# range, yet large enough that the modelled viral load saturates every
+# downstream detection probability — so the risk-days integrand is zero there
+# regardless of the exact (capped) value. This only ever triggers far out in
+# the integration tail; it never affects standard scenarios.
+_MAX_GROWTH_EXP2 = 700.0
+
 
 def _concentration(C0, doubling_time, t):
-    concentration = C0 * 2 ** (t / doubling_time)
-    return concentration
+    exponent = t / doubling_time
+    if exponent > _MAX_GROWTH_EXP2:
+        exponent = _MAX_GROWTH_EXP2
+    return C0 * 2.0**exponent
 
 
 def _prob_infectious_copies(n_copies, k):
@@ -165,6 +176,24 @@ def _prob_infectious_nondetection_wc(
     return product
 
 
+@lru_cache(maxsize=None)
+def _gauss_legendre_rule(n):
+    """Cached n-point Gauss-Legendre nodes and weights on [-1, 1].
+
+    Matches gonum's quad.Fixed (used by the Go backend), so the Python and Go
+    "gauss-legendre" results agree to machine precision.
+    """
+    return np.polynomial.legendre.leggauss(n)
+
+
+def _integrate_gauss_legendre(func, a, b, args, n=1000):
+    """Fixed n-point Gauss-Legendre quadrature of func over [a, b]."""
+    nodes, weights = _gauss_legendre_rule(n)
+    x = 0.5 * (b - a) * nodes + 0.5 * (a + b)
+    y = np.fromiter((func(xi, *args) for xi in x), dtype=float, count=x.size)
+    return 0.5 * (b - a) * float(np.dot(weights, y))
+
+
 def _risk_days(
     copies_per_virion,
     C0,
@@ -177,28 +206,42 @@ def _risk_days(
     retests,
     z=1.6449,
     limits=(-100, 500),
+    integration_method="gauss-legendre",
 ):
     # Ideally we would integrate from -np.inf to np.inf, but that causes an
-    # overflow error, so we choose safe limits instead
-    from scipy.integrate import quad
+    # overflow error, so we choose safe limits instead.
+    args = (
+        copies_per_virion,
+        C0,
+        doubling_time,
+        volume_transfused,
+        k,
+        pool_size,
+        lod50,
+        lod95_lod50_ratio,
+        retests,
+        z,
+    )
+    if integration_method == "gauss-legendre":
+        # Fixed 1000-point Gauss-Legendre, matching the Go backend. The default:
+        # robust to narrow / compact-support integrands where adaptive quad can
+        # silently miss the active window.
+        rd = _integrate_gauss_legendre(
+            _prob_infectious_nondetection, limits[0], limits[1], args
+        )
+    elif integration_method == "quad":
+        # Adaptive Gauss-Kronrod (scipy). Retained so prior analyses computed
+        # with quad can be reproduced exactly via the Python API.
+        from scipy.integrate import quad
 
-    rd = quad(
-        _prob_infectious_nondetection,
-        limits[0],
-        limits[1],
-        args=(
-            copies_per_virion,
-            C0,
-            doubling_time,
-            volume_transfused,
-            k,
-            pool_size,
-            lod50,
-            lod95_lod50_ratio,
-            retests,
-            z,
-        ),
-    )[0]
+        rd = quad(
+            _prob_infectious_nondetection, limits[0], limits[1], args=args
+        )[0]
+    else:
+        raise ValueError(
+            "integration_method must be 'gauss-legendre' or 'quad', "
+            f"got {integration_method!r}"
+        )
     return rd
 
 
@@ -431,6 +474,7 @@ def _risk_days_bs_python(
     mode_precision=2,
     progress=None,
     return_sim_df=False,
+    integration_method="gauss-legendre",
 ):
     if n_bs <= 0:
         raise ValueError("n_bs must be greater than zero to perform simulations.")
@@ -492,9 +536,11 @@ def _risk_days_bs_python(
         for i in range(n_bs)
     ]
     from concurrent.futures import ProcessPoolExecutor, as_completed
+    from functools import partial
 
+    _rd = partial(_risk_days, integration_method=integration_method)
     with ProcessPoolExecutor(max_workers=threads) as executor:
-        futures = [executor.submit(_risk_days, *args) for args in args_list]
+        futures = [executor.submit(_rd, *args) for args in args_list]
         completed_count = 0
         for future in as_completed(futures):
             rdests.append(future.result())
@@ -547,6 +593,7 @@ def _risk_days_bs_python(
             lod50,
             lod95_lod50_ratio,
             retests,
+            integration_method=integration_method,
         )
     elif point_estimate == "median":
         rd_pe = statistics.median(rdests)
@@ -597,6 +644,7 @@ def risk_days_bs(
     progress=None,
     return_sim_df=False,
     use_go=False,
+    integration_method="gauss-legendre",
 ):
     """
     Risk days bootstrap calculation with optional Go acceleration.
@@ -607,9 +655,21 @@ def risk_days_bs(
         If True, uses the high-performance Go implementation.
         If False (default), uses the Python implementation.
         If Go implementation fails, automatically falls back to Python.
+    integration_method : {"gauss-legendre", "quad"}, default="gauss-legendre"
+        Numerical integration scheme for the risk-days integrand.
+        "gauss-legendre" uses a fixed 1000-point Gauss-Legendre rule matching
+        the Go backend (robust default). "quad" uses scipy's adaptive
+        Gauss-Kronrod quadrature and is provided for reproducing prior
+        analyses computed with quad; it is only available on the Python path
+        (use_go=False), since the Go backend always uses Gauss-Legendre.
 
     All other parameters are passed through to the underlying implementation.
     """
+    if use_go and integration_method != "gauss-legendre":
+        raise ValueError(
+            "Go acceleration only implements 'gauss-legendre' integration; "
+            "set use_go=False to use integration_method='quad'."
+        )
     if use_go:
         try:
             from ._go import risk_days_bs_go
@@ -686,6 +746,7 @@ def risk_days_bs(
         mode_precision,
         progress,
         return_sim_df,
+        integration_method,
     )
 
 

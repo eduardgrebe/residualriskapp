@@ -2,6 +2,29 @@
 
 ## Completed
 
+- [x] **Integration robustness (2026-05-28, `fix_integration_quadrature`).**
+      Baseline `_risk_days` now defaults to a fixed 1000-point Gauss-Legendre
+      rule (`integration_method="gauss-legendre"`), matching the Go backend to
+      machine precision; `integration_method="quad"` (scipy adaptive
+      Gauss-Kronrod) remains selectable on the Python path for reproducing
+      prior analyses (`use_go=True` + `quad` raises `ValueError`). Threaded
+      through `_risk_days`, `_risk_days_bs_python`, `risk_days_bs`. Added an
+      overflow guard in `_concentration` (caps `t/doubling_time` at 700) so the
+      GL rule, which always samples near the upper limit, can't raise
+      `OverflowError` at small `doubling_time`. Corrected the misleading
+      "adaptive quad" comment in `go/riskdays/integration.go`. Versions bumped
+      to 0.9.5 (library + Go). 8 new sandbox-safe tests in
+      `TestIntegrationMethod`. *Context:* scipy adaptive `quad` silently returns
+      ~0 on compact-support integrands when its initial Gauss-Kronrod nodes miss
+      the active window; the baseline integrand has noncompact (exponential-tail)
+      support so quad was actually robust there, but GL is adopted for
+      Python↔Go parity and future-proofing. The PrEP integrand DOES have compact
+      support (eclipse + serology cutoffs) and is where quad genuinely fails —
+      apply the same GL fix on `feature_prep_model`.
+      *NOTE:* the 15 `ProcessPoolExecutor` bootstrap tests can't run in the
+      sandbox (SemLock `PermissionError`); run `pytest` outside the sandbox to
+      confirm. No hardcoded absolute-value goldens depend on the method, and the
+      quad→GL shift is ~5e-8 (within all tolerances), so they're expected green.
 - [x] Port KDE mode estimation (`_kde_mode_log`) to Go (`go/riskdays/kde.go`)
 - [x] Implement Inverse Gamma sampling in Go (`go/riskdays/random.go`)
 - [x] Native InvGamma sampling in Python backend — `k_invgamma_alpha` / `k_invgamma_beta` / `k_invgamma_mode` kwargs in `core.py` and `_go.py`
