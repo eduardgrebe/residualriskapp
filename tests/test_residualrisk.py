@@ -650,6 +650,53 @@ class TestModeKde:
 
 
 # ---------------------------------------------------------------------------
+# _sample_positive_normal
+# ---------------------------------------------------------------------------
+
+
+class TestSamplePositiveNormal:
+    """Regression tests for _sample_positive_normal — Normal(mean, sd) truncated
+    at 0 (not at the mean).
+
+    Guards against the scipy.stats.truncnorm gotcha that previously truncated
+    doubling_time / lod50 / incidence at their *mean* (a=0 in standardized
+    units), discarding the lower half and inflating the sampled mean by ~0.8*sd.
+    """
+
+    def test_all_positive(self):
+        np.random.seed(0)
+        s = rr._sample_positive_normal(5.0, 1.0, 50_000)
+        assert (s > 0).all()
+
+    def test_truncates_at_zero_not_mean(self):
+        # The old bug truncated at the mean → min ≥ mean. Truncating at 0 must
+        # produce values below the mean. (This assertion fails on the old code.)
+        np.random.seed(0)
+        s = rr._sample_positive_normal(5.0, 1.0, 50_000)
+        assert s.min() < 5.0
+
+    def test_sample_mean_matches_nominal(self):
+        # With mean ≫ sd the 0-truncation is negligible, so the sample mean
+        # tracks the nominal mean (~5.0). The old a=0 bug gave ~mean + 0.8*sd
+        # (~5.8), which this rejects.
+        np.random.seed(0)
+        s = rr._sample_positive_normal(5.0, 1.0, 100_000)
+        assert np.mean(s) == pytest.approx(5.0, rel=0.02)
+
+    def test_zero_sd_returns_constant(self):
+        s = rr._sample_positive_normal(3.0, 0.0, 10)
+        assert s.shape == (10,)
+        assert np.all(s == 3.0)
+
+    def test_reproducible_with_global_seed(self):
+        np.random.seed(123)
+        s1 = rr._sample_positive_normal(2.0, 0.5, 1000)
+        np.random.seed(123)
+        s2 = rr._sample_positive_normal(2.0, 0.5, 1000)
+        np.testing.assert_array_equal(s1, s2)
+
+
+# ---------------------------------------------------------------------------
 # sample_invgamma
 # ---------------------------------------------------------------------------
 
