@@ -9,13 +9,18 @@ working tree clean, all three versions at `1.1.0.dev0`. Everything below the
 line — the PrEP model build-out, all code-review findings (H1, H2, M1, M2, M3,
 L1, L2, L4, L5), the integration-robustness / truncnorm-positivity /
 analytic-`tcrit` work, the marker-based test runner, and the sinusoidal
-`a`/`b` uniform-uncertainty feature (commit `40a6cb2`) — is **committed**.
+`a`/`b` uniform-uncertainty feature (commit `40a6cb2`), and the PrEP drug-effect
+(transmissibility-reduction) parameter (commit `05b9e76`) — is **committed**.
 `bash scripts/run_tests.sh fast` is robust (marker-based) on both branches.
+(Note: the drug-effect `@multiprocessing` tests still need an outside-sandbox run;
+in-sandbox we verified ruff, Go tests, 33 sandbox-safe prep tests, and the Go
+bridge.)
 
-**UNCOMMITTED (this session):** the PrEP drug-effect (transmissibility-reduction)
-parameter — full-stack (Python + Go + bridge + sim_df + UI) + tests + docs (see
-Completed). In-sandbox verified (ruff, Go tests, 33 sandbox-safe prep tests, Go
-bridge); the `@multiprocessing` tests need an outside-sandbox run.
+This session ("prep-model-cleanup") then crystallised the **scope, validation, and
+documentation** of the tool: the Layer 1 (tool) vs Layer 2 (Python API / effective
+incidence) boundary, the one-product-per-run design, the assay-defaults task, and
+the PK/PD deferred objective — see "## Scope & validation", "Assay defaults &
+calibration", and Deferred. (`README.md` + `AGENTS.md` updated to match.)
 
 One item remains before the PrEP release: the end-to-end scientific validation.
 (Agents can't commit/push — provide exact git commands.)
@@ -36,11 +41,132 @@ One item remains before the PrEP release: the end-to-end scientific validation.
       passes **outside the sandbox** as of 2026-05-29; what remains here is the
       *scientific* reproduction of prior published results, not test-green.
 
+### Assay defaults & calibration
+
+- [ ] **Re-check and populate default NAT assay parameters (LoD50 / LoD95).**
+      Re-derive the tool's default assay parameters — LoD50, LoD95 (and the
+      implied `lod95_lod50_ratio`) — from manufacturer **package inserts**.
+      Assays to cover (at least):
+    - Roche cobas TaqScreen **MPX**
+    - Roche cobas TaqScreen **MPX v2.0**
+    - Grifols Procleix **Ultrio Plus**
+    - Grifols Procleix **Ultrio Elite**
+
+      Specifics to get right:
+    - **Revisit the IU/mL → copies/mL conversion** (the canonical home for the
+      IU↔copies/mL LOD-conversion question raised in the `rr_prep_v3` review).
+      Refer to the existing research already performed and applied in
+      `~/dev/residual_risk/roche_rr_latam/` — that repo also holds the Roche
+      package insert and the correct LoD numbers.
+    - **HIV type / group specificity matters:** LoD differs by HIV-1 vs HIV-2 and
+      by HIV-1 group (M vs O). **Provide defaults *only* for the most common HIV-1
+      group (Group M).** Do **not** ship defaults for HIV-2 or the less common
+      HIV-1 groups.
+    - **WHO International Standard version:** analytical-sensitivity LoD values are
+      calibrated against a specific WHO standard; the IU values (and hence the
+      IU→copies conversion) depend on which standard/version was used. Record, per
+      assay/insert, which WHO standard version the quoted LoD is calibrated to, and
+      keep that consistent across assays and the conversion factor.
+
+---
+
+## Scope & validation
+
+### Scope: what the tool models (Layer 1) vs what it does not (Layer 2)
+
+**Decision (2026-05-29).** The tool — the `residualrisk` Python package, its Go
+engine, and the Streamlit webapp — covers **Layer 1**: the mechanistic
+window-period model that estimates **risk-day-equivalents (RDEs)**, plus a final
+step that applies a **pre-computed incidence** to an RDE distribution to obtain
+residual risk (`residual_risk_rd` = incidence × RDE / 365.25 × per).
+
+It deliberately does **not** implement **Layer 2** — the population residual-risk
+aggregation (donor-stratum PrEP-use prevalence, self-deferral / discard, sex- and
+route-stratified incidence, product mix; full component list in the reference
+below). Layer 2 is too complex and too operator-/time-specific to reflect in the
+webapp for now; some aspects may be added in future (deferred — see Deferred →
+"Population PrEP-use & stratified-incidence modelling in the webapp").
+
+**Recommended approach for a sophisticated modelling exercise.** Build Layer 2 in
+code using the **Python API** (which wraps the fast Go engine): call
+`risk_days_prep_bs` for the RDE distributions and assemble the population layers
+around them. For the **webapp**, fold the disaggregated inputs — PrEP-use
+population proportions, stratified incidences, self-deferral / discard, etc. —
+into a single **"effective incidence"** for each of oPrEP and iPrEP and supply
+those as the fully-baked incidence inputs. The webapp's job is RDEs + applying
+that pre-computed incidence; the disaggregation happens upstream.
+
+### One product per run — by design
+
+The tool estimates RDEs for **one transfused product at a time**, in both the
+baseline and PrEP models. The user models each product separately by entering that
+product's **transfused plasma volume and volume range** (`volume_transfused` /
+`volume_transfused_range`) and running the tool once per product — e.g. red-cell
+units (~20 mL residual plasma), fresh frozen plasma (~200 mL), or platelets (using
+their own plasma-volume estimate). This is an **explicit design choice**: the tool
+will **not** automate simultaneous multi-product RDE estimation — the user drives
+that, and any cross-product mix-weighting is part of Layer 2 (above).
+
+- [ ] **Documentation must make the one-product-per-run design explicit.** Done in
+      `README.md` ✓ and `AGENTS.md` ✓; **remaining: in-app guidance / help text**
+      in `app.py` (make clear that `volume_transfused` is the per-product
+      transfused plasma volume, that the user runs the tool once per product —
+      RBC / FFP / platelets / … — and that multi-product estimation is
+      intentionally not automated).
+
+### Validation
+
+- [ ] **Replicate the `rr_prep_v3` analysis (with refinements) as an ad-hoc
+      script driving the Python package.** Build Layer 2 on top of the package's
+      RDE outputs (Python API → Go engine) and reproduce the prior published
+      residual-risk numbers. This both (a) validates the mechanistic engine
+      end-to-end against a known result and (b) is the concrete vehicle for the
+      end-to-end validation release gate (Open → "Remaining before the PrEP
+      release"). Expect known, explainable shifts vs the notebook: the
+      truncnorm-positivity fix, Gauss-Legendre vs quad, analytic vs grid `tcrit`,
+      and the k-distribution choice. Belongs in the analysis repo
+      (`residualrisk_analysis`), not the tool.
+
+### Layer 2 reference — population residual-risk aggregation
+
+The components that translate per-window-period RDEs into population residual
+risk, as implemented ad hoc in `compute_risks` (`rr_prep_v3.py`) and **not** in
+the tool. Recorded here so we stay on top of it as the tool develops. (The
+mechanistic RDE engine itself — `sin_varied`, `vl_postbt`, `prob_*`, `risk_days`
+— is fully ported; the tool even improves on the notebook by fixing its
+`truncnorm(0, inf, mean, sd)` positivity bug, defaulting to Gauss-Legendre, and
+adding optional `a`/`b` + `drug_effect` variation.)
+
+- **Donor strata & counts** — first-time vs repeat donors × male/female, with
+  operator-specific annual donation counts.
+- **PrEP-use prevalence by stratum** — oral/injectable × sex × FT/RD, with a
+  repeat-donor:first-time ratio (≈1/13) and sex ratios (oral F:M ≈1/12,
+  injectable ≈1/6).
+- **Self-deferral rate** (`sd_rate`) — fraction of PrEP-using donors who
+  self-defer and do not donate (prior: `Uniform(0.1, 0.7)`).
+- **Disclosure / discard rate** (`disc_rate`) — fraction of non-self-deferred
+  PrEP-user donations disclosed → discarded (prior: `Uniform(0.5, 0.75)`).
+  Combined: at-risk donations = usage × (1 − `sd_rate`) × (1 − `disc_rate`).
+- **Sex- and route-specific incidence** — separate male/female oral & injectable
+  incidence, with an injectable:oral ratio (≈0.33); the tool/webapp take a single
+  oPrEP and a single iPrEP incidence (hence the "effective incidence" guidance
+  above).
+- **Cross-product mix-weighting** — combining per-product residual risks (RBC,
+  FFP, platelets, …) into a single population figure weighted by each product's
+  share of transfusions. Note: the *per-product* RDE is by design a separate tool
+  run (different plasma volume — see "One product per run" above); only the
+  population mix-weighting is Layer 2.
+
+The prior published RBC/FFP residual-risk numbers were produced by `compute_risks`
+fed from the mechanistic RDE, so the validation task above reproduces them by
+re-running that aggregation on the *tool's* RDE outputs — which also confirms the
+tool's RDE is the correct input to the published pipeline.
+
 ---
 
 ## Completed
 
-### PrEP drug-effect (transmissibility reduction) parameter (2026-05-29) — UNCOMMITTED
+### PrEP drug-effect (transmissibility reduction) parameter (2026-05-29, commit `05b9e76`)
 
 - [x] **Optional antiretroviral drug-effect (transmissibility-reduction) factor
       for PrEP.** `drug_effect ∈ (0, 1]` (1.0 = no reduction) — a linear
@@ -276,6 +402,16 @@ concentration itself over time and let the downstream quantities follow from it:
 - **Prerequisite:** review the PK/PD literature for the relevant PrEP drugs to
   ground both the concentration dynamics and the concentration→effect
   relationships.
+
+### Population PrEP-use & stratified-incidence modelling in the webapp
+
+Deferred possible future work: surface some of Layer 2 — population PrEP-use
+prevalence, self-deferral / discard, sex- and route-stratified incidence —
+directly in the webapp, instead of requiring users to pre-compute an "effective
+incidence." See **## Scope & validation** for the decision (Layer 2 stays out of
+the webapp for now), the recommended Python-API approach, and the full Layer 2
+component reference. (The IU/mL ↔ copies/mL LOD conversion surfaced in the same
+review is tracked under Open → "Assay defaults & calibration".)
 
 ---
 

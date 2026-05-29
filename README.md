@@ -306,6 +306,31 @@ log-logistic, lognormal mixture) and recommendations with full justification.
 - **Mean**: Mean of bootstrap distribution
 - **Mode**: Mode of bootstrap distribution
 
+### Scope and limitations
+
+The tool estimates **risk-day-equivalents (RDEs) / the infectious window period**
+and applies a **pre-computed incidence** to obtain residual risk. It deliberately
+does **not** model population-level PrEP-use prevalence, donor self-deferral or
+discard, or stratified (sex-, route-, or donor-type-specific) incidence — those
+depend on a specific blood operator and time period.
+
+**One product per run.** RDEs are estimated for a single transfused product at a
+time, in both the baseline and PrEP models. Model each product *separately* by
+entering that product's transfused plasma volume and range and running the tool
+once per product — e.g. red-cell units (~20 mL residual plasma), fresh frozen
+plasma (~200 mL), or platelets (using your own plasma-volume estimate). The tool
+does **not** automate simultaneous multi-product estimation; this is an explicit
+design choice, and combining products into a population figure is left to the user.
+
+For a sophisticated analysis that needs those layers, build them in code on top of
+the [Python API](#python-api) (which wraps the Go engine) — i.e. call the RDE
+functions and assemble the population model around their outputs. For the **web
+interface**, fold the disaggregated inputs (PrEP-use proportions, stratified
+incidences, self-deferral/discard, etc.) into a single **effective incidence** for
+each scenario (e.g. oral vs injectable PrEP) and supply that as the incidence
+input. (See the project `TODO.md` → "Scope & validation" for the rationale and the
+full list of population-level components that live outside the tool.)
+
 ## Performance
 
 ### Go Implementation (default)

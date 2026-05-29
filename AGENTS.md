@@ -101,6 +101,18 @@ Downstream analyses (e.g. R scripts via `reticulate`) should call these rather t
 4. **Bootstrap Simulation**: Monte Carlo sampling of parameter uncertainty
 5. **Window Period Calculation**: Numerical integration to find infectious window period
 
+**Design scope (single product per run).** The tool estimates RDEs / the
+infectious window period for **one transfused product at a time**, in both the
+baseline and PrEP models, then applies a **pre-computed incidence** to obtain
+residual risk. Model each product separately by setting its transfused plasma
+volume + range (`volume_transfused` / `volume_transfused_range`) and running once
+per product (e.g. red cells ~20 mL residual plasma, FFP ~200 mL, platelets with
+their own plasma-volume estimate). The tool deliberately does **not** automate
+multi-product estimation, nor the population-level "Layer 2" aggregation
+(PrEP-use prevalence, self-deferral / discard, stratified incidence) — that is the
+user's, built on the Python API or folded into an "effective incidence" per
+scenario. See `TODO.md` → "Scope & validation" for the full rationale.
+
 ### Key Parameters
 
 **Viral Growth**:
@@ -121,8 +133,8 @@ Downstream analyses (e.g. R scripts via `reticulate`) should call these rather t
 - `k_posterior_sample` — Array of posterior draws for k (used when sampling from a posterior)
 - `k_invgamma_alpha` — Shape parameter α for Inverse Gamma k distribution (omit or `None` for posterior-sample paths)
 - `k_invgamma_beta` — Scale parameter β for Inverse Gamma k distribution (omit or `None` for posterior-sample paths)
-- `volume_transfused` — Volume of blood transfused (mL)
-- `volume_transfused_min/max` — Uncertainty range
+- `volume_transfused` — Per-product transfused **plasma** volume (mL); single-product-per-run, so set this per product and run once per product (see Design scope above)
+- `volume_transfused_min/max` — Uncertainty range for the plasma volume
 - `copies_per_virion` — RNA copies per virion (default: 2)
 
 **Simulation**:
