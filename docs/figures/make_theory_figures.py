@@ -137,9 +137,7 @@ def fig3_k_distributions():
     ax.plot(xs, 0.9 * hc.sf(xs) + 0.1 * ac.sf(xs), color="C1", ls=":", lw=2,
             label="90/10 mixture")
     for p in (np.percentile(ka, 5), np.median(ka), np.percentile(ka, 95)):
-        ax.axvline(p, color="crimson", alpha=0.4, lw=1)
-    ax.text(np.median(ka), 0.5, "  animal P5/P50/P95", color="crimson",
-            fontsize=7, rotation=90, va="center")
+        ax.axvline(p, color="crimson", alpha=0.4, lw=1)  # animal P5/P50/P95 (see caption)
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xlabel("$k$")
