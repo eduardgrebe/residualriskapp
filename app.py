@@ -1059,7 +1059,7 @@ if st.sidebar.button(button_label):
         time.sleep(0.3)
         progressbar.empty()
 
-        # --- PrEP bootstrap runs (Python-only) ---
+        # --- PrEP bootstrap runs (Go or Python, per the selected implementation) ---
         _prep_k_kwargs = dict(
             k_posterior_sample=k_param,
             k_invgamma_alpha=k_invgamma_alpha,

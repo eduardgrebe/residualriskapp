@@ -4,250 +4,71 @@
 
 ### SESSION STATE (2026-05-29)
 
-`main`'s baseline integration fix is merged into `feature_prep_model`; all three
-versions at `1.1.0.dev0`. Committed: H1/H2/M1, the PrEP GL integrator fix
-(82bab58), the test-runner marker/dedup/threads work (01226b8), and M2/M3
-(1f1e6b3). **UNCOMMITTED:** the L2/L4 analytic-`tcrit` cleanup — `residualrisk/prep.py`
-(analytic `tcrit`, delete grid `_vl_postbt_vec`), `tests/test_prep_go_parity.py`
-(M2 PE tolerance 1e-3 → 1e-9), + this TODO. Remaining before the PrEP release:
-the `a`/`b`/`offset` design decision and end-to-end validation against prior
-analyses. (Agents can't commit/push — give the user the exact git commands.)
+On `feature_prep_model`; `main` is fully merged in (merge commit `31118a6`),
+working tree clean, all three versions at `1.1.0.dev0`. Everything below the
+line — the PrEP model build-out, all code-review findings (H1, H2, M1, M2, M3,
+L1, L2, L4, L5), the integration-robustness / truncnorm-positivity /
+analytic-`tcrit` work, and the marker-based test runner — is **committed**.
+`bash scripts/run_tests.sh fast` is robust (marker-based) on both branches.
 
-### PrEP model — `feature_prep_model` branch
+Two items remain before the PrEP release, both **scientific decisions yours to
+drive**. (Agents can't commit/push — provide exact git commands.)
 
-- [x] **Design decision: oPrEP vs iPrEP scenario handling.** *(Resolved 2026-05-21.)*
-      `risk_days_prep_bs()` remains a single-scenario function.
-      Populations don't overlap → risk is additive.
-
-- [x] **Design decision: PrEP as additive layer on baseline risk.** *(Resolved 2026-05-21.)*
-      PrEP breakthrough risk layers *on top of* baseline window-period risk.
-      UI design:
-      - Remove "Mechanistic model with PrEP" from the RDE method dropdown.
-      - Add two independent checkboxes below the dropdown:
-        ☐ Include oral PrEP breakthrough risk
-        ☐ Include injectable PrEP breakthrough risk
-      - When checked, corresponding PrEP parameter expander appears.
-      - Run button always runs baseline first, then PrEP bootstraps if checked.
-      - Results: baseline RDE (always), oPrEP RDE (if checked), iPrEP RDE
-        (if checked), displayed side-by-side.
-      - Residual risk: baseline incidence input (exists), plus separate PrEP
-        breakthrough incidence inputs (prepopulated with defaults). Total
-        residual risk = sum of all components.
-
-- [x] **Wire PrEP into app.py.** *(Done 2026-05-21.)*
-      Removed "Mechanistic model with PrEP" from dropdown. Added two independent
-      checkboxes (Include oral PrEP / Include injectable PrEP) below the dropdown,
-      only shown when mechanistic model is selected. Shared PrEP params expander
-      (eclipse, a/b/offset) + per-modality expanders (set point, seroconversion
-      Weibull). Button dispatch runs oPrEP and/or iPrEP bootstraps after baseline.
-      Incidence section shows PrEP breakthrough incidence inputs when checkboxes ticked.
-      Results show baseline + oPrEP + iPrEP RDEs; residual risk section shows
-      per-component breakdown + additive total. Download button combines all scenario
-      DataFrames with a `scenario` column.
-
-- [x] **Add `return_sim_df` support to `risk_days_prep_bs()`.** *(Done 2026-05-21.)*
-      Returns a per-iteration Polars DataFrame including PrEP-specific columns
-      (set_point, eclipse, ser_*, a, b, offset) alongside standard columns.
-
-- [x] **Code cleanup in `prep.py`:** *(Done 2026-05-21.)*
-      Removed dead `_vl_noarv()`. Moved all inline imports to top-level.
-      Integration limits `(-100, 500)` kept — sufficient for 265-day dynamics.
+### Remaining before the PrEP release
 
 - [ ] **Design decision: bootstrapping `a`, `b`, `offset`.** The sinusoidal
       set-point oscillation parameters are currently fixed across all bootstrap
       iterations. Decide whether to add uncertainty distributions (e.g. uniform
       ranges) or keep them fixed. Scientific decision.
 
-- [x] **Integration tests for `risk_days_prep_bs()`.** *(Done 2026-05-21.)*
-      `tests/test_prep_bootstrap.py` — 39 tests across 7 classes: result
-      structure (8), sim_df validation (8), reproducibility (2), point-estimate
-      methods (3), k-distribution paths (6), PrEP parameter effects (4),
-      edge cases (3), Go dispatch (5). Python-path tests require
-      ProcessPoolExecutor (fail in macOS sandbox, pass outside).
-
-- [x] **Go implementation of PrEP model.** *(Done 2026-05-21.)* Ported PrEP
-      breakthrough infection model from Python to Go. All five phases complete:
-
-  - [x] **Phase 1: Go PrEP functions** — `prep.go` (SinVaried, FindTcrit
-        (analytic), VLPostBT, ProbInfectiousPrep, ProbNondetectionSerology,
-        ProbNondetectionPrep, ProbInfectiousNondetectionPrep),
-        `prep_models.go` (PrepInnerParams), `prep_integration.go`
-        (RiskDaysPrep), `models.go` (PrEP fields, SetDefaults, Validate),
-        `riskdays.go` (PrEP bootstrap path), `main.go` (PrEP binary output).
-  - [x] **Phase 2: Go tests** — 30 tests in `prep_test.go` (unit +
-        integration, golden value cross-validated against Python).
-  - [x] **Phase 3: Python wrapper** — `risk_days_prep_bs_go()` in `_go.py`.
-  - [x] **Phase 4: Dispatcher + app.py wiring** — `use_go` param in
-        `risk_days_prep_bs()`; `app.py` passes `use_go=use_go_acceleration`.
-  - [x] **Phase 5: Cross-validation** — `tests/test_prep_go_parity.py`
-        (5 tests, all pass).
-
 - [ ] **End-to-end validation of PrEP + baseline results against prior analyses.**
       Run the tool with input parameters from previous published baseline analyses
-      (Grebe et al. 2020, ISBT 2024) and PrEP analyses (ISBT 2025) and confirm that 
-      RDE estimates are comparable to previously reported values (or shifted 
-      proportional to the major shift in k distribution used). If results
-      differ, understand and document why (e.g. different k distribution,
-      quadrature method, analytic vs grid tcrit). This applies to both the
-      Python and Go implementations. The code passes unit/integration tests, but
-      scientific validity requires reproducing known results with known inputs.
-
-### Code review findings (2026-05-26)
-
-From a review of the 14 PrEP commits in range `6a7f233..722ab36` (~3280 LOC).
-Priority order, highest first.
-
-#### High severity
-
-- [x] **H1 — Lookback path doesn't reset `prep_oral_run` / `prep_inj_run`.**
-      *(Done 2026-05-28 — Lookback branch in `app.py` now sets both
-      `prep_oral_run` and `prep_inj_run` to `False` on a successful run.
-      UNCOMMITTED.)*
-      `app.py:1184–1219` (the `elif rde_method == "Lookback data":` branch in
-      the button handler) sets `sims_run`, `rde_method_run`, `bs`, `samp`,
-      `sim_df` but leaves the PrEP session keys untouched. After a
-      Mechanistic+PrEP run followed by a Lookback run, the results section
-      (`app.py:1333, 1351`) still renders the stale oPrEP / iPrEP RDE
-      histograms, and the residual-risk section (`app.py:1408, 1440`) adds
-      stale PrEP components into `_rr_total_pe` — so "Total residual risk
-      (additive)" reports the wrong number.
-      Fix: in the Lookback branch, set
-      `st.session_state["prep_oral_run"] = False` and
-      `st.session_state["prep_inj_run"] = False` (and ideally clear
-      `iwp_pe_prep_*` / `samp_prep_*` / `sim_df_prep_*`).
-
-- [x] **H2 — Python PrEP integrand crashes with `TypeError` when `a > offset`.**
-      *(Done 2026-05-28 — chose fix option (b): clamp `max(0.0, Cv)` in Python
-      `_vl_postbt` and Go `VLPostBT`. Physically correct (VL can't be negative),
-      keeps full UI range, and fixes the Go negative-probability bug too.
-      UNCOMMITTED.)*
-      `_prob_nondetection_prep` in `residualrisk/prep.py:147–158` falls through
-      both `if Cc == 0.0` and `elif Cc > 0.0` and returns `None` when `Cc < 0`.
-      `Cc < 0` whenever `offset + a·sin(b·(t−tcrit)) < 0`, i.e. `a > offset`.
-      The UI permits `prep_a ∈ [0, 2]` and `prep_offset ∈ [0, 2]`
-      (`app.py:757–783`), so this is reachable. Verified by direct call:
-      at `a=2.0, offset=1.0, t=32.24`, `_vl_postbt → −336`, the integrand
-      raises `TypeError: unsupported operand type(s) for *: 'float' and 'NoneType'`.
-      Go does not crash but `ProbInfectiousCopies(negative_n_copies, k) =
-      1 − exp(positive) < 0` produces a negative probability.
-      Fix options (cleanest first): (a) constrain UI so `a ≤ offset`;
-      (b) clamp `Cv = max(Cv, 0)` in `_vl_postbt` / `VLPostBT`;
-      (c) make `_prob_nondetection_prep` explicit on the negative branch.
-
-#### Medium severity
-
-- [x] **M1 — Go `SetDefaults` PrEP serology defaults don't match Python.**
-      *(Done 2026-05-28 — serology defaults aligned to production
-      `ser_min=28.7, ser_max=250, ser_alpha=50.49434, ser_beta=1.15062`; added
-      `SetPointDistUniform=(19.1,2265)` and `EclipseDistUniform=(4.0,10.0)`
-      defaults so a direct CLI caller matches Python. Go tests still pass.
-      UNCOMMITTED.)*
-      `go/riskdays/models.go:153–186` uses `SerMin=10, SerMax=500,
-      SerAlpha=9.1, SerBeta=5.2`. Python `risk_days_prep_bs` (and the
-      `risk_days_prep_bs_go` bridge, and the app UI) uses
-      `ser_min=28.7, ser_max=250, ser_alpha=50.49434, ser_beta=1.15062`.
-      Latent in production (bridge always passes explicit values from its own
-      Python-matching defaults) but a direct CLI caller that omits these
-      gets silently wrong defaults. Also: `SetPointDistUniform` and
-      `EclipseDistUniform` have no defaults at all → direct caller omitting
-      them gets degenerate (zero-width) sampling.
-      Fix: align `SetDefaults` PrEP block with Python production defaults;
-      add defaults (or `Validate()` errors) for the uniform-range fields.
-
-- [x] **M2 — `test_prep_go_parity.py` doesn't actually cross-validate Python vs Go.**
-      *(DONE 2026-05-29 — UNCOMMITTED. Added `TestPrepPythonGoAgreement` (marked
-      `@pytest.mark.multiprocessing`): primary-parameters PE agreement (rel 1e-3
-      — the genuine numerical cross-validation; Python GL 3.091848 vs Go GL
-      3.091880, rel 1.05e-5, spot-checked in-sandbox) plus median (20%) / CrI
-      (25%) distributional agreement under independent RNGs. Fixed the misleading
-      class/module docstrings. Runs outside the sandbox only — VERIFY THERE.)*
-      Despite the filename and docstring ("Cross-validate Python and Go PrEP
-      bootstrap results"), none of the five tests compares a Python-computed
-      number to a Go-computed number — they are all Go-only sanity /
-      reproducibility / dispatch checks. The baseline suite has a real
-      `TestPythonGoAgreement` in `tests/test_residualrisk.py` (medians / PE
-      within tolerance); the PrEP suite has no equivalent.
-      Combined with M3 below, the Go PrEP implementation has never been
-      numerically validated against the Python reference at production params.
-      Fix: add `TestPrepPythonGoAgreement` modeled on the baseline (PE /
-      median / quantiles within tolerance over a few hundred bootstraps at
-      production serology defaults).
-
-- [x] **M3 — Go PrEP golden values use non-production serology params.**
-      *(DONE 2026-05-29 — UNCOMMITTED. Kept the narrow-window `defaultPrepParams`
-      golden (1.0086) — valuable compact-support coverage — and enhanced its
-      comment to spell out that it is validated vs the Simpson/GL truth (the
-      regime where adaptive quad collapses to ~5e-18). Added `productionPrepParams`
-      + `TestRiskDaysPrep_GoldenValue_Production` cross-validated against the
-      Python Simpson truth 3.091868 (0.1% tol; Go GL = 3.091880). Reference values:
-      OLD/test serology → Simpson 1.008635, Go 1.0086; PRODUCTION serology →
-      Simpson 3.091868, Go 3.091880, Python GL 3.091848. Full Go suite passes.)*
-      `go/riskdays/prep_test.go:25–48` `defaultPrepParams` uses
-      `SerMin=10, SerMax=500, SerAlpha=9.1, SerBeta=5.2` (same numbers as M1).
-      The "cross-validated against Python" golden values
-      (`TestRiskDaysPrep_GoldenValue → 1.0086`,
-      `TestProbInfectiousNondetectionPrep_CrossValidate → 4.153e-2`,
-      `TestProbNondetectionSerology_InWindow → 0.9565`) are therefore
-      validated at serology params the production code never uses. The
-      production params (`α=50.49, β=1.15`) give a much wider, slower-decaying
-      active integration window than the test params (`β=5.2` cuts sharply
-      around t≈15–25 days). `quad.Fixed(integrand, -100, 500, 1000, nil, 0)`
-      is only demonstrated to agree with Python Simpson within 1% in the
-      narrow-window case.
-      Fix: keep the existing golden value with an updated comment, and add a
-      second golden value computed at production serology params.
-
-#### Low severity
-
-- [ ] **L1 — `point_estimate="mode"` differs between Python and Go.**
-      `riskDaysBSPrep case "mode"` uses `KDEModeLog(rdests, 1_000_000, 0,
-      input.Threads)` (`go/riskdays/riskdays.go:349–350`); Python
-      `risk_days_prep_bs` uses `mode_rounded(rdests,
-      precision=mode_precision)` (`residualrisk/prep.py:493`).
-      `mode_precision` is sent to Go but ignored. PrEP faithfully mirrors
-      baseline Go (`riskdays.go:187–188`) — so it is consistent with the
-      pre-existing baseline pattern, but the cross-impl PE discrepancy is real
-      for any user who picks "mode" and toggles Go/Python.
-      Decide on one mode algorithm for both sides, or document that "mode"
-      PE is implementation-dependent.
-
-- [x] **L2 + L4 — analytic `tcrit`; delete grid `_vl_postbt_vec`.**
-      *(DONE 2026-05-29 — UNCOMMITTED. Replaced the grid-search `_vl_postbt_vec`
-      with `_find_tcrit(eclipse, C0, doubling_time, set_point) = eclipse +
-      doubling_time*log2(set_point/C0)`, mirroring Go's `FindTcrit`. Swapped the
-      two call sites in `_prob_infectious_prep` / `_prob_nondetection_prep` and
-      deleted `_vl_postbt_vec` (no other callers). Outcomes, all verified:
-      fixes the L2 empty-argmin crash (dt=15 → tcrit≈312d now returns finite,
-      was ValueError); ~4× faster Python PrEP path (115→28 ms/`_risk_days_prep`
-      call — the grid was rebuilt twice per integrand eval and discarded); and
-      Python now equals Go to machine precision — production primary-params PE
-      3.091880263679 vs Go 3.091880263679, rel **9.31e-14** (was 1.05e-5 with the
-      grid). NB: this is a real +1.05e-5 shift in Python PrEP results, toward the
-      exact crossover (grid rounded tcrit up to the next 0.1-day point) — an
-      accuracy improvement, not a correctness fix; standard scenarios move only
-      at the 6th sig fig. Accordingly tightened the M2 `test_primary_parameters_pe_agree`
-      tolerance from 1e-3 → 1e-9.)*
-
-- [ ] **L5 — Misc nits.**
-      - `go/riskdays/version.go` not bumped despite adding the entire PrEP
-        path to the Go binary (per `CLAUDE.md` versioning rules).
-      - `app.py:1062` comment says "PrEP bootstrap runs (Python-only)" but
-        the calls pass `use_go=use_go_acceleration`. Stale.
-      - `tests/test_prep_go_parity.py` carries the abbreviated AGPL header
-        instead of the full header used elsewhere (per `CLAUDE.md`
-        "All new Python files must include the AGPL v3.0 license header").
-      - `go/riskdays/integration.go:39` comment still says
-        "adaptive quadrature / Equivalent to scipy.integrate.quad" but
-        `quad.Fixed` is fixed-order Gauss-Legendre. Pre-existing, unrelated
-        to PrEP, but worth fixing while in the area.
-
-### Pre-existing on `main` (file against `main`, not this branch)
-
-
+      (Grebe et al. 2020, ISBT 2024) and PrEP analyses (ISBT 2025) and confirm that
+      RDE estimates are comparable to previously reported values (or shifted
+      proportional to known changes). If results differ, understand and document
+      why. Known shifts to expect: the truncnorm-positivity fix lowers RDE ≈8%
+      (baseline) / ≈25% (PrEP); plus the k-distribution choice, GL vs quad, and
+      analytic vs grid `tcrit`. Applies to both Python and Go. Unit/integration
+      tests pass, but scientific validity requires reproducing known results.
+      *Also pending:* a full `bash scripts/run_tests.sh` run **outside the
+      sandbox** to confirm the `ProcessPoolExecutor` tests (incl. M2) are green —
+      so far only verified via in-sandbox serial replication.
 
 ---
 
 ## Completed
+
+### Code-review findings (2026-05-26 review) — all resolved
+
+- [x] **H1** — Lookback branch resets `prep_oral_run`/`prep_inj_run` so stale PrEP
+      results don't leak into the lookback display / additive total. *(4e82576)*
+- [x] **H2** — clamp viral load `max(0, Cv)` in Python `_vl_postbt` + Go `VLPostBT`
+      (`a > offset` no longer crashes Python / yields negative Go probability). *(4e82576)*
+- [x] **M1** — Go `SetDefaults` PrEP serology + uniform-range defaults aligned to
+      Python production values. *(4e82576)*
+- [x] **M2** — real Python↔Go PrEP cross-validation (`TestPrepPythonGoAgreement`):
+      primary-params PE within 1e-9 + median/CrI agreement at n_bs=2000 (bumped
+      from 500 so the InvGamma(α=2) heavy-tail upper CrI is stable). *(1f1e6b3, calibrated in 31118a6)*
+- [x] **M3** — production-serology Go golden `TestRiskDaysPrep_GoldenValue_Production`
+      (≈3.0919 vs Simpson truth); narrow-window 1.0086 golden comment corrected. *(1f1e6b3)*
+- [x] **L1** — `point_estimate="mode"` is KDE-log on both sides: PrEP Python now uses
+      `_kde_mode_log` (was `mode_rounded`), matching Go `KDEModeLog` and baseline Python.
+- [x] **L2 + L4** — analytic `_find_tcrit`; deleted grid `_vl_postbt_vec`. Fixes the
+      empty-argmin crash, ~4× faster Python PrEP, machine-precision Python≡Go. *(93f4e34)*
+- [x] **L5** — Go `version.go` bumped to 1.1.0.dev0; `integration.go` "adaptive quad"
+      comment corrected to fixed Gauss-Legendre; `app.py:1062` PrEP "(Python-only)"
+      comment fixed; `test_prep_go_parity.py` given the full AGPL header.
+
+### PrEP model build-out (2026-05-20/21)
+
+- [x] Design: oPrEP/iPrEP as independent additive scenarios; PrEP breakthrough risk
+      layered on top of baseline window-period risk.
+- [x] `app.py` wiring — oPrEP/iPrEP checkboxes, parameter expanders, side-by-side
+      results, per-component + additive residual risk, combined download.
+- [x] `risk_days_prep_bs()` with `return_sim_df` (PrEP-specific columns); prep.py cleanup.
+- [x] Integration tests — `tests/test_prep_bootstrap.py`.
+- [x] Full Go port — `prep*.go`, `risk_days_prep_bs_go()` bridge, `use_go` dispatcher,
+      cross-validation tests.
 
 ### truncnorm positivity fix (2026-05-29, `fix_truncnorm_positivity` → `main`)
 
@@ -263,8 +84,10 @@ Priority order, highest first.
       Main-lineage library version 0.9.5 → 0.9.6 (subsumed by `1.1.0.dev0` on
       this branch). Regression guard: `TestSamplePositiveNormal`. *Surfaced by*
       the PrEP M2 Python↔Go agreement test; pre-existing since the original code.
-      **PrEP (`prep.py`) has the same two sites — still to fix here, using the
-      now-merged `_sample_positive_normal` helper.**
+      **PrEP (`prep.py`) had the same two sites — fixed in the merge commit
+      (`31118a6`) using the merged `_sample_positive_normal` helper (+ `_vl_postbt`
+      restructured so the growth exponential is only evaluated for `t ≤ tcrit`,
+      avoiding a discarded overflow now that small `doubling_time` is sampleable).**
 
 ### Test runner: marker-based sandbox filter + dedup + thread tuning (2026-05-29, `feature_prep_model`, commit 01226b8)
 
@@ -275,12 +98,9 @@ Priority order, highest first.
       file matched "Bootstrap") and **leaked** 6 `ProcessPoolExecutor` tests
       (`test_prep_k_distributions.py::TestPrepBsKDistributions`) that then failed
       in the sandbox. Replaced with an explicit `@pytest.mark.multiprocessing`
-      marker on the 69 pool tests (10 class-level + method-level on mixed
-      classes), registered in `pyproject.toml`; `fast` now uses
-      `-m "not multiprocessing"`. Deterministic partition: **159 safe / 69 pool /
-      228 total**; the safe set now includes `TestPrepIntegrationMethod` (5) and
-      `TestIntegrationMethod` (8). `bash scripts/run_tests.sh fast` is green in
-      the sandbox (Go PASSED, Python 159 passed / 69 deselected, 0 PermissionError).
+      marker on the pool tests, registered in `pyproject.toml`; `fast` now uses
+      `-m "not multiprocessing"`. (Backported to `main` in commits 64a0910/6ba5668
+      + dedup/threads in 8483702, so the merge was conflict-free on the test files.)
 - [x] **Deduplicated within-file test names.** Renamed the ~20 colliding
       method occurrences across parallel backend/dist classes to be globally
       unique (e.g. `test_sanity_checks` → `…_python` / `…_go`; `test_lnmix` →
@@ -311,41 +131,26 @@ Priority order, highest first.
       - production (α=50.49434, β=1.15062): GL 3.09185 vs quad 3.09187 → **no
         production shift** (rel 6e-6).
       5 new sandbox-safe tests in `TestPrepIntegrationMethod`
-      (`tests/test_prep_bootstrap.py`); also removed a pre-existing unused
-      `import math` there. AGENTS.md public-API note added (and
-      `risk_days_prep_bs` listed). No version bump (already `1.1.0.dev0`; no Go
-      change — Go already uses GL). (At the time of this fix Python↔Go agreed to
-      ~1e-5 for PrEP because Python still used grid `tcrit`; the subsequent L2/L4
-      analytic-`tcrit` change tightened that to machine precision.) *Files:*
-      `residualrisk/prep.py`,
-      `tests/test_prep_bootstrap.py`, `AGENTS.md`. *Verified in-sandbox:* 5 new +
-      8 baseline integration tests pass, ruff clean, Go tests pass; the 69
-      full-suite failures are all the known `ProcessPoolExecutor` SemLock
-      `PermissionError` (run `pytest` outside the sandbox to confirm those).
+      (`tests/test_prep_bootstrap.py`). AGENTS.md public-API note added (and
+      `risk_days_prep_bs` listed).
 
-### Baseline integration robustness (merged from `main` 2026-05-28)
+### Baseline integration robustness (`fix_integration_quadrature` → `main`, merged 2026-05-28)
 
-- [x] **Integration robustness (`fix_integration_quadrature` → `main` → merged into `feature_prep_model`).**
-      Baseline `_risk_days` now defaults to a fixed 1000-point Gauss-Legendre
-      rule (`integration_method="gauss-legendre"`), matching the Go backend to
-      machine precision; `integration_method="quad"` (scipy adaptive
-      Gauss-Kronrod) remains selectable on the Python path for reproducing
-      prior analyses (`use_go=True` + `quad` raises `ValueError`). Threaded
-      through `_risk_days`, `_risk_days_bs_python`, `risk_days_bs`. Added an
-      overflow guard in `_concentration` (caps `t/doubling_time` at 700) so the
-      GL rule, which always samples near the upper limit, can't raise
-      `OverflowError` at small `doubling_time`. Corrected the misleading
-      "adaptive quad" comment in `go/riskdays/integration.go`. 8 new
-      sandbox-safe tests in `TestIntegrationMethod`. *Context:* scipy adaptive
-      `quad` silently returns ~0 on **compact-support** integrands when its
-      initial Gauss-Kronrod nodes miss the active window; the baseline integrand
-      has noncompact (exponential-tail) support so quad was actually robust
-      there — GL was adopted for Python↔Go parity and future-proofing. **The
-      PrEP integrand HAS compact support (eclipse + serology cutoffs) and is
-      where quad genuinely fails → applying the same GL default to
-      `_risk_days_prep` is the remaining open item on this branch (see Open).**
-      *NOTE:* the `ProcessPoolExecutor` bootstrap tests can't run in the sandbox
-      (SemLock `PermissionError`); run `pytest` outside the sandbox to confirm.
+- [x] **Integration robustness.** Baseline `_risk_days` now defaults to a fixed
+      1000-point Gauss-Legendre rule (`integration_method="gauss-legendre"`),
+      matching the Go backend to machine precision; `integration_method="quad"`
+      (scipy adaptive Gauss-Kronrod) remains selectable on the Python path for
+      reproducing prior analyses (`use_go=True` + `quad` raises `ValueError`).
+      Threaded through `_risk_days`, `_risk_days_bs_python`, `risk_days_bs`. Added
+      an overflow guard in `_concentration` (caps `t/doubling_time` at 700).
+      Corrected the misleading "adaptive quad" comment in
+      `go/riskdays/integration.go`. 8 new sandbox-safe tests in
+      `TestIntegrationMethod`. *Context:* scipy adaptive `quad` silently returns
+      ~0 on **compact-support** integrands when its initial Gauss-Kronrod nodes
+      miss the active window; the baseline integrand has noncompact
+      (exponential-tail) support so quad was robust there — GL was adopted for
+      Python↔Go parity and future-proofing. (The PrEP integrand does have compact
+      support → handled by the PrEP integrator fix above.)
 
 ### PrEP model
 

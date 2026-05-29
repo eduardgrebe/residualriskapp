@@ -28,13 +28,13 @@ from scipy.integrate import quad
 
 from .core import (
     _integrate_gauss_legendre,
+    _kde_mode_log,
     _prob_infectious_copies,
     _prob_neg_retest,
     _prob_pos_init,
     _sample_k,
     _sample_positive_normal,
     get_cpu_core_count,
-    mode_rounded,
 )
 
 
@@ -482,7 +482,10 @@ def risk_days_prep_bs(
     elif point_estimate == "mean":
         rd_pe = statistics.mean(rdests)
     elif point_estimate == "mode":
-        rd_pe = mode_rounded(rdests, precision=mode_precision)
+        # KDE-log mode — matches Go's KDEModeLog and the baseline Python path
+        # (_risk_days_bs_python). Accurate but slow. mode_precision is unused
+        # here (kept for API / Go-bridge compatibility), as in the baseline.
+        rd_pe = _kde_mode_log(rdests, n_grid=1_000_000, cap=None)
     else:
         rd_pe = None
 
