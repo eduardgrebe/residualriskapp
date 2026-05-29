@@ -587,6 +587,21 @@ class TestPrepIntegrationMethod(unittest.TestCase):
                 integration_method="quad",
             )
 
+    def test_scalar_a_exceeds_offset_raises(self):
+        # a > offset would drive the plateau viral load negative; rejected up
+        # front (before the pool, so sandbox-safe).
+        kw = {**PREP_BS_KWARGS, "a": 1.5, "offset": 1.0,
+              "k_invgamma_alpha": 2.0, "k_invgamma_beta": 0.002019}
+        with self.assertRaises(ValueError):
+            risk_days_prep_bs(**kw)
+
+    def test_a_dist_upper_exceeds_offset_raises(self):
+        # Likewise for the upper bound of the sampling range.
+        kw = {**PREP_BS_KWARGS, "offset": 1.0, "a_dist_uniform": (0.5, 1.2),
+              "k_invgamma_alpha": 2.0, "k_invgamma_beta": 0.002019}
+        with self.assertRaises(ValueError):
+            risk_days_prep_bs(**kw)
+
 
 if __name__ == "__main__":
     unittest.main()

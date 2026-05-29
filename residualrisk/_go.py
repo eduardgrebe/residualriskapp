@@ -449,6 +449,8 @@ def risk_days_prep_bs_go(
     a=0.7,
     b=0.6,
     offset=1,
+    a_dist_uniform=None,
+    b_dist_uniform=None,
     ser_min=28.7,
     ser_max=250,
     ser_alpha=50.49434,
@@ -535,6 +537,12 @@ def risk_days_prep_bs_go(
         "ser_alpha": ser_alpha,
         "ser_beta": ser_beta,
     }
+    # Optional uniform ranges for the sinusoidal params; omitted → Go treats
+    # them as fixed at a / b (its [0,0] sentinel).
+    if a_dist_uniform is not None:
+        input_data["a_dist_uniform"] = list(a_dist_uniform)
+    if b_dist_uniform is not None:
+        input_data["b_dist_uniform"] = list(b_dist_uniform)
 
     # Add k distribution parameters (same logic as baseline wrapper)
     if k_posterior_sample is not None:
@@ -665,6 +673,8 @@ def risk_days_prep_bs_go(
                 "doubling_time":     arrays[col_idx["doubling_time"]],
                 "set_point":         arrays[col_idx["set_point"]],
                 "eclipse":           arrays[col_idx["eclipse"]],
+                "a":                 arrays[col_idx["a"]],
+                "b":                 arrays[col_idx["b"]],
                 "lod50":             arrays[col_idx["lod50"]],
                 "volume_transfused": arrays[col_idx["volume_transfused"]],
                 "iwp":               arrays[col_idx["iwp"]],
@@ -676,8 +686,6 @@ def risk_days_prep_bs_go(
                 (pl.col("lod50") * lod95_lod50_ratio).alias("lod95"),
                 pl.lit(retests).alias("retests"),
                 pl.lit(z).alias("z"),
-                pl.lit(a).alias("a"),
-                pl.lit(b).alias("b"),
                 pl.lit(offset).alias("offset"),
                 pl.lit(ser_min).alias("ser_min"),
                 pl.lit(ser_max).alias("ser_max"),

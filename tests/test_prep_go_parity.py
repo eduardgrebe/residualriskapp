@@ -127,6 +127,28 @@ class TestPrepGoParity(unittest.TestCase):
         self.assertGreater(rd_pe, 0)
         self.assertEqual(len(rdests), 100)
 
+    def test_go_prep_fixed_ab_default(self):
+        """Without ranges, Go holds the sinusoidal a and b fixed at the scalars."""
+        _, _, _, _, sim_df = risk_days_prep_bs_go(**{**COMMON_KWARGS, "n_bs": 100})
+        self.assertEqual(sim_df["a"].n_unique(), 1)
+        self.assertEqual(sim_df["b"].n_unique(), 1)
+        self.assertAlmostEqual(sim_df["a"][0], COMMON_KWARGS["a"])
+        self.assertAlmostEqual(sim_df["b"][0], COMMON_KWARGS["b"])
+
+    def test_go_prep_varied_ab(self):
+        """With ranges, Go samples a and b uniformly per iteration; sim_df
+        carries the real per-iteration values, within range and a <= offset."""
+        kw = {**COMMON_KWARGS, "n_bs": 300,
+              "a_dist_uniform": (0.5, 0.9), "b_dist_uniform": (0.4, 0.8)}
+        _, _, _, _, sim_df = risk_days_prep_bs_go(**kw)
+        self.assertGreater(sim_df["a"].n_unique(), 1)
+        self.assertGreater(sim_df["b"].n_unique(), 1)
+        self.assertGreaterEqual(sim_df["a"].min(), 0.5)
+        self.assertLessEqual(sim_df["a"].max(), 0.9)
+        self.assertGreaterEqual(sim_df["b"].min(), 0.4)
+        self.assertLessEqual(sim_df["b"].max(), 0.8)
+        self.assertLessEqual(sim_df["a"].max(), COMMON_KWARGS["offset"])
+
 
 @pytest.mark.multiprocessing
 @unittest.skipIf(find_go_binary() is None, "Go binary not available")
@@ -178,6 +200,35 @@ class TestPrepPythonGoAgreement(unittest.TestCase):
                 self.py[1][bound], self.go[1][bound],
                 delta=abs(self.go[1][bound]) * 0.25,
             )
+
+
+@pytest.mark.multiprocessing
+@unittest.skipIf(find_go_binary() is None, "Go binary not available")
+class TestPrepPythonGoAgreementVariedAB(TestPrepPythonGoAgreement):
+    """Same Python↔Go cross-validation as the parent, but with the sinusoidal
+    amplitude (a) and frequency (b) *varied* uniformly — confirming the two
+    backends sample and integrate the oscillation parameters equivalently.
+
+    Inherits the parent's three checks. The primary-parameters PE test is
+    unaffected (the PE uses the fixed scalar a/b, not the ranges), so it still
+    agrees to ~1e-9. At n_bs=2000 the varied-a/b distributional agreement is
+    median ~1.4% / CrI bounds ≲12%, well within the inherited 20%/25% bounds.
+    """
+
+    A_DIST = (0.5, 0.9)
+    B_DIST = (0.4, 0.8)
+
+    @classmethod
+    def setUpClass(cls):
+        kwargs = {
+            **COMMON_KWARGS,
+            "point_estimate": "primary parameters",
+            "n_bs": cls.N_BS,
+            "a_dist_uniform": cls.A_DIST,
+            "b_dist_uniform": cls.B_DIST,
+        }
+        cls.py = risk_days_prep_bs(**kwargs, use_go=False)
+        cls.go = risk_days_prep_bs(**kwargs, use_go=True)
 
 
 if __name__ == "__main__":

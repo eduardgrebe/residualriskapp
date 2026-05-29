@@ -755,6 +755,39 @@ if include_prep_oral or include_prep_inj:
             help="Vertical offset of sinusoidal oscillation (multiplied by set point).",
         )
 
+        prep_vary_sin = col2.checkbox(
+            "Vary sinusoidal oscillation parameters (a, b)",
+            value=False,
+            help="When enabled, the amplitude (a) and frequency (b) are sampled "
+            "uniformly across bootstrap iterations instead of held fixed at the "
+            "values above. The offset is always held fixed.",
+        )
+        if prep_vary_sin:
+            _a_max = float(prep_offset)
+            prep_a_dist_uniform = col2.slider(
+                "Amplitude (a) range",
+                min_value=0.0,
+                max_value=_a_max,
+                value=(min(0.5, _a_max), min(0.9, _a_max)),
+                step=0.05,
+                format="%.2f",
+                help="Uniform sampling range for the amplitude a. The upper bound "
+                "is capped at the offset — a > offset would drive the plateau "
+                "viral load negative.",
+            )
+            prep_b_dist_uniform = col2.slider(
+                "Frequency (b) range",
+                min_value=0.0,
+                max_value=5.0,
+                value=(0.4, 0.8),
+                step=0.05,
+                format="%.2f",
+                help="Uniform sampling range for the frequency b.",
+            )
+        else:
+            prep_a_dist_uniform = None
+            prep_b_dist_uniform = None
+
 if include_prep_oral:
     with prep_oral_container:
         col1, col2 = st.columns(2)
@@ -1101,6 +1134,8 @@ if st.sidebar.button(button_label):
                 a=prep_a,
                 b=prep_b,
                 offset=prep_offset,
+                a_dist_uniform=prep_a_dist_uniform,
+                b_dist_uniform=prep_b_dist_uniform,
                 ser_min=seroconversion_min_oral,
                 ser_max=seroconversion_max_oral,
                 ser_alpha=seroconversion_weibull_alpha_oral,
@@ -1155,6 +1190,8 @@ if st.sidebar.button(button_label):
                 a=prep_a,
                 b=prep_b,
                 offset=prep_offset,
+                a_dist_uniform=prep_a_dist_uniform,
+                b_dist_uniform=prep_b_dist_uniform,
                 ser_min=seroconversion_min_inj,
                 ser_max=seroconversion_max_inj,
                 ser_alpha=seroconversion_weibull_alpha_inj,

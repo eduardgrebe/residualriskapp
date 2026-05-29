@@ -11,15 +11,14 @@ L1, L2, L4, L5), the integration-robustness / truncnorm-positivity /
 analytic-`tcrit` work, and the marker-based test runner — is **committed**.
 `bash scripts/run_tests.sh fast` is robust (marker-based) on both branches.
 
-Two items remain before the PrEP release, both **scientific decisions yours to
-drive**. (Agents can't commit/push — provide exact git commands.)
+**UNCOMMITTED (this session):** optional uniform uncertainty for the sinusoidal
+`a`/`b` — resolves the `a`/`b`/`offset` design decision (see Completed) — plus
+its tests and docs.
+
+One item remains before the PrEP release, a **scientific task yours to drive**.
+(Agents can't commit/push — provide exact git commands.)
 
 ### Remaining before the PrEP release
-
-- [ ] **Design decision: bootstrapping `a`, `b`, `offset`.** The sinusoidal
-      set-point oscillation parameters are currently fixed across all bootstrap
-      iterations. Decide whether to add uncertainty distributions (e.g. uniform
-      ranges) or keep them fixed. Scientific decision.
 
 - [ ] **End-to-end validation of PrEP + baseline results against prior analyses.**
       Run the tool with input parameters from previous published baseline analyses
@@ -30,13 +29,38 @@ drive**. (Agents can't commit/push — provide exact git commands.)
       (baseline) / ≈25% (PrEP); plus the k-distribution choice, GL vs quad, and
       analytic vs grid `tcrit`. Applies to both Python and Go. Unit/integration
       tests pass, but scientific validity requires reproducing known results.
-      *Also pending:* a full `bash scripts/run_tests.sh` run **outside the
-      sandbox** to confirm the `ProcessPoolExecutor` tests (incl. M2) are green —
-      so far only verified via in-sandbox serial replication.
+      The full `bash scripts/run_tests.sh` suite (incl. the `ProcessPoolExecutor`
+      tests — M2 and the varied-`a`/`b` `TestPrepPythonGoAgreementVariedAB`)
+      passes **outside the sandbox** as of 2026-05-29; what remains here is the
+      *scientific* reproduction of prior published results, not test-green.
 
 ---
 
 ## Completed
+
+### PrEP sinusoidal `a`/`b` uncertainty (2026-05-29) — UNCOMMITTED
+
+- [x] **Optional uniform uncertainty for the sinusoidal `a` (amplitude) and `b`
+      (frequency).** Resolves the `a`/`b`/`offset` bootstrapping design decision:
+      `a` and `b` are sampled `Uniform(lo, hi)` per bootstrap iteration when
+      `a_dist_uniform` / `b_dist_uniform` are given; default `None` = fixed at the
+      scalar (back-compatible, draws no RNG → reproducible). `offset` stays fixed.
+      `a` and the upper bound of `a_dist_uniform` must be `<= offset` (enforced in
+      Python and Go `Validate()`, capped in the UI) since `a > offset` drives the
+      plateau viral load negative. Confirmed against the analysis repo
+      (`residualrisk_analysis` `rr_prep*.py`) that prior published analyses always
+      held `a`/`b`/`offset` fixed and varied `set_point`/`eclipse` uniform — no
+      prior template for varying `a`/`b`. Six layers wired: `prep.py`,
+      `go/riskdays/models.go`, `go/riskdays/riskdays.go`, `go/main.go`
+      (per-iteration `a`/`b` emitted as binary output columns → correct Go-path
+      `sim_df`), `residualrisk/_go.py`, `app.py` ("Vary sinusoidal oscillation
+      parameters (a, b)" checkbox, off by default, ranges a∈(0.5,0.9) / b∈(0.4,0.8)).
+      Tests: Go-path fixed-vs-varied `sim_df` (`test_go_prep_fixed_ab_default`,
+      `test_go_prep_varied_ab`), `a > offset` validation (`test_scalar_a_exceeds_offset_raises`,
+      `test_a_dist_upper_exceeds_offset_raises`), and `TestPrepPythonGoAgreementVariedAB`
+      (Python↔Go equivalency with `a`/`b` varied — median ~1.4%, CrI bounds ≲12% at
+      n_bs=2000; primary-parameters PE still agrees to ~1e-9 since the PE uses the
+      scalar `a`/`b`). Docs updated in `AGENTS.md`.
 
 ### Code-review findings (2026-05-26 review) — all resolved
 

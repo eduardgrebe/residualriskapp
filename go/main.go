@@ -208,13 +208,15 @@ func main() {
 		var columns []string
 		var dataColumns [][]float64
 		if input.PrepMode {
-			columns = []string{"iwp", "k", "doubling_time", "set_point", "eclipse", "lod50", "volume_transfused"}
+			columns = []string{"iwp", "k", "doubling_time", "set_point", "eclipse", "a", "b", "lod50", "volume_transfused"}
 			dataColumns = [][]float64{
 				output.Simulations,
 				output.Ks,
 				output.DoublingTimes,
 				output.SetPoints,
 				output.Eclipses,
+				output.As,
+				output.Bs,
 				output.LOD50s,
 				output.VolumesTransfused,
 			}

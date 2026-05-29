@@ -230,6 +230,28 @@ func riskDaysBSPrep(input RiskDaysInput, rng *RandomGenerator, ks, doublingTimes
 		}
 	}
 
+	// Sinusoidal oscillation params: fixed at the scalar A/B unless a uniform
+	// range is given ([0,0] = fixed). offset is never varied.
+	var aVals []float64
+	if input.ADistUniform[0] != 0 || input.ADistUniform[1] != 0 {
+		aVals = rng.GenerateUniform(input.ADistUniform[0], input.ADistUniform[1], input.NBS)
+	} else {
+		aVals = make([]float64, input.NBS)
+		for i := range aVals {
+			aVals[i] = input.A
+		}
+	}
+
+	var bVals []float64
+	if input.BDistUniform[0] != 0 || input.BDistUniform[1] != 0 {
+		bVals = rng.GenerateUniform(input.BDistUniform[0], input.BDistUniform[1], input.NBS)
+	} else {
+		bVals = make([]float64, input.NBS)
+		for i := range bVals {
+			bVals[i] = input.B
+		}
+	}
+
 	// Build PrEP args
 	argsList := make([]PrepInnerParams, input.NBS)
 	for i := 0; i < input.NBS; i++ {
@@ -239,8 +261,8 @@ func riskDaysBSPrep(input RiskDaysInput, rng *RandomGenerator, ks, doublingTimes
 			DoublingTime:     doublingTimes[i],
 			SetPoint:         setPoints[i],
 			Eclipse:          eclipses[i],
-			A:                input.A,
-			B:                input.B,
+			A:                aVals[i],
+			B:                bVals[i],
 			Offset:           input.Offset,
 			VolumeTransfused: volumesTransfused[i],
 			K:                ks[i],
@@ -366,6 +388,8 @@ func riskDaysBSPrep(input RiskDaysInput, rng *RandomGenerator, ks, doublingTimes
 		out.VolumesTransfused = volumesTransfused
 		out.SetPoints = setPoints
 		out.Eclipses = eclipses
+		out.As = aVals
+		out.Bs = bVals
 	}
 	return out, nil
 }

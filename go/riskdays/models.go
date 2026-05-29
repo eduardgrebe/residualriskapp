@@ -77,6 +77,8 @@ type RiskDaysInput struct {
 	A                    float64 `json:"a"`                       // sinusoidal amplitude
 	B                    float64 `json:"b"`                       // sinusoidal frequency
 	Offset               float64 `json:"offset"`                  // sinusoidal offset
+	ADistUniform         [2]float64 `json:"a_dist_uniform"`        // [min, max] for uniform sampling; [0,0] = fixed at A
+	BDistUniform         [2]float64 `json:"b_dist_uniform"`        // [min, max] for uniform sampling; [0,0] = fixed at B
 	SerMin               float64 `json:"ser_min"`                 // serology window start (days)
 	SerMax               float64 `json:"ser_max"`                 // serology window end (days)
 	SerAlpha             float64 `json:"ser_alpha"`               // Weibull scale parameter
@@ -101,6 +103,8 @@ type RiskDaysOutput struct {
 	// PrEP-specific per-iteration arrays (PrepMode + ReturnParams)
 	SetPoints []float64 `json:"-"`
 	Eclipses  []float64 `json:"-"`
+	As        []float64 `json:"-"`
+	Bs        []float64 `json:"-"`
 }
 
 // ProgressMessage represents a progress update during calculation
@@ -231,6 +235,14 @@ func (input *RiskDaysInput) Validate() error {
 		}
 		if input.SerBeta <= 0 {
 			return fmt.Errorf("ser_beta must be positive in PrEP mode")
+		}
+		// The sinusoidal amplitude must not exceed the offset, or the plateau
+		// viral load would go negative (clamped to 0 in VLPostBT).
+		if input.A > input.Offset {
+			return fmt.Errorf("a (%v) must be <= offset (%v) in PrEP mode", input.A, input.Offset)
+		}
+		if input.ADistUniform[1] > input.Offset {
+			return fmt.Errorf("a_dist_uniform upper bound (%v) must be <= offset (%v) in PrEP mode", input.ADistUniform[1], input.Offset)
 		}
 	}
 

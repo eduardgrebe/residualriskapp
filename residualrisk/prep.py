@@ -39,6 +39,31 @@ from .core import (
 
 
 def _sin_varied(t, a, b, offset):
+    """Sinusoidal oscillation factor for the post-breakthrough viral-load plateau.
+
+    Returns ``offset + a * sin(b * t)``. In the PrEP breakthrough model the
+    plateau viral load is ``set_point * _sin_varied(t - tcrit, a, b, offset)``
+    (see :func:`_vl_postbt`), so this factor scales the set-point: the plateau
+    oscillates between ``(offset - a)`` and ``(offset + a)`` times ``set_point``.
+
+    Parameters
+    ----------
+    t : float or array
+        Time **since the plateau onset** ``tcrit`` (days); callers pass
+        ``t - tcrit``.
+    a : float
+        Oscillation amplitude, as a fraction of ``set_point``.
+    b : float
+        Angular frequency (radians/day); the oscillation period is ``2*pi / b``.
+    offset : float
+        Central level of the oscillation, as a multiple of ``set_point``
+        (``offset = 1`` centres the plateau on ``set_point``).
+
+    Notes
+    -----
+    If ``a > offset`` the factor goes negative on its downswings, which would
+    imply a negative viral load; :func:`_vl_postbt` clamps the result to ``0``.
+    """
     return offset + a * np.sin(b * t)
 
 
@@ -297,6 +322,8 @@ def risk_days_prep_bs(
     a=0.7,
     b=0.6,
     offset=1,
+    a_dist_uniform=None,
+    b_dist_uniform=None,
     ser_min=28.7,
     ser_max=250,
     ser_alpha=50.49434,
@@ -326,6 +353,21 @@ def risk_days_prep_bs(
     use_go=False,
     integration_method="gauss-legendre",
 ):
+    """Bootstrap the PrEP-breakthrough risk-day-equivalents (RDE) distribution.
+
+    Each iteration samples ``k``, ``doubling_time`` / ``lod50`` (positive
+    truncated normal), and ``set_point`` / ``eclipse`` / ``volume_transfused``
+    (uniform over their ``*_dist_uniform`` / ``*_range``). The sinusoidal
+    set-point oscillation parameters ``a`` and ``b`` are held fixed at their
+    scalar values unless ``a_dist_uniform`` / ``b_dist_uniform`` are given, in
+    which case they are sampled ``Uniform(lo, hi)`` per iteration (``None`` =
+    fixed, the default — back-compatible). ``offset`` is always fixed. ``a``
+    (and the upper bound of ``a_dist_uniform``) must be ``<= offset``, or the
+    plateau viral load would go negative.
+
+    Returns ``(rd_pe, rd_cri, rd_range, rdests, sim_df)``; ``sim_df`` is ``None``
+    unless ``return_sim_df=True``.
+    """
     if use_go and integration_method != "gauss-legendre":
         raise ValueError(
             "Go acceleration only implements 'gauss-legendre' integration; "
@@ -353,6 +395,8 @@ def risk_days_prep_bs(
                 a=a,
                 b=b,
                 offset=offset,
+                a_dist_uniform=a_dist_uniform,
+                b_dist_uniform=b_dist_uniform,
                 ser_min=ser_min,
                 ser_max=ser_max,
                 ser_alpha=ser_alpha,
@@ -385,6 +429,14 @@ def risk_days_prep_bs(
 
     if n_bs <= 0:
         raise ValueError("n_bs must be greater than zero to perform simulations.")
+    # The sinusoidal amplitude must not exceed the offset, or the plateau viral
+    # load would go negative (it would otherwise be clamped to 0 in _vl_postbt).
+    if a > offset:
+        raise ValueError(f"a ({a}) must be <= offset ({offset}).")
+    if a_dist_uniform is not None and a_dist_uniform[1] > offset:
+        raise ValueError(
+            f"a_dist_uniform upper bound ({a_dist_uniform[1]}) must be <= offset ({offset})."
+        )
 
     np.random.seed(seed)
     ks = _sample_k(
@@ -408,11 +460,23 @@ def risk_days_prep_bs(
     volumes_transfused = np.random.uniform(
         volume_transfused_range[0], volume_transfused_range[1], n_bs
     )
+    # Sinusoidal oscillation parameters: fixed at the scalar value unless a
+    # uniform range is given. np.full draws no RNG, so reproducibility of the
+    # other parameters is unchanged when these are not varied. offset is never
+    # varied; a <= offset is enforced above.
+    a_s = (
+        np.random.uniform(a_dist_uniform[0], a_dist_uniform[1], n_bs)
+        if a_dist_uniform is not None else np.full(n_bs, a)
+    )
+    b_s = (
+        np.random.uniform(b_dist_uniform[0], b_dist_uniform[1], n_bs)
+        if b_dist_uniform is not None else np.full(n_bs, b)
+    )
 
     args_list = [
         (
             copies_per_virion, C0, doubling_times[i], set_points[i], eclipses[i],
-            a, b, offset, volumes_transfused[i], ks[i], pool_size, lod50s[i],
+            a_s[i], b_s[i], offset, volumes_transfused[i], ks[i], pool_size, lod50s[i],
             lod95_lod50_ratio, retests, ser_min, ser_max, ser_alpha, ser_beta, z,
             (-100, 500),
         )
