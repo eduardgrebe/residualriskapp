@@ -221,6 +221,7 @@ class TestLnMixTheoreticalStatistics:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.multiprocessing
 class TestLnMixBootstrapKSamples:
     """
     Verify that the Python bootstrap backend samples k from the correct lognormal
@@ -266,6 +267,7 @@ class TestLnMixBootstrapKSamples:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.multiprocessing
 class TestPythonGoLnMixAgreement:
     """
     Verify that the Python and Go backends produce statistically indistinguishable

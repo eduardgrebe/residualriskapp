@@ -210,6 +210,7 @@ class TestInvGammaTheoreticalStatistics:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.multiprocessing
 class TestInvGammaBootstrapKSamples:
     """
     Verify that the Python bootstrap backend samples k from the correct InvGamma
@@ -281,6 +282,7 @@ class TestInvGammaBootstrapKSamples:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.multiprocessing
 class TestPythonGoInvGammaAgreement:
     """
     Verify that the Python and Go backends produce statistically indistinguishable
