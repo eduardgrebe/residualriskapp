@@ -1,5 +1,41 @@
 # TODO
 
+## In progress
+
+### Technical documentation — `docs/theory.md` (base mechanistic + lookback models)
+
+Scientific-style technical documentation for the **base** model (on `main`; PrEP to
+follow on its branch). Sources: the 2020 notebooks (`residualrisk_analysis/notebooks/
+Residual Risk.ipynb`, `IWP from Operational Data.ipynb`) and the published methodology
+(`literature/Grebe et al. 2020 Blood RR Appendix.pdf`) — reuse that text where possible,
+updated for the improvements now in the package/Go (GL integration default,
+truncnorm-positivity fix, k input-distribution options, KDE-log mode, lookback
+Jeffreys-posterior samples, Go acceleration).
+
+**Initial draft complete (2026-05-29)** — `docs/theory.md` (§§1–9) plus three
+generated figures (`docs/figures/`, with `make_theory_figures.py` generator).
+Decisions used: GitHub-flavoured `$…$`/`$$…$$` KaTeX (renders in Streamlit too);
+comprehensive methods chapter (§4); k input distributions documented in full (§5.2);
+figures generated. **Awaiting EG review.**
+
+- [x] Confirm format/scope decisions (rendering, detail depth, k-dist in full, figures)
+- [x] §1 Introduction & scope · §2 Notation table
+- [x] §3 Mechanistic IWP model (viral dynamics; dose-response; NAT non-detection; IWP
+      integral; worst-case note)
+- [x] §4 Numerical methods (1000-pt Gauss-Legendre vs quad; limits/overflow; Go + RNG
+      independence)
+- [x] §5 Uncertainty analysis (truncnorm-positivity fix; k input distributions in full;
+      point-estimate options incl. KDE-log mode; credible intervals)
+- [x] §6 IWP → residual risk (incidence × IWP / 365.25; 1-in-x; incidence uncertainty)
+- [x] §7 Lookback / operational-data model (Poisson/χ² estimator + exact CI;
+      Jeffreys-Gamma posterior; CI vs CrI distinction)
+- [x] §8 Default parameters & worked example · §9 References
+- [x] Three explanatory figures (dose-response; IWP construction; k input distributions)
+- [ ] **EG review pass** (verify equations, prose, citations; confirm worked-example
+      numbers; decide whether to wire `docs/theory.md` into the Streamlit app)
+- [ ] Verify LaTeX renders in the Streamlit app's markdown (KaTeX) once wired in
+- [ ] _(later)_ PrEP model documentation — on the PrEP branch
+
 ## Completed
 
 - [x] **truncnorm positivity fix (2026-05-29, `fix_truncnorm_positivity`).**
