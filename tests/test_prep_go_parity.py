@@ -136,9 +136,15 @@ class TestPrepPythonGoAgreement(unittest.TestCase):
     which returns the deterministic PE plus the full per-iteration sample.
     """
 
+    # n_bs is bumped above COMMON_KWARGS's 500: the k prior is InvGamma(α=2)
+    # (infinite variance), so the upper-CrI (97.5th pct) is too noisy to compare
+    # at n_bs=500 (Python-vs-Go ~29%). At n_bs=2000 the agreement is stable
+    # (median ~1%, CrI bounds ≤~10%), well within the tolerances below.
+    N_BS = 2000
+
     @classmethod
     def setUpClass(cls):
-        kwargs = {**COMMON_KWARGS, "point_estimate": "primary parameters"}
+        kwargs = {**COMMON_KWARGS, "point_estimate": "primary parameters", "n_bs": cls.N_BS}
         cls.py = risk_days_prep_bs(**kwargs, use_go=False)
         cls.go = risk_days_prep_bs(**kwargs, use_go=True)
 

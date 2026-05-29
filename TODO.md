@@ -249,6 +249,23 @@ Priority order, highest first.
 
 ## Completed
 
+### truncnorm positivity fix (2026-05-29, `fix_truncnorm_positivity` → `main`)
+
+- [x] **`truncnorm.rvs(0, np.inf, mean, sd)` truncated at the mean, not 0.**
+      scipy's `a`/`b` bounds are in *standard deviations from* `loc`, so `a=0`
+      maps to the lower bound `loc` — discarding the lower half of the
+      distribution and inflating sampled means by ≈`0.8*sd`. Affected
+      `_risk_days_bs_python` (`doubling_time`, `lod50`) and `residual_risk_rd`
+      (`incidence`). Fixed via a shared `_sample_positive_normal(mean, sd, n)`
+      helper (`a = -mean/sd`, truncating at 0, matching Go's
+      `GenerateTruncatedNormal`). Baseline RDE median **−8.3%** (1.355 → 1.243),
+      now matching Go to **0.6%**; prior results were biased conservative (high).
+      Main-lineage library version 0.9.5 → 0.9.6 (subsumed by `1.1.0.dev0` on
+      this branch). Regression guard: `TestSamplePositiveNormal`. *Surfaced by*
+      the PrEP M2 Python↔Go agreement test; pre-existing since the original code.
+      **PrEP (`prep.py`) has the same two sites — still to fix here, using the
+      now-merged `_sample_positive_normal` helper.**
+
 ### Test runner: marker-based sandbox filter + dedup + thread tuning (2026-05-29, `feature_prep_model`, commit 01226b8)
 
 - [x] **`scripts/run_tests.sh fast` now reliable.** The old `fast` mode used a

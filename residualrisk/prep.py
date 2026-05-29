@@ -24,7 +24,6 @@ from functools import partial
 
 import numpy as np
 import polars as pl
-import scipy.stats as stats
 from scipy.integrate import quad
 
 from .core import (
@@ -33,6 +32,7 @@ from .core import (
     _prob_neg_retest,
     _prob_pos_init,
     _sample_k,
+    _sample_positive_normal,
     get_cpu_core_count,
     mode_rounded,
 )
@@ -60,12 +60,16 @@ def _find_tcrit(eclipse, C0, doubling_time, set_point):
 
 def _vl_postbt(t, eclipse, C0, doubling_time, set_point, a, b, offset, tcrit):
     if t < eclipse:
-        concentration = 0.0
+        vl = 0.0
+    elif t <= tcrit:
+        # Exponential growth phase. The exponent is bounded here (at t=tcrit it
+        # equals log2(set_point/C0)), so no overflow.
+        vl = C0 * 2 ** ((t - eclipse) / doubling_time)
     else:
-        concentration = C0 * 2 ** ((t - eclipse) / doubling_time)
-    if t <= tcrit:
-        vl = concentration
-    else:
+        # Oscillating plateau. The exponential is deliberately NOT evaluated in
+        # this branch: for large t with a small (now-sampleable) doubling_time it
+        # would overflow, and the value would only be discarded — cf. the
+        # growth-exponent cap in core._concentration.
         vl = set_point * _sin_varied(t=t - tcrit, a=a, b=b, offset=offset)
     # Modelled viral load can dip below zero when the sinusoidal set-point
     # oscillation amplitude exceeds its offset (a > offset); clamp to a
@@ -397,10 +401,10 @@ def risk_days_prep_bs(
         k_lnmix_mu2=k_lnmix_mu2,
         k_lnmix_sigma2=k_lnmix_sigma2,
     )
-    doubling_times = stats.truncnorm.rvs(0, np.inf, doubling_time, doubling_time_norm_sd, n_bs)
+    doubling_times = _sample_positive_normal(doubling_time, doubling_time_norm_sd, n_bs)
     set_points = np.random.uniform(set_point_dist_uniform[0], set_point_dist_uniform[1], n_bs)
     eclipses = np.random.uniform(eclipse_dist_uniform[0], eclipse_dist_uniform[1], n_bs)
-    lod50s = stats.truncnorm.rvs(0, np.inf, lod50, lod50_sd, n_bs)
+    lod50s = _sample_positive_normal(lod50, lod50_sd, n_bs)
     volumes_transfused = np.random.uniform(
         volume_transfused_range[0], volume_transfused_range[1], n_bs
     )
