@@ -451,6 +451,8 @@ def risk_days_prep_bs_go(
     offset=1,
     a_dist_uniform=None,
     b_dist_uniform=None,
+    drug_effect=1.0,
+    drug_effect_dist_uniform=None,
     ser_min=28.7,
     ser_max=250,
     ser_alpha=50.49434,
@@ -532,6 +534,7 @@ def risk_days_prep_bs_go(
         "a": a,
         "b": b,
         "offset": offset,
+        "drug_effect": drug_effect,
         "ser_min": ser_min,
         "ser_max": ser_max,
         "ser_alpha": ser_alpha,
@@ -543,6 +546,9 @@ def risk_days_prep_bs_go(
         input_data["a_dist_uniform"] = list(a_dist_uniform)
     if b_dist_uniform is not None:
         input_data["b_dist_uniform"] = list(b_dist_uniform)
+    # Omitted → Go treats drug_effect as fixed at the scalar (its [0,0] sentinel).
+    if drug_effect_dist_uniform is not None:
+        input_data["drug_effect_dist_uniform"] = list(drug_effect_dist_uniform)
 
     # Add k distribution parameters (same logic as baseline wrapper)
     if k_posterior_sample is not None:
@@ -675,6 +681,7 @@ def risk_days_prep_bs_go(
                 "eclipse":           arrays[col_idx["eclipse"]],
                 "a":                 arrays[col_idx["a"]],
                 "b":                 arrays[col_idx["b"]],
+                "drug_effect":       arrays[col_idx["drug_effect"]],
                 "lod50":             arrays[col_idx["lod50"]],
                 "volume_transfused": arrays[col_idx["volume_transfused"]],
                 "iwp":               arrays[col_idx["iwp"]],

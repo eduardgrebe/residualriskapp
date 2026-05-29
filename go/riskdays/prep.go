@@ -30,7 +30,8 @@ func SinVaried(t, a, b, offset float64) float64 {
 
 // FindTcrit computes the time at which exponential viral growth first reaches
 // the set-point. This is the analytic solution to:
-//   C0 * 2^((t - eclipse) / doubling_time) = set_point
+//
+//	C0 * 2^((t - eclipse) / doubling_time) = set_point
 //
 // Solving: tcrit = eclipse + doubling_time * log2(set_point / C0)
 //
@@ -61,6 +62,28 @@ func VLPostBT(t, eclipse, C0, doublingTime, setPoint, a, b, offset, tcrit float6
 	return math.Max(0.0, setPoint*SinVaried(t-tcrit, a, b, offset))
 }
 
+// DrugEffectFactor returns the antiretroviral transmissibility-reduction factor
+// at time t — the multiplier applied to the per-time infection probability in
+// ProbInfectiousPrep. drugEffect is a scalar in (0, 1] (1.0 = no reduction).
+//
+// It is currently CONSTANT in t, so it factors straight out of the RDE integral
+// (multiplying here is numerically identical to scaling the final RDE), and the
+// default 1.0 leaves the integrand bit-for-bit unchanged.
+//
+// t is taken deliberately as a placeholder for a future time-varying drug
+// effect: breakthrough infections on long-acting injectable PrEP typically
+// occur as the drug washes out, so the factor should relax toward 1.0 across
+// the window as drug concentration decays. Returning a function of t here (e.g.
+// an exponential wash-out from the last-injection time) is then the only
+// correct placement, since it would no longer factor out of the integral.
+// Corresponds to Python _drug_effect().
+func DrugEffectFactor(t, drugEffect float64) float64 {
+	// Placeholder: constant in t. Replace with a t-dependent expression
+	// (e.g. decaying long-acting drug concentration) to model PrEP wash-out;
+	// expected to matter most for injectable PrEP.
+	return drugEffect
+}
+
 // ProbInfectiousPrep calculates the probability that a transfusion is infectious
 // given PrEP breakthrough viral dynamics.
 // Corresponds to Python _prob_infectious_prep().
@@ -69,7 +92,8 @@ func ProbInfectiousPrep(t float64, params PrepInnerParams) float64 {
 	C := VLPostBT(t, params.Eclipse, params.C0, params.DoublingTime,
 		params.SetPoint, params.A, params.B, params.Offset, tcrit)
 	nCopies := C * float64(params.CopiesPerVirion) * params.VolumeTransfused
-	return ProbInfectiousCopies(nCopies, params.K)
+	// Drug effect is a linear scalar on the realized infection probability.
+	return DrugEffectFactor(t, params.DrugEffect) * ProbInfectiousCopies(nCopies, params.K)
 }
 
 // ProbNondetectionSerology computes the probability that serology (antibody)
@@ -118,7 +142,8 @@ func ProbNondetectionPrep(t float64, params PrepInnerParams) float64 {
 // non-detection probabilities.
 //
 // This is a 3-product integrand (vs 2-product for baseline):
-//   P_infectious × P_NAT_nondetection × P_serology_nondetection
+//
+//	P_infectious × P_NAT_nondetection × P_serology_nondetection
 //
 // Corresponds to Python _prob_infectious_nondetection_prep().
 func ProbInfectiousNondetectionPrep(t float64, params PrepInnerParams) float64 {
@@ -129,9 +154,10 @@ func ProbInfectiousNondetectionPrep(t float64, params PrepInnerParams) float64 {
 	C := VLPostBT(t, params.Eclipse, params.C0, params.DoublingTime,
 		params.SetPoint, params.A, params.B, params.Offset, tcrit)
 
-	// Infectivity
+	// Infectivity (drug effect is a linear scalar on the infection probability;
+	// see DrugEffectFactor — constant in t today, placeholder for wash-out)
 	nCopies := C * float64(params.CopiesPerVirion) * params.VolumeTransfused
-	pInfectious := ProbInfectiousCopies(nCopies, params.K)
+	pInfectious := DrugEffectFactor(t, params.DrugEffect) * ProbInfectiousCopies(nCopies, params.K)
 
 	// NAT non-detection
 	Cc := float64(params.CopiesPerVirion) * C

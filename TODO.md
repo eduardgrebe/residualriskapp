@@ -8,14 +8,16 @@ On `feature_prep_model`; `main` is fully merged in (merge commit `31118a6`),
 working tree clean, all three versions at `1.1.0.dev0`. Everything below the
 line — the PrEP model build-out, all code-review findings (H1, H2, M1, M2, M3,
 L1, L2, L4, L5), the integration-robustness / truncnorm-positivity /
-analytic-`tcrit` work, and the marker-based test runner — is **committed**.
+analytic-`tcrit` work, the marker-based test runner, and the sinusoidal
+`a`/`b` uniform-uncertainty feature (commit `40a6cb2`) — is **committed**.
 `bash scripts/run_tests.sh fast` is robust (marker-based) on both branches.
 
-**UNCOMMITTED (this session):** optional uniform uncertainty for the sinusoidal
-`a`/`b` — resolves the `a`/`b`/`offset` design decision (see Completed) — plus
-its tests and docs.
+**UNCOMMITTED (this session):** the PrEP drug-effect (transmissibility-reduction)
+parameter — full-stack (Python + Go + bridge + sim_df + UI) + tests + docs (see
+Completed). In-sandbox verified (ruff, Go tests, 33 sandbox-safe prep tests, Go
+bridge); the `@multiprocessing` tests need an outside-sandbox run.
 
-One item remains before the PrEP release, a **scientific task yours to drive**.
+One item remains before the PrEP release: the end-to-end scientific validation.
 (Agents can't commit/push — provide exact git commands.)
 
 ### Remaining before the PrEP release
@@ -38,7 +40,36 @@ One item remains before the PrEP release, a **scientific task yours to drive**.
 
 ## Completed
 
-### PrEP sinusoidal `a`/`b` uncertainty (2026-05-29) — UNCOMMITTED
+### PrEP drug-effect (transmissibility reduction) parameter (2026-05-29) — UNCOMMITTED
+
+- [x] **Optional antiretroviral drug-effect (transmissibility-reduction) factor
+      for PrEP.** `drug_effect ∈ (0, 1]` (1.0 = no reduction) — a linear
+      multiplier on the per-time infection probability, applied *inside the
+      integrand* (`_drug_effect` in `prep.py` / `DrugEffectFactor` in `prep.go`),
+      held fixed at the scalar unless `drug_effect_dist_uniform=(lo, hi)` is given
+      (then sampled `Uniform(lo, hi)` per bootstrap iteration). Matches the prior
+      analysis (`rr_prep_v3.py`: `Uniform(0.5, 1.0)`, median 0.75) — but because
+      the factor is constant in `t` it factors out of the RDE integral, so the
+      in-integrand placement is numerically identical to scaling the RDE while
+      being the only correct placement should it ever become time-varying.
+      `_drug_effect` / `DrugEffectFactor` take `t` as a deliberate placeholder for
+      that future time-varying (long-acting-injectable wash-out) extension — see
+      the deferred PK/PD task. Full-stack like the `a`/`b` feature: `prep.py`, Go
+      (`prep.go` / `prep_models.go` / `models.go` / `riskdays.go` / `main.go` +
+      `_go.py` bridge, with a per-iteration `drug_effect` binary column → correct
+      Go-path `sim_df`), and `app.py` (per-scenario point input default 1.0 +
+      bootstrap range slider default (1.0, 1.0); on by default, value 1.0 → no
+      shift). `0 < drug_effect ≤ 1` and the range `⊂ (0, 1]` are enforced in
+      Python and Go `Validate()` and capped in the UI. Default 1.0 leaves results
+      bit-for-bit unchanged (verified: production PrEP RDE 3.09188 = the existing
+      golden value; Python≡Go PE). Tests: direct-integration linearity +
+      validation (`TestPrepIntegrationMethod`), full-bootstrap element-wise
+      scaling + backward-compat + varied range (`TestPrepBsDrugEffect`), Go-path
+      fixed/varied/linear (`TestPrepGoParity`), and
+      `TestPrepPythonGoAgreementDrugEffect` (Python↔Go parity with `drug_effect`
+      varied). Docs in `AGENTS.md`.
+
+### PrEP sinusoidal `a`/`b` uncertainty (2026-05-29, commit `40a6cb2`)
 
 - [x] **Optional uniform uncertainty for the sinusoidal `a` (amplitude) and `b`
       (frequency).** Resolves the `a`/`b`/`offset` bootstrapping design decision:
@@ -211,6 +242,40 @@ If additional distributions are needed beyond InvGamma and LN-mixture, consider
 refactoring from individual kwargs to a general dispatch API:
 `k_distribution` (string) + `k_dist_params` (dict). Not needed for two parametric
 distributions but would be cleaner for N > 3.
+
+### PK/PD-driven drug-concentration modelling for PrEP (longer-term)
+
+A substantial modelling extension that needs careful design — a longer-term
+objective, not an immediate task. Today the drug effect enters only as a
+constant transmissibility-reduction scalar (`_drug_effect` in `prep.py` /
+`DrugEffectFactor` in `prep.go` — a deliberate placeholder that takes `t` but
+currently ignores it). A more faithful model would represent the drug
+concentration itself over time and let the downstream quantities follow from it:
+
+- **Explicit drug-concentration dynamics** for oral and injectable PrEP —
+  fluctuating around a steady state under (sub-optimal) adherence for oral PrEP,
+  and decaying after the last dose for long-acting injectables.
+- **Couple viral load, detectability and transmissibility to concentration.**
+  Theoretically these move *inversely* to drug concentration: as concentration
+  falls the protective effect weakens, so breakthrough viral load rises — which
+  in turn raises both NAT/serology detectability and transmission probability.
+  They should therefore be derived together as functions of concentration rather
+  than set independently. Promoting `_drug_effect` to a genuine function of `t`
+  (e.g. an exponential wash-out from the last-injection time) is the narrow first
+  step; the fuller version drives viral load from concentration as well.
+- **Injectable PrEP is the key motivation.** Breakthrough infections on
+  long-acting injectables typically occur as the drug washes out — precisely the
+  regime a constant factor handles worst. This also surfaces a structural point:
+  the current sigmoidal / oscillating-plateau viral-load model is most
+  appropriate for **sub-optimal-adherence oral PrEP** and less so for
+  **drug-washout injectable PrEP**, so the VL model *structure* itself may need
+  rethinking for the injectable case.
+- **Drug-specific potency.** Agents differ materially (e.g. the more effective
+  lenacapavir vs. cabotegravir), so parameters — and possibly the functional
+  form — should be drug-specific.
+- **Prerequisite:** review the PK/PD literature for the relevant PrEP drugs to
+  ground both the concentration dynamics and the concentration→effect
+  relationships.
 
 ---
 

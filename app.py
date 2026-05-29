@@ -808,6 +808,35 @@ if include_prep_oral:
             step=10,
             help="Uncertainty range for the oPrEP viral load set point (sampled uniformly).",
         )
+        drug_effect_oral = col1.number_input(
+            "Drug effect (transmissibility factor)",
+            min_value=0.05,
+            max_value=1.0,
+            value=1.0,
+            step=0.05,
+            format="%.2f",
+            help=(
+                "Multiplicative transmissibility-reduction factor from antiretroviral "
+                "drug presence in oPrEP breakthrough infection (1.0 = no reduction). "
+                "Used for the primary-parameters point estimate."
+            ),
+        )
+        drug_effect_range_oral = col1.slider(
+            "Drug effect range (bootstrap)",
+            min_value=0.05,
+            max_value=1.0,
+            value=(1.0, 1.0),
+            step=0.05,
+            help=(
+                "Uncertainty range for the oPrEP drug effect, sampled uniformly per "
+                "bootstrap iteration. Leave at (1.0, 1.0) for no reduction; e.g. "
+                "(0.5, 1.0) reproduces the prior analysis."
+            ),
+        )
+        # (1.0, 1.0) → no range; hold fixed at the point value (pass None).
+        prep_drug_effect_dist_oral = (
+            None if drug_effect_range_oral[0] >= 1.0 else drug_effect_range_oral
+        )
 
         seroconversion_min_oral = col2.number_input(
             "Time to seroconversion min (days)",
@@ -863,6 +892,36 @@ if include_prep_inj:
             value=(10, 2500),
             step=10,
             help="Uncertainty range for the iPrEP viral load set point (sampled uniformly).",
+        )
+        drug_effect_inj = col1.number_input(
+            "Drug effect (transmissibility factor)",
+            min_value=0.05,
+            max_value=1.0,
+            value=1.0,
+            step=0.05,
+            format="%.2f",
+            help=(
+                "Multiplicative transmissibility-reduction factor from antiretroviral "
+                "drug presence in iPrEP breakthrough infection (1.0 = no reduction). "
+                "Used for the primary-parameters point estimate. NB: for long-acting "
+                "injectables the effect is expected to wane as the drug washes out."
+            ),
+        )
+        drug_effect_range_inj = col1.slider(
+            "Drug effect range (bootstrap)",
+            min_value=0.05,
+            max_value=1.0,
+            value=(1.0, 1.0),
+            step=0.05,
+            help=(
+                "Uncertainty range for the iPrEP drug effect, sampled uniformly per "
+                "bootstrap iteration. Leave at (1.0, 1.0) for no reduction; e.g. "
+                "(0.5, 1.0) reproduces the prior analysis."
+            ),
+        )
+        # (1.0, 1.0) → no range; hold fixed at the point value (pass None).
+        prep_drug_effect_dist_inj = (
+            None if drug_effect_range_inj[0] >= 1.0 else drug_effect_range_inj
         )
 
         seroconversion_min_inj = col2.number_input(
@@ -1136,6 +1195,8 @@ if st.sidebar.button(button_label):
                 offset=prep_offset,
                 a_dist_uniform=prep_a_dist_uniform,
                 b_dist_uniform=prep_b_dist_uniform,
+                drug_effect=drug_effect_oral,
+                drug_effect_dist_uniform=prep_drug_effect_dist_oral,
                 ser_min=seroconversion_min_oral,
                 ser_max=seroconversion_max_oral,
                 ser_alpha=seroconversion_weibull_alpha_oral,
@@ -1192,6 +1253,8 @@ if st.sidebar.button(button_label):
                 offset=prep_offset,
                 a_dist_uniform=prep_a_dist_uniform,
                 b_dist_uniform=prep_b_dist_uniform,
+                drug_effect=drug_effect_inj,
+                drug_effect_dist_uniform=prep_drug_effect_dist_inj,
                 ser_min=seroconversion_min_inj,
                 ser_max=seroconversion_max_inj,
                 ser_alpha=seroconversion_weibull_alpha_inj,

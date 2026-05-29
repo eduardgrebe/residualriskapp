@@ -32,6 +32,7 @@ var defaultPrepParams = PrepInnerParams{
 	A:                0.7,
 	B:                0.6,
 	Offset:           1.0,
+	DrugEffect:       1.0,
 	VolumeTransfused: 200.0,
 	K:                0.000673,
 	PoolSize:         16,

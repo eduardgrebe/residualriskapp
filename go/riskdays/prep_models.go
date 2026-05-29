@@ -21,25 +21,26 @@ package riskdays
 // This parallels RiskDaysInnerParams but includes PrEP-specific fields for
 // the 3-phase viral dynamics and serology non-detection.
 type PrepInnerParams struct {
-	CopiesPerVirion int
-	C0              float64
-	DoublingTime    float64
-	SetPoint        float64
-	Eclipse         float64
-	A               float64
-	B               float64
-	Offset          float64
+	CopiesPerVirion  int
+	C0               float64
+	DoublingTime     float64
+	SetPoint         float64
+	Eclipse          float64
+	A                float64
+	B                float64
+	Offset           float64
+	DrugEffect       float64
 	VolumeTransfused float64
-	K               float64
-	PoolSize        int
-	LOD50           float64
-	LOD95LOD50Ratio float64
-	Retests         int
-	SerMin          float64
-	SerMax          float64
-	SerAlpha        float64
-	SerBeta         float64
-	Z               float64
-	LimitMin        float64
-	LimitMax        float64
+	K                float64
+	PoolSize         int
+	LOD50            float64
+	LOD95LOD50Ratio  float64
+	Retests          int
+	SerMin           float64
+	SerMax           float64
+	SerAlpha         float64
+	SerBeta          float64
+	Z                float64
+	LimitMin         float64
+	LimitMax         float64
 }

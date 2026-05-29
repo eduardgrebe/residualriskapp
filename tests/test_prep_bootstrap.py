@@ -602,6 +602,77 @@ class TestPrepIntegrationMethod(unittest.TestCase):
         with self.assertRaises(ValueError):
             risk_days_prep_bs(**kw)
 
+    def test_drug_effect_linear(self):
+        # drug_effect is a linear scalar on the per-time infection probability;
+        # being constant in t it factors out of the integral, so the RDE scales
+        # exactly with it (this is what makes it equivalent to scaling the RDE).
+        full = _risk_days_prep(**_PREP_SINGLE, **_SER_PROD)  # default 1.0
+        half = _risk_days_prep(**_PREP_SINGLE, **_SER_PROD, drug_effect=0.5)
+        quarter = _risk_days_prep(**_PREP_SINGLE, **_SER_PROD, drug_effect=0.25)
+        assert half == pytest.approx(0.5 * full, rel=1e-12)
+        assert quarter == pytest.approx(0.25 * full, rel=1e-12)
+
+    def test_drug_effect_default_is_identity(self):
+        # Default 1.0 leaves the integrand bit-for-bit unchanged (x*1.0 is exact).
+        self.assertEqual(
+            _risk_days_prep(**_PREP_SINGLE, **_SER_PROD),
+            _risk_days_prep(**_PREP_SINGLE, **_SER_PROD, drug_effect=1.0),
+        )
+
+    def test_scalar_drug_effect_out_of_range_raises(self):
+        # drug_effect must be in (0, 1]; rejected before the pool (sandbox-safe).
+        for bad in (1.5, 0.0, -0.1):
+            kw = {**PREP_BS_KWARGS, "drug_effect": bad,
+                  "k_invgamma_alpha": 2.0, "k_invgamma_beta": 0.002019}
+            with self.assertRaises(ValueError):
+                risk_days_prep_bs(**kw)
+
+    def test_drug_effect_dist_out_of_range_raises(self):
+        # The sampling range must satisfy 0 < lo <= hi <= 1.
+        for bad in ((0.5, 1.2), (0.0, 0.8), (0.8, 0.5)):
+            kw = {**PREP_BS_KWARGS, "drug_effect_dist_uniform": bad,
+                  "k_invgamma_alpha": 2.0, "k_invgamma_beta": 0.002019}
+            with self.assertRaises(ValueError):
+                risk_days_prep_bs(**kw)
+
+
+@pytest.mark.multiprocessing
+class TestPrepBsDrugEffect(unittest.TestCase):
+    """drug_effect threaded through the full Python bootstrap (ProcessPoolExecutor).
+
+    threads=1 (from PREP_BS_KWARGS) keeps rdests in submission order, so the
+    two runs align element-wise.
+    """
+
+    BASE = {**PREP_BS_KWARGS, "k_invgamma_alpha": 2.0, "k_invgamma_beta": 0.002019}
+
+    def test_drug_effect_scales_rdests_elementwise(self):
+        # Same seed + None range (np.full draws no RNG) → identical underlying
+        # draws; drug_effect multiplies each iteration's RDE, so every bootstrap
+        # sample scales by exactly the factor.
+        _, _, _, rd_full, _ = risk_days_prep_bs(**self.BASE, drug_effect=1.0)
+        _, _, _, rd_half, _ = risk_days_prep_bs(**self.BASE, drug_effect=0.5)
+        np.testing.assert_allclose(
+            np.asarray(rd_half), 0.5 * np.asarray(rd_full), rtol=1e-12
+        )
+
+    def test_drug_effect_default_matches_explicit_one(self):
+        # Backward-compat: omitting drug_effect is identical to passing 1.0 — the
+        # feature does not shift existing results.
+        _, _, _, rd_default, _ = risk_days_prep_bs(**self.BASE)
+        _, _, _, rd_one, _ = risk_days_prep_bs(**self.BASE, drug_effect=1.0)
+        np.testing.assert_array_equal(np.asarray(rd_default), np.asarray(rd_one))
+
+    def test_varied_drug_effect_within_range(self):
+        # Sampled per-iteration drug_effect lies within the requested range.
+        _, _, _, _, sim_df = risk_days_prep_bs(
+            **{**self.BASE, "return_sim_df": True,
+               "drug_effect_dist_uniform": (0.5, 0.9)}
+        )
+        de = sim_df["drug_effect"].to_numpy()
+        assert de.min() >= 0.5 and de.max() <= 0.9
+        assert len(set(de.tolist())) > 1
+
 
 if __name__ == "__main__":
     unittest.main()

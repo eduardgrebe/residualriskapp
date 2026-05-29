@@ -102,6 +102,32 @@ def _vl_postbt(t, eclipse, C0, doubling_time, set_point, a, b, offset, tcrit):
     return max(0.0, vl)
 
 
+def _drug_effect(t, drug_effect):
+    """Antiretroviral transmissibility-reduction factor at time ``t``.
+
+    Returns the multiplicative factor applied to the per-time infection
+    probability in :func:`_prob_infectious_prep`. ``drug_effect`` is a scalar in
+    ``(0, 1]`` (1.0 = no reduction). It is **currently constant in ``t``**, so it
+    factors straight out of the RDE integral — multiplying here is numerically
+    identical to scaling the final RDE (as the prior analysis did), and the
+    default 1.0 leaves the integrand bit-for-bit unchanged.
+
+    ``t`` is taken deliberately, as a placeholder for a future *time-varying*
+    drug effect. Breakthrough infections on long-acting injectable PrEP
+    typically occur as the drug washes out, so the protective factor should
+    relax toward 1.0 across the window as drug concentration decays. Modelling
+    that means returning a function of ``t`` here (e.g. an exponential wash-out
+    from the last-injection time) — at which point it no longer factors out of
+    the integral, which is exactly why this multiplication lives *inside* the
+    integrand rather than being applied to the RDE afterwards.
+    """
+    # Placeholder: constant in t. Replace the body with a t-dependent expression
+    # (e.g. decaying long-acting drug concentration) to model PrEP wash-out;
+    # expected to matter most for injectable PrEP. The call site in
+    # _prob_infectious_prep already receives t, so this is a one-function change.
+    return drug_effect
+
+
 def _prob_infectious_prep(
     t,
     eclipse,
@@ -114,6 +140,7 @@ def _prob_infectious_prep(
     volume_transfused,
     k,
     copies_per_virion=2.0,
+    drug_effect=1.0,
 ):
     tcrit = _find_tcrit(eclipse, C0, doubling_time, set_point)
     C = _vl_postbt(
@@ -129,7 +156,11 @@ def _prob_infectious_prep(
     )
     n_copies = C * copies_per_virion * volume_transfused
     prob = _prob_infectious_copies(n_copies, k)
-    return prob
+    # Drug-effect transmissibility reduction acts on the realized infection
+    # probability (a linear scalar), where infectivity is defined — not on the
+    # viral dose inside the dose-response. Constant in t today, so it factors
+    # out of the RDE integral; see _drug_effect for the time-varying extension.
+    return _drug_effect(t, drug_effect) * prob
 
 
 def _prob_nondetection_serology_prep(t, min, max, alpha, beta):
@@ -203,6 +234,7 @@ def _prob_infectious_nondetection_prep(
     ser_max,
     ser_alpha,
     ser_beta,
+    drug_effect=1.0,
     z=1.6449,
 ):
     product = (
@@ -217,6 +249,7 @@ def _prob_infectious_nondetection_prep(
             offset=offset,
             volume_transfused=volume_transfused,
             k=k,
+            drug_effect=drug_effect,
         )
         * _prob_nondetection_prep(
             t=t,
@@ -265,6 +298,7 @@ def _risk_days_prep(
     ser_alpha,
     ser_beta,
     z,
+    drug_effect=1.0,
     limits=(-100, 500),
     integration_method="gauss-legendre",
 ):
@@ -274,7 +308,7 @@ def _risk_days_prep(
         eclipse, C0, doubling_time, set_point, a, b, offset,
         volume_transfused, k, copies_per_virion, pool_size,
         lod50, lod95_lod50_ratio, retests, ser_min, ser_max,
-        ser_alpha, ser_beta,
+        ser_alpha, ser_beta, drug_effect,
     )
     if integration_method == "gauss-legendre":
         # Fixed 1000-point Gauss-Legendre, matching the Go backend. The default:
@@ -324,6 +358,8 @@ def risk_days_prep_bs(
     offset=1,
     a_dist_uniform=None,
     b_dist_uniform=None,
+    drug_effect=1.0,
+    drug_effect_dist_uniform=None,
     ser_min=28.7,
     ser_max=250,
     ser_alpha=50.49434,
@@ -365,6 +401,16 @@ def risk_days_prep_bs(
     (and the upper bound of ``a_dist_uniform``) must be ``<= offset``, or the
     plateau viral load would go negative.
 
+    ``drug_effect`` is a transmissibility-reduction factor in ``(0, 1]`` (1.0 =
+    no reduction, the default) applied as a linear multiplier on the per-time
+    infection probability inside the integrand (see :func:`_drug_effect`). It is
+    held fixed at the scalar unless ``drug_effect_dist_uniform=(lo, hi)`` is
+    given, then sampled ``Uniform(lo, hi)`` per iteration (range must lie within
+    ``(0, 1]``). Default 1.0 leaves the RDE bit-for-bit unchanged. Because the
+    factor is constant in ``t`` it factors out of the integral, so this is
+    numerically identical to scaling the final RDE — but the in-integrand
+    placement is the only correct one if it is ever made time-varying.
+
     Returns ``(rd_pe, rd_cri, rd_range, rdests, sim_df)``; ``sim_df`` is ``None``
     unless ``return_sim_df=True``.
     """
@@ -397,6 +443,8 @@ def risk_days_prep_bs(
                 offset=offset,
                 a_dist_uniform=a_dist_uniform,
                 b_dist_uniform=b_dist_uniform,
+                drug_effect=drug_effect,
+                drug_effect_dist_uniform=drug_effect_dist_uniform,
                 ser_min=ser_min,
                 ser_max=ser_max,
                 ser_alpha=ser_alpha,
@@ -437,6 +485,16 @@ def risk_days_prep_bs(
         raise ValueError(
             f"a_dist_uniform upper bound ({a_dist_uniform[1]}) must be <= offset ({offset})."
         )
+    # Drug effect is a transmissibility-reduction factor in (0, 1] (1.0 = none).
+    if not 0 < drug_effect <= 1:
+        raise ValueError(f"drug_effect ({drug_effect}) must be in (0, 1].")
+    if drug_effect_dist_uniform is not None:
+        de_lo, de_hi = drug_effect_dist_uniform
+        if not 0 < de_lo <= de_hi <= 1:
+            raise ValueError(
+                "drug_effect_dist_uniform must satisfy 0 < lo <= hi <= 1, "
+                f"got {drug_effect_dist_uniform}."
+            )
 
     np.random.seed(seed)
     ks = _sample_k(
@@ -472,13 +530,20 @@ def risk_days_prep_bs(
         np.random.uniform(b_dist_uniform[0], b_dist_uniform[1], n_bs)
         if b_dist_uniform is not None else np.full(n_bs, b)
     )
+    # Drug-effect factor: held fixed at the scalar unless a uniform range is
+    # given (np.full draws no RNG, so reproducibility is unchanged when not
+    # varied; the default 1.0 leaves the RDE bit-for-bit identical).
+    de_s = (
+        np.random.uniform(drug_effect_dist_uniform[0], drug_effect_dist_uniform[1], n_bs)
+        if drug_effect_dist_uniform is not None else np.full(n_bs, drug_effect)
+    )
 
     args_list = [
         (
             copies_per_virion, C0, doubling_times[i], set_points[i], eclipses[i],
             a_s[i], b_s[i], offset, volumes_transfused[i], ks[i], pool_size, lod50s[i],
             lod95_lod50_ratio, retests, ser_min, ser_max, ser_alpha, ser_beta, z,
-            (-100, 500),
+            de_s[i], (-100, 500),
         )
         for i in range(n_bs)
     ]
@@ -523,6 +588,7 @@ def risk_days_prep_bs(
             "ser_alpha",
             "ser_beta",
             "z",
+            "drug_effect",
             "limits",
         ]
         sim_df = pl.DataFrame(
@@ -538,7 +604,7 @@ def risk_days_prep_bs(
             copies_per_virion, C0, doubling_time, set_point, eclipse,
             a, b, offset, volume_transfused, k, pool_size, lod50,
             lod95_lod50_ratio, retests, ser_min, ser_max, ser_alpha, ser_beta, z,
-            (-100, 500),
+            drug_effect, (-100, 500),
             integration_method=integration_method,
         )
     elif point_estimate == "median":

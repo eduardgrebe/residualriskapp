@@ -252,6 +252,19 @@ func riskDaysBSPrep(input RiskDaysInput, rng *RandomGenerator, ks, doublingTimes
 		}
 	}
 
+	// Drug-effect factor: fixed at the scalar unless a uniform range is given
+	// ([0,0] = fixed). make+fill draws no RNG, so reproducibility is unchanged
+	// when not varied; the default 1.0 leaves the RDE bit-for-bit identical.
+	var drugEffectVals []float64
+	if input.DrugEffectDistUniform[0] != 0 || input.DrugEffectDistUniform[1] != 0 {
+		drugEffectVals = rng.GenerateUniform(input.DrugEffectDistUniform[0], input.DrugEffectDistUniform[1], input.NBS)
+	} else {
+		drugEffectVals = make([]float64, input.NBS)
+		for i := range drugEffectVals {
+			drugEffectVals[i] = input.DrugEffect
+		}
+	}
+
 	// Build PrEP args
 	argsList := make([]PrepInnerParams, input.NBS)
 	for i := 0; i < input.NBS; i++ {
@@ -264,6 +277,7 @@ func riskDaysBSPrep(input RiskDaysInput, rng *RandomGenerator, ks, doublingTimes
 			A:                aVals[i],
 			B:                bVals[i],
 			Offset:           input.Offset,
+			DrugEffect:       drugEffectVals[i],
 			VolumeTransfused: volumesTransfused[i],
 			K:                ks[i],
 			PoolSize:         input.PoolSize,
@@ -349,6 +363,7 @@ func riskDaysBSPrep(input RiskDaysInput, rng *RandomGenerator, ks, doublingTimes
 			A:                input.A,
 			B:                input.B,
 			Offset:           input.Offset,
+			DrugEffect:       input.DrugEffect,
 			VolumeTransfused: input.VolumeTransfused,
 			K:                input.K,
 			PoolSize:         input.PoolSize,
@@ -390,6 +405,7 @@ func riskDaysBSPrep(input RiskDaysInput, rng *RandomGenerator, ks, doublingTimes
 		out.Eclipses = eclipses
 		out.As = aVals
 		out.Bs = bVals
+		out.DrugEffects = drugEffectVals
 	}
 	return out, nil
 }
