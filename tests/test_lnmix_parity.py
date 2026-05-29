@@ -50,6 +50,11 @@ from scipy import stats as scipy_stats
 
 from residualrisk import core as rr
 
+# Worker count for the @pytest.mark.multiprocessing bootstrap tests (run only
+# outside sandboxed environments). All but one core keeps the large-n_bs cases
+# fast; max(1, …) guards single-core hosts.
+TEST_THREADS = max(1, rr.get_cpu_core_count() - 1)
+
 # ---------------------------------------------------------------------------
 # Lognormal mixture theoretical constants (Recommendation B)
 # ---------------------------------------------------------------------------
@@ -83,7 +88,7 @@ _COMMON_BS = dict(
     pool_size=16,
     retests=1,
     k=APPROX_MIXTURE_MODE,
-    threads=2,
+    threads=TEST_THREADS,
 )
 
 _LNMIX_BS = dict(
@@ -152,7 +157,7 @@ class TestLnMixTheoreticalStatistics:
         s2 = rr.sample_lnmix(1000, W, MU1, SIGMA1, MU2, SIGMA2, seed=7)
         np.testing.assert_array_equal(s1, s2)
 
-    def test_different_seeds_differ(self):
+    def test_different_seeds_differ_theory(self):
         """Different seeds produce different samples."""
         s1 = rr.sample_lnmix(1000, W, MU1, SIGMA1, MU2, SIGMA2, seed=7)
         s2 = rr.sample_lnmix(1000, W, MU1, SIGMA1, MU2, SIGMA2, seed=8)
@@ -363,7 +368,7 @@ class TestLnMixGoStatistics:
         r2 = _rdests(rr.risk_days_bs(**{**self._KWARGS, "seed": 1}))
         np.testing.assert_array_equal(r1, r2)
 
-    def test_different_seeds_differ(self):
+    def test_different_seeds_differ_go(self):
         """Different seeds produce different output."""
         r1 = _rdests(rr.risk_days_bs(**{**self._KWARGS, "seed": 1}))
         r2 = _rdests(rr.risk_days_bs(**{**self._KWARGS, "seed": 2}))

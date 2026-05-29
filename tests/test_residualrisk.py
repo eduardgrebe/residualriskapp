@@ -35,6 +35,12 @@ import pytest
 
 from residualrisk import core as rr
 
+# Worker count for the @pytest.mark.multiprocessing bootstrap tests. They run
+# only outside sandboxed environments, so use all but one core to keep the
+# large-n_bs cases fast. max(1, …) guards single-core hosts, where cores-1 = 0
+# would make ProcessPoolExecutor(0) raise.
+TEST_THREADS = max(1, rr.get_cpu_core_count() - 1)
+
 # ---------------------------------------------------------------------------
 # Shared parameter fixtures
 # ---------------------------------------------------------------------------
@@ -82,7 +88,7 @@ BS_KWARGS = dict(
     k_posterior_sample=K_POSTERIOR,
     n_bs=500,
     seed=42,
-    threads=2,
+    threads=TEST_THREADS,
 )
 
 
@@ -395,17 +401,17 @@ def _assert_bs_result_sane(result, n_bs):
 
 class TestRiskDaysBsPython:
     @pytest.mark.multiprocessing
-    def test_returns_correct_structure(self):
+    def test_returns_correct_structure_python(self):
         result = rr.risk_days_bs(**BS_KWARGS, use_go=False)
         assert len(result) == 5
 
     @pytest.mark.multiprocessing
-    def test_sanity_checks(self):
+    def test_sanity_checks_python(self):
         result = rr.risk_days_bs(**BS_KWARGS, use_go=False)
         _assert_bs_result_sane(result, BS_KWARGS["n_bs"])
 
     @pytest.mark.multiprocessing
-    def test_point_estimate_matches_risk_days(self):
+    def test_point_estimate_matches_risk_days_python(self):
         # With point_estimate="primary parameters" the pe should equal _risk_days
         # evaluated at the primary (non-bootstrapped) parameter values.
         result = rr.risk_days_bs(
@@ -440,7 +446,7 @@ class TestRiskDaysBsPython:
         assert sorted(r1[3]) != sorted(r2[3])
 
     @pytest.mark.multiprocessing
-    def test_returns_sim_df_when_requested(self):
+    def test_returns_sim_df_when_requested_python(self):
         result = rr.risk_days_bs(**BS_KWARGS, use_go=False, return_sim_df=True)
         assert len(result) == 5
         sim_df = result[4]
@@ -459,15 +465,15 @@ class TestRiskDaysBsPython:
 
 
 class TestRiskDaysBsGo:
-    def test_returns_correct_structure(self):
+    def test_returns_correct_structure_go(self):
         result = rr.risk_days_bs(**BS_KWARGS, use_go=True)
         assert len(result) == 5
 
-    def test_sanity_checks(self):
+    def test_sanity_checks_go(self):
         result = rr.risk_days_bs(**BS_KWARGS, use_go=True)
         _assert_bs_result_sane(result, BS_KWARGS["n_bs"])
 
-    def test_point_estimate_matches_risk_days(self):
+    def test_point_estimate_matches_risk_days_go(self):
         result = rr.risk_days_bs(
             **BS_KWARGS, use_go=True, point_estimate="primary parameters"
         )
@@ -484,7 +490,7 @@ class TestRiskDaysBsGo:
         )
         assert result[0] == pytest.approx(expected_pe, rel=1e-6)
 
-    def test_returns_sim_df_when_requested(self):
+    def test_returns_sim_df_when_requested_go(self):
         result = rr.risk_days_bs(**BS_KWARGS, use_go=True, return_sim_df=True)
         assert len(result) == 5
         sim_df = result[4]
@@ -787,7 +793,7 @@ class TestInvgammaIwpAgreement:
             retests=1,
             n_bs=500,
             seed=42,
-            threads=2,
+            threads=TEST_THREADS,
             point_estimate="mode",
             use_go=False,
         )
@@ -953,7 +959,7 @@ _INVGAMMA_BS_KWARGS = dict(
     k_invgamma_beta=0.002019,
     n_bs=500,
     seed=42,
-    threads=2,
+    threads=TEST_THREADS,
 )
 
 
@@ -961,7 +967,7 @@ _INVGAMMA_BS_KWARGS = dict(
 class TestRiskDaysBsPythonInvGamma:
     """InvGamma k distribution via the Python backend."""
 
-    def test_sanity(self):
+    def test_sanity_python_invgamma(self):
         result = rr.risk_days_bs(**_INVGAMMA_BS_KWARGS, use_go=False)
         _assert_bs_result_sane(result, _INVGAMMA_BS_KWARGS["n_bs"])
 
@@ -980,7 +986,7 @@ class TestRiskDaysBsPythonInvGamma:
         r2 = rr.risk_days_bs(**_INVGAMMA_BS_KWARGS, use_go=False)
         assert sorted(r1[3]) == sorted(r2[3])
 
-    def test_point_estimate_matches_risk_days(self):
+    def test_point_estimate_matches_risk_days_python_invgamma(self):
         result = rr.risk_days_bs(
             **_INVGAMMA_BS_KWARGS, use_go=False, point_estimate="primary parameters"
         )
@@ -1001,11 +1007,11 @@ class TestRiskDaysBsPythonInvGamma:
 class TestRiskDaysBsGoInvGamma:
     """InvGamma k distribution via the Go backend."""
 
-    def test_sanity(self):
+    def test_sanity_go_invgamma(self):
         result = rr.risk_days_bs(**_INVGAMMA_BS_KWARGS, use_go=True)
         _assert_bs_result_sane(result, _INVGAMMA_BS_KWARGS["n_bs"])
 
-    def test_point_estimate_matches_risk_days(self):
+    def test_point_estimate_matches_risk_days_go_invgamma(self):
         result = rr.risk_days_bs(
             **_INVGAMMA_BS_KWARGS, use_go=True, point_estimate="primary parameters"
         )

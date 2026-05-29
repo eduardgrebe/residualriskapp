@@ -48,6 +48,11 @@ from scipy import stats as scipy_stats
 
 from residualrisk import core as rr
 
+# Worker count for the @pytest.mark.multiprocessing bootstrap tests (run only
+# outside sandboxed environments). All but one core keeps the large-n_bs cases
+# fast; max(1, …) guards single-core hosts.
+TEST_THREADS = max(1, rr.get_cpu_core_count() - 1)
+
 # ---------------------------------------------------------------------------
 # InvGamma(alpha, beta) theoretical constants
 # ---------------------------------------------------------------------------
@@ -83,7 +88,7 @@ _COMMON_BS = dict(
     pool_size=16,
     retests=1,
     k=THEORY_MODE,
-    threads=2,
+    threads=TEST_THREADS,
 )
 
 # Base InvGamma bootstrap kwargs (n_bs set per test class)
