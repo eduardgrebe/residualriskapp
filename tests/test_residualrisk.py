@@ -394,14 +394,17 @@ def _assert_bs_result_sane(result, n_bs):
 
 
 class TestRiskDaysBsPython:
+    @pytest.mark.multiprocessing
     def test_returns_correct_structure(self):
         result = rr.risk_days_bs(**BS_KWARGS, use_go=False)
         assert len(result) == 5
 
+    @pytest.mark.multiprocessing
     def test_sanity_checks(self):
         result = rr.risk_days_bs(**BS_KWARGS, use_go=False)
         _assert_bs_result_sane(result, BS_KWARGS["n_bs"])
 
+    @pytest.mark.multiprocessing
     def test_point_estimate_matches_risk_days(self):
         # With point_estimate="primary parameters" the pe should equal _risk_days
         # evaluated at the primary (non-bootstrapped) parameter values.
@@ -421,6 +424,7 @@ class TestRiskDaysBsPython:
         )
         assert result[0] == pytest.approx(expected_pe, rel=1e-6)
 
+    @pytest.mark.multiprocessing
     def test_reproducible_with_same_seed(self):
         r1 = rr.risk_days_bs(**BS_KWARGS, use_go=False)
         r2 = rr.risk_days_bs(**BS_KWARGS, use_go=False)
@@ -429,11 +433,13 @@ class TestRiskDaysBsPython:
         # sorted values rather than the raw list.
         assert sorted(r1[3]) == sorted(r2[3])
 
+    @pytest.mark.multiprocessing
     def test_different_seeds_give_different_results(self):
         r1 = rr.risk_days_bs(**{**BS_KWARGS, "seed": 42}, use_go=False)
         r2 = rr.risk_days_bs(**{**BS_KWARGS, "seed": 99999}, use_go=False)
         assert sorted(r1[3]) != sorted(r2[3])
 
+    @pytest.mark.multiprocessing
     def test_returns_sim_df_when_requested(self):
         result = rr.risk_days_bs(**BS_KWARGS, use_go=False, return_sim_df=True)
         assert len(result) == 5
@@ -486,6 +492,7 @@ class TestRiskDaysBsGo:
         assert "iwp" in sim_df.columns
 
 
+@pytest.mark.multiprocessing
 class TestPythonGoAgreement:
     """
     Python and Go use independent RNGs so results will not be identical.
@@ -785,6 +792,7 @@ class TestInvgammaIwpAgreement:
             use_go=False,
         )
 
+    @pytest.mark.multiprocessing
     def test_iwp_mode_agrees_with_human_posterior(self):
         """IWP mode from InvGamma ≈ IWP mode from human posterior."""
         k_human = self._load_human_posterior()
@@ -949,6 +957,7 @@ _INVGAMMA_BS_KWARGS = dict(
 )
 
 
+@pytest.mark.multiprocessing
 class TestRiskDaysBsPythonInvGamma:
     """InvGamma k distribution via the Python backend."""
 
@@ -1022,6 +1031,7 @@ class TestRiskDaysBsGoInvGamma:
         result = rr.risk_days_bs(**kwargs_mode, use_go=True)
         _assert_bs_result_sane(result, _INVGAMMA_BS_KWARGS["n_bs"])
 
+    @pytest.mark.multiprocessing
     def test_simulation_medians_agree_with_python(self):
         """Python and Go InvGamma paths should agree within 15% on the median."""
         py = rr.risk_days_bs(**_INVGAMMA_BS_KWARGS, use_go=False)
