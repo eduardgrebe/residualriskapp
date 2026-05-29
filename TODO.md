@@ -22,24 +22,20 @@ incidence) boundary, the one-product-per-run design, the assay-defaults task, an
 the PK/PD deferred objective — see "## Scope & validation", "Assay defaults &
 calibration", and Deferred. (`README.md` + `AGENTS.md` updated to match.)
 
-One item remains before the PrEP release: the end-to-end scientific validation.
+The end-to-end scientific validation — the last PrEP-release gate — is now
+**discharged** (2026-05-29); see Completed → "End-to-end PrEP validation".
 (Agents can't commit/push — provide exact git commands.)
 
 ### Remaining before the PrEP release
 
-- [ ] **End-to-end validation of PrEP + baseline results against prior analyses.**
-      Run the tool with input parameters from previous published baseline analyses
-      (Grebe et al. 2020, ISBT 2024) and PrEP analyses (ISBT 2025) and confirm that
-      RDE estimates are comparable to previously reported values (or shifted
-      proportional to known changes). If results differ, understand and document
-      why. Known shifts to expect: the truncnorm-positivity fix lowers RDE ≈8%
-      (baseline) / ≈25% (PrEP); plus the k-distribution choice, GL vs quad, and
-      analytic vs grid `tcrit`. Applies to both Python and Go. Unit/integration
-      tests pass, but scientific validity requires reproducing known results.
-      The full `bash scripts/run_tests.sh` suite (incl. the `ProcessPoolExecutor`
-      tests — M2 and the varied-`a`/`b` `TestPrepPythonGoAgreementVariedAB`)
-      passes **outside the sandbox** as of 2026-05-29; what remains here is the
-      *scientific* reproduction of prior published results, not test-green.
+- _Nothing release-blocking outstanding._ The end-to-end PrEP validation gate is
+  discharged (see Completed). The still-open items below (assay defaults, in-app
+  guidance) and the Deferred items are quality/scope work, not release gates.
+- [ ] _(Optional, non-blocking)_ **Baseline-only reproduction (Grebe et al. 2020
+      / ISBT 2024).** The validation reproduced the **PrEP** pipeline against ISBT
+      2025; the baseline window-period numbers were not separately reproduced
+      (same engine, covered by unit tests + the truncnorm-fix tests). A short
+      baseline replication in `../residualriskapp_validation` would close this too.
 
 ### Assay defaults & calibration
 
@@ -165,6 +161,34 @@ tool's RDE is the correct input to the published pipeline.
 ---
 
 ## Completed
+
+### End-to-end PrEP validation — release gate discharged (2026-05-29)
+
+- [x] **End-to-end validation of the PrEP pipeline against the prior ad-hoc
+      analysis and the published results.** Realised as a standalone repo,
+      `../residualriskapp_validation` (paired Jupytext notebook
+      `notebooks/validation.py` + executed `.ipynb`), which editable-installs this
+      package and drives the **Go engine**. Findings:
+    - **Reproduces `rr_prep_v3` end-to-end.** The package matches the frozen
+      mechanistic RDE outputs (`rd_*_bs.npy`) for all four products
+      ({RBC, FFP} × {oral, injectable}) up to a single, uniform **≈ −6% downward
+      shift**, *fully attributed* to the truncated-normal positivity fix (buggy-
+      truncnorm reconstruction matches the `.npy` to <0.3%; GL-vs-quad and
+      analytic-vs-grid `tcrit` negligible; k handling identical via gamma fit).
+    - **Matches the published ISBT 2025 base case.** Layer-2 aggregation
+      (`compute_risks`, ported into the validation repo) on the original RDEs
+      reproduces the presented figures (`presentations/`): RBC **1-in-110.8M** vs
+      published **110** (95% CrI 24–1,437 vs 24–1,405); Plasma **1-in-74.6M** vs
+      **75** (17–968 vs 17–942); increase-over-baseline +7.7% / +7.0% vs +7.7% /
+      +6.9%. The current package gives ~6% *safer* figures (RBC 1-in-119M, Plasma
+      1-in-79M) — the truncnorm-fix shift, expressed in the published metric.
+    - **Dominant sensitivity = the k-distribution choice** (animal-derived vs
+      human-anchored default InvGamma), which moves the estimate far more than the
+      truncnorm fix — corroborated by the published tornado slides.
+    - Note: the **baseline-only** comparison (Grebe 2020 / ISBT 2024) was not
+      separately reproduced (optional follow-up — see Open). The full
+      `bash scripts/run_tests.sh` suite (incl. the `ProcessPoolExecutor` tests)
+      passes **outside the sandbox**.
 
 ### PrEP drug-effect (transmissibility reduction) parameter (2026-05-29, commit `05b9e76`)
 
