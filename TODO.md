@@ -31,9 +31,14 @@ figures generated. **Awaiting EG review.**
       Jeffreys-Gamma posterior; CI vs CrI distinction)
 - [x] §8 Default parameters & worked example · §9 References
 - [x] Three explanatory figures (dose-response; IWP construction; k input distributions)
+- [x] Wired into the app: `pages/1_Documentation.py` renders `theory.md`, splitting
+      figure references out to `st.image` (st.markdown does not load relative local
+      images) and rendering text/LaTeX via `st.markdown`
 - [ ] **EG review pass** (verify equations, prose, citations; confirm worked-example
-      numbers; decide whether to wire `docs/theory.md` into the Streamlit app)
-- [ ] Verify LaTeX renders in the Streamlit app's markdown (KaTeX) once wired in
+      numbers)
+- [ ] Visual check that LaTeX renders in `st.markdown` — especially `$…$` inside the
+      notation/parameter/k-distribution **tables** (the one KaTeX-in-Streamlit nuance
+      I could not verify headless)
 - [ ] _(later)_ PrEP model documentation — on the PrEP branch
 
 ## Completed
