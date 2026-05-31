@@ -561,3 +561,10 @@ review is tracked under Open → "Assay defaults & calibration".)
   - Component 1 (human): w=0.90, μ₁=−7.2403, σ₁=0.3241
   - Component 2 (animal): w=0.10, μ₂=−3.7423, σ₂=0.5258
   - Mixture mode ≈ 0.000649, median ≈ 0.000750, mean ≈ 0.003389
+- *Idea (not a hard task):* consider **Mermaid** diagrams to make the algorithm/architecture
+  documentation clearer — e.g. a flowchart of the IWP integrand (viral dynamics →
+  dose-response × non-detection → integral → bootstrap → residual risk) and a component
+  diagram (Streamlit app ↔ `residualrisk` package ↔ Go engine). Caveat: Mermaid renders
+  natively in fenced `mermaid` code blocks on GitHub, but `st.markdown` does **not** render
+  it, so the accordion Documentation page would need a helper (e.g. `streamlit-mermaid`) or
+  the diagrams pre-rendered to SVG/PNG like the existing figures. Weigh that before adopting.
