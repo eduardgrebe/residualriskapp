@@ -9,7 +9,7 @@ dependencies = [
     "polars>=1.41.2",
     "numpy>=2.4.6",
     "scipy>=1.17.1",
-    "plotly>=6.7.0",
+    "plotly>=6.8.0",
     "watchdog>=6.0.0",
 ]
 
