@@ -323,7 +323,9 @@ log-logistic, lognormal mixture) and recommendations with full justification.
 
 ```
 residualriskapp/
-├── app.py                   # Streamlit web application (imports the residualrisk package)
+├── app.py                   # Multipage entry point / st.navigation router
+├── estimator.py             # Main estimator page (imports the residualrisk package)
+├── pages/                   # Secondary Streamlit pages (Documentation, Credits)
 ├── residualrisk/            # Installable Python package (core calculation engine)
 │   ├── __init__.py          # Public API surface
 │   ├── core.py              # Core calculation engine (bootstrap, integration, IWP)

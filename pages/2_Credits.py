@@ -13,4 +13,13 @@ import streamlit as st
 
 st.set_page_config(page_title="Credits — Residual HIV-TT Risk Estimator")
 
+_STATIC_DIR = Path(__file__).parent.parent / "static"
+
 st.markdown((Path(__file__).parent.parent / "docs" / "credits.md").read_text())
+
+# Vitalant Research Institute logo — larger, centred at the bottom of the page.
+# Streamlit elements must live here in the page module; placed inside the markdown
+# content file (credits.md) they render as literal text rather than running.
+st.divider()
+_, _logo_col, _ = st.columns([1, 2, 1])
+_logo_col.image(str(_STATIC_DIR / "vri_logo_white_ri.png"), width="stretch")

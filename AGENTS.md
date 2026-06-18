@@ -19,7 +19,11 @@ residualriskapp/
 ├── README.md              # User-facing documentation
 ├── AGENTS.md              # This file — canonical project instructions for agents
 ├── LICENSE                # GNU AGPL v3.0
-├── app.py                 # Streamlit web application (entry point)
+├── app.py                 # Multipage entry point / st.navigation router
+├── estimator.py           # Main estimator page (Streamlit web UI)
+├── pages/                 # Secondary Streamlit pages
+│   ├── 1_Documentation.py
+│   └── 2_Credits.py
 ├── residualrisk/          # Installable Python package (core calculation engine)
 │   ├── __init__.py        # Public API surface (re-exports from core and _go)
 │   ├── core.py            # Calculation engine (formerly residualrisk.py)
@@ -52,7 +56,7 @@ residualriskapp/
   - `risk_days_bs` accepts `integration_method` (`"gauss-legendre"` default, or `"quad"`). The default is a fixed 1000-point Gauss-Legendre rule matching the Go backend (robust; immune to the adaptive-quad "missed peak" failure on compact-support integrands). `"quad"` selects scipy adaptive Gauss-Kronrod and is **Python-path only** (`use_go=False`) — provided for reproducing prior analyses computed with quad. `use_go=True` with `integration_method="quad"` raises `ValueError`.
 - `get_cpu_core_count`, `mode_rounded` — utility helpers used by the UI
 - `mode_kde` — estimate the mode of a positive posterior via KDE on the log scale (pure-Python, slow on large posteriors; kept as fallback)
-- `mode_kde_go` — fast Go-backed KDE mode estimation via the `--kde-mode` subcommand; `cap=40_000, n_grid=5_000` by default (< 0.1% error, ~0.9s for all three posteriors); used by `app.py` at load time with Python fallback to hardcoded values
+- `mode_kde_go` — fast Go-backed KDE mode estimation via the `--kde-mode` subcommand; `cap=40_000, n_grid=5_000` by default (< 0.1% error, ~0.9s for all three posteriors); used by `estimator.py` at load time with Python fallback to hardcoded values
 - `sample_invgamma` — sample from an Inverse Gamma distribution; supports `alpha`+`beta` or `alpha`+`mode` parameterisations
 - `sample_lnmix` — sample from a two-component lognormal mixture; parameters: `n, w, mu1, sigma1, mu2, sigma2, seed=None`
 - `find_go_binary` — locator for the Go binary (honors `$RESIDUALRISK_GO_BINARY` env var)
@@ -62,11 +66,16 @@ Downstream analyses (e.g. R scripts via `reticulate`) should call these rather t
 
 ## Core Application Files
 
-- **`app.py`** — Streamlit web UI
+- **`app.py`** — Multipage entry point / router
+  - Thin `st.navigation` router: defines the page list and the shared page config (title, favicon)
+  - Holds `APP_VERSION`; renders the shared sidebar footer (VRI logo + centred app/library version caption) on every page
+  - Sets explicit nav labels: **Estimator** (default page), **Documentation**, **Credits**
+  - Entry point: `streamlit run app.py`
+
+- **`estimator.py`** — Streamlit web UI (the Estimator page)
   - Parameter input interface with expandable sections
   - Supports three RDE estimation methods: Mechanistic model, Lookback data, Mechanistic model with PrEP
   - Real-time calculation and result visualization
-  - Entry point: `streamlit run app.py`
   - Imports via the public API: `import residualrisk as rr`
 
 - **`residualrisk/core.py`** — Main calculation engine
@@ -159,13 +168,13 @@ It covers:
 **Implementation status:**
 - **Inverse Gamma**: fully implemented in both Python (`residualrisk/core.py`,
   `sample_invgamma()`) and Go (`go/riskdays/random.go`, `GenerateInvGamma()`),
-  with UI wiring in `app.py`. Supports α+β or α+mode parameterisations.
+  with UI wiring in `estimator.py`. Supports α+β or α+mode parameterisations.
   KDE modes of the three posteriors are pre-computed at load time via
   `mode_kde_go()` (Go KDE subprocess, ~0.9s total, < 0.1% error) cached by
   `@st.cache_data`, with hardcoded fallback if Go binary is unavailable.
 - **Lognormal mixture**: fully implemented in Python (`residualrisk/core.py`,
   `sample_lnmix()`), Go (`go/riskdays/random.go`, `GenerateLogNormalMixture()`),
-  bridge (`residualrisk/_go.py`), and UI (`app.py`). Parameters: `k_lnmix_w`,
+  bridge (`residualrisk/_go.py`), and UI (`estimator.py`). Parameters: `k_lnmix_w`,
   `k_lnmix_mu1`, `k_lnmix_sigma1`, `k_lnmix_mu2`, `k_lnmix_sigma2`. Default
   values (w=0.90, μ₁=−7.2403, σ₁=0.3241, μ₂=−3.7423, σ₂=0.5258) implement
   Recommendation B. UI provides a mixing-weight slider with optional advanced
@@ -178,7 +187,7 @@ this document first.
 
 ## PrEP Model Status
 
-- `app.py` has UI stubs for the "Mechanistic model with PrEP" dropdown (currently shows a "not yet available" message and halts)
+- `estimator.py` has UI stubs for the "Mechanistic model with PrEP" dropdown (currently shows a "not yet available" message and halts)
 - No PrEP model source is present in the repo at this time; the prior `residualrisk_prep.py` was removed during the package restructure
 - Go implementation of PrEP model **does not exist yet**
 - Plan: release initial version without PrEP, then add a PrEP module (likely at `residualrisk/prep.py`) alongside a manuscript
@@ -309,7 +318,7 @@ Both Python versions are displayed together in the app sidebar (`App vX.Y.Z · L
 
 1. Update calculation functions in `residualrisk/core.py`
 2. If it belongs on the public API, re-export it from `residualrisk/__init__.py` and add to `__all__`
-3. Add UI controls in `app.py`
+3. Add UI controls in `estimator.py`
 4. Update Go implementation in `go/riskdays/` if needed
 5. Update JSON schema in `go/riskdays/models.go` and wire it through `residualrisk/_go.py`
 6. Document in this file and in `README.md`

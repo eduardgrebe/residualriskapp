@@ -95,7 +95,8 @@ COPY --from=go-builder --chown=appuser:appuser /build/riskdays_go ./go/bin/riskd
 RUN chmod +x ./go/bin/riskdays_go
 
 # Copy application code and the residualrisk package
-COPY --chown=appuser:appuser app.py ./
+# app.py is the multipage router; estimator.py is the main estimator page.
+COPY --chown=appuser:appuser app.py estimator.py ./
 COPY --chown=appuser:appuser residualrisk/ ./residualrisk/
 COPY --chown=appuser:appuser pages/ ./pages/
 COPY --chown=appuser:appuser docs/ ./docs/
