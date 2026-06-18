@@ -6,8 +6,11 @@ The model, Python package and web application were designed and developed by Edu
 
 Additional assistance by:
 
-* Brian Custer, Vitalant Research Institute (<bcuster@vitalant.org>) – Supervision, oversight, guidance and financial support.
-* Artur Belov, U.S. Food and Drug Administration (<artur.belov@fda.hhs.gov>) – Infectivity model development and `k` parameter posterior distributions – human and animal data.
+* Brian Custer, Vitalant Research Institute (<bcuster@vitalant.org>) – Conceptualization, supervision, oversight, guidance and financial support
+* Vivian I. Avelino-Silva: Conceptualization
+* Marjorie D. Bravo: Collaboration and data curation
+* Michael P. Busch: Conceptualization and guidance
+* Artur Belov, U.S. Food and Drug Administration (<artur.belov@fda.hhs.gov>) – Infectivity model development and `k` parameter posterior distributions – human and animal data
 
 ## References
 
