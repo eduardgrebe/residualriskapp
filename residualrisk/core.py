@@ -929,3 +929,94 @@ def residual_risk_rd(
     rr_cri = np.quantile(rr, (alpha / 2, 1 - alpha / 2))
     rr_sd = np.std(rr)
     return (rr_pe, rr_cri, rr_sd)
+
+
+def total_residual_risk_rd(
+    components,
+    per=1e6,
+    seed=126887,
+    alpha=0.05,
+    return_samps=False,
+):
+    """Additive total residual risk across populations, with a *joint* credible
+    interval.
+
+    ``components`` is a non-empty sequence of
+    ``(iwp_pe, iwp_bs, incidence, incidence_norm_sd)`` tuples — one per population
+    (e.g. baseline, oral-PrEP, injectable-PrEP). ``iwp_bs`` is that population's
+    bootstrap sample of risk-day equivalents (IWP).
+
+    The per-iteration residual-risk *probability* for component ``c`` is
+
+        p_c[b] = incidence_draw_c[b] * iwp_bs_c[b] / 365.25
+
+    and the total per iteration is ``T[b] = sum_c p_c[b]``. The credible interval
+    is the empirical ``(alpha/2, 1 - alpha/2)`` quantiles of ``T`` — i.e. we sum
+    the components *within each iteration* and then take quantiles of the summed
+    distribution.
+
+    Two modelling assumptions are baked in, both deliberate:
+
+    1. **Shared parameters are aligned across components.** The ``iwp_bs_c``
+       arrays must already share the same per-iteration draws of the parameters
+       common to every component (infectivity ``k``, viral doubling time, LOD,
+       transfused volume). This holds when they are produced by the Go backend
+       with a common seed, because those parameters are drawn *before* the
+       baseline/PrEP branch, so the PrEP-specific draws do not perturb them.
+       Pairing the arrays by iteration index then preserves the positive
+       correlation those shared parameters induce between components — which is
+       what makes the summed-quantile interval a valid joint CrI rather than an
+       independence approximation. (The pure-Python bootstrap draws in a
+       different order and is **not** aligned; see the UI caveat.)
+
+    2. **Incidence is independent across populations.** Each component's
+       incidence is drawn with its own seed (``seed + i``), reflecting the
+       assumption that the populations' incidence-rate uncertainties are
+       independent.
+
+    Returns ``(rr_pe, rr_cri, onein_pe, onein_cri)``; with ``return_samps=True``
+    the per-iteration total-probability sample is appended. ``rr_pe``/``rr_cri``
+    are per ``per`` transfusions; ``onein_pe``/``onein_cri`` are in the
+    "1 in N transfusions" representation, with ``onein_cri`` following the same
+    ``(alpha/2, 1 - alpha/2)`` quantile ordering as
+    ``residual_risk_rd(one_in_x=True)``.
+    """
+    components = list(components)
+    if not components:
+        raise ValueError("components must be a non-empty sequence")
+
+    n = len(components[0][1])
+    if n == 0:
+        raise ValueError("iwp_bs arrays must be non-empty")
+    if any(len(c[1]) != n for c in components):
+        raise ValueError(
+            "all components must have the same number of bootstrap iterations; "
+            "iwp_bs arrays must be equal length and per-iteration aligned"
+        )
+
+    total_prob_pe = 0.0
+    total_prob_samp = np.zeros(n, dtype=float)
+    for i, (iwp_pe, iwp_bs, incidence, incidence_norm_sd) in enumerate(components):
+        if incidence <= 0:
+            raise ValueError(f"incidence must be positive, got {incidence}")
+        if iwp_pe <= 0:
+            raise ValueError(f"iwp_pe must be positive, got {iwp_pe}")
+        total_prob_pe += incidence * iwp_pe / 365.25
+        # Independent incidence draws per population (seed + i). Uses the legacy
+        # global RNG via _sample_positive_normal, exactly like residual_risk_rd,
+        # so a single-component call reproduces residual_risk_rd bit-for-bit.
+        np.random.seed(seed + i)
+        incidence_draws = _sample_positive_normal(incidence, incidence_norm_sd, n)
+        total_prob_samp += incidence_draws * np.asarray(iwp_bs, dtype=float) / 365.25
+
+    if total_prob_pe <= 0 or np.any(total_prob_samp <= 0):
+        raise ValueError("total residual-risk probability must be positive")
+
+    rr_pe = total_prob_pe * per
+    rr_cri = tuple(np.quantile(total_prob_samp * per, (alpha / 2, 1 - alpha / 2)))
+    onein_pe = 1.0 / total_prob_pe
+    onein_cri = tuple(np.quantile(1.0 / total_prob_samp, (alpha / 2, 1 - alpha / 2)))
+
+    if return_samps:
+        return (rr_pe, rr_cri, onein_pe, onein_cri, total_prob_samp)
+    return (rr_pe, rr_cri, onein_pe, onein_cri)

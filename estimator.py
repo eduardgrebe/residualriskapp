@@ -1173,6 +1173,11 @@ if st.sidebar.button(button_label):
         )
         st.session_state["sims_run"] = True
         st.session_state["rde_method_run"] = "Mechanistic model"
+        # Record the backend used: the total-risk CrI is a valid joint interval
+        # only when the component IWP samples share their per-iteration k /
+        # viral-dynamics / LOD / volume draws, which the Go backend guarantees
+        # (the Python path draws in a different order and is not aligned).
+        st.session_state["used_go"] = use_go_acceleration
         st.session_state["samp"] = pl.DataFrame({"iwp": st.session_state["bs"]})
         # Fallback: if sim_df is None (e.g., from Go implementation), use samp
         if st.session_state["sim_df"] is None:
@@ -1529,17 +1534,21 @@ else:
                 alpha=alpha,
                 one_in_x=True,
             )
-            output_container.write("**Baseline residual risk**")
-            output_container.write(
-                f"RR PE: {rr_pe:.5f} /million transfusions ({sig_level:.0f}% {interval_label}: {rr_cri[0]:.5f} to {rr_cri[1]:.5f})"
-            )
-            output_container.write(
-                f"RR PE: 1 transmission in {rr_onein_pe:,.0f} transfusions ({sig_level:.0f}% {interval_label}: {rr_onein_cri[1]:,.0f} to {rr_onein_cri[0]:,.0f})"
-            )
+            # Build one results table instead of a long list of lines. Each
+            # scenario is a row; the point estimate is shown with its credible
+            # interval in parentheses, per 10^6 transfusions and as "1 in N".
+            def _rr_row(label, pe, cri, onein_pe, onein_cri):
+                per_m = f"{pe:.5f} ({cri[0]:.5f} – {cri[1]:.5f})"
+                freq = f"1 in {onein_pe:,.0f} (1 in {onein_cri[1]:,.0f} – 1 in {onein_cri[0]:,.0f})"
+                return (label, per_m, freq)
 
-            # PrEP residual risk components
-            _rr_total_pe = rr_pe
-            _rr_total_samps = None
+            rr_rows = [_rr_row("Baseline", rr_pe, rr_cri, rr_onein_pe, rr_onein_cri)]
+
+            # Per-population (iwp_pe, iwp_bs, incidence, incidence_sd) for the
+            # joint total-risk CrI (see rr.total_residual_risk_rd).
+            total_components = [
+                (iwp_pe, st.session_state["samp"]["iwp"].to_numpy(), inc_perpy, inc_perpy_sd)
+            ]
 
             if st.session_state.get("prep_oral_run") and st.session_state.get("samp_prep_oral") is not None:
                 iwp_pe_oral = st.session_state.get("iwp_pe_prep_oral")
@@ -1564,13 +1573,16 @@ else:
                         alpha=alpha,
                         one_in_x=True,
                     )
-                    _rr_total_pe += rr_oral_pe
-                    output_container.write("**Oral PrEP residual risk component**")
-                    output_container.write(
-                        f"RR PE: {rr_oral_pe:.5f} /million transfusions ({sig_level:.0f}% {interval_label}: {rr_oral_cri[0]:.5f} to {rr_oral_cri[1]:.5f})"
+                    rr_rows.append(
+                        _rr_row("Oral PrEP", rr_oral_pe, rr_oral_cri, rr_oral_onein_pe, rr_oral_onein_cri)
                     )
-                    output_container.write(
-                        f"RR PE: 1 transmission in {rr_oral_onein_pe:,.0f} transfusions ({sig_level:.0f}% {interval_label}: {rr_oral_onein_cri[1]:,.0f} to {rr_oral_onein_cri[0]:,.0f})"
+                    total_components.append(
+                        (
+                            iwp_pe_oral,
+                            st.session_state["samp_prep_oral"]["iwp"].to_numpy(),
+                            inc_prep_oral_perpy,
+                            inc_prep_oral_perpy_sd,
+                        )
                     )
 
             if st.session_state.get("prep_inj_run") and st.session_state.get("samp_prep_inj") is not None:
@@ -1596,20 +1608,72 @@ else:
                         alpha=alpha,
                         one_in_x=True,
                     )
-                    _rr_total_pe += rr_inj_pe
-                    output_container.write("**Injectable PrEP residual risk component**")
-                    output_container.write(
-                        f"RR PE: {rr_inj_pe:.5f} /million transfusions ({sig_level:.0f}% {interval_label}: {rr_inj_cri[0]:.5f} to {rr_inj_cri[1]:.5f})"
+                    rr_rows.append(
+                        _rr_row("Injectable PrEP", rr_inj_pe, rr_inj_cri, rr_inj_onein_pe, rr_inj_onein_cri)
                     )
-                    output_container.write(
-                        f"RR PE: 1 transmission in {rr_inj_onein_pe:,.0f} transfusions ({sig_level:.0f}% {interval_label}: {rr_inj_onein_cri[1]:,.0f} to {rr_inj_onein_cri[0]:,.0f})"
+                    total_components.append(
+                        (
+                            iwp_pe_inj,
+                            st.session_state["samp_prep_inj"]["iwp"].to_numpy(),
+                            inc_prep_inj_perpy,
+                            inc_prep_inj_perpy_sd,
+                        )
                     )
 
-            # Total (additive) residual risk PE — shown only when PrEP components are present
-            if st.session_state.get("prep_oral_run") or st.session_state.get("prep_inj_run"):
-                output_container.write(
-                    f"**Total residual risk (additive) PE: {_rr_total_pe:.5f} /million transfusions**"
+            # Total (additive) residual risk with a joint credible interval.
+            # The component IWP bootstrap arrays share their per-iteration k /
+            # viral-dynamics / LOD / volume draws (Go backend, common seed), so
+            # summing per iteration and taking quantiles yields a valid joint
+            # CrI; incidence is drawn independently per population.
+            #
+            # TODO: oral and injectable PrEP currently share their PrEP-specific
+            # draws too (eclipse, a, b, AND drug_effect), because they run off the
+            # same seed. drug_effect in particular should be specified AND drawn
+            # independently per scenario — see TODO.md ("Independent PrEP
+            # drug_effect for oral vs injectable"). That needs the inject-shared-
+            # arrays refactor (shared k/dt/lod/volume, independent PrEP draws);
+            # same-seed gives shared-everything, different-seed would break the
+            # shared-parameter alignment that makes this total CrI valid.
+            if len(total_components) > 1:
+                t_pe, t_cri, t_onein_pe, t_onein_cri = rr.total_residual_risk_rd(
+                    total_components,
+                    per=1e6,
+                    seed=st.session_state["seed"],
+                    alpha=alpha,
                 )
+                rr_rows.append((
+                    "**Total (additive)**",
+                    f"**{t_pe:.5f} ({t_cri[0]:.5f} – {t_cri[1]:.5f})**",
+                    f"**1 in {t_onein_pe:,.0f} (1 in {t_onein_cri[1]:,.0f} – 1 in {t_onein_cri[0]:,.0f})**",
+                ))
+
+            output_container.subheader("Residual risk of HIV transfusion transmission")
+            _rr_table = (
+                "| Scenario | Residual risk (per 10⁶ transfusions) | Equivalent frequency |\n"
+                "|:--|--:|--:|\n"
+            )
+            for _label, _per_m, _freq in rr_rows:
+                _rr_table += f"| {_label} | {_per_m} | {_freq} |\n"
+            output_container.markdown(_rr_table)
+
+            _caption = (
+                f"Point estimates; ranges in parentheses are {sig_level:.0f}% {interval_label}s."
+            )
+            if len(total_components) > 1:
+                if st.session_state.get("used_go", True):
+                    _caption += (
+                        f" The additive total's {interval_label} is computed per iteration "
+                        "(components share the sampled k, viral-dynamics, LOD and volume "
+                        "draws; the populations' incidences are assumed independent)."
+                    )
+                else:
+                    _caption += (
+                        f" The additive total's {interval_label} is approximate: the Python "
+                        "backend does not align the shared parameters across components, so "
+                        "they are treated as independent (incidences assumed independent "
+                        "regardless). Use the Go backend for the exact shared-parameter interval."
+                    )
+            output_container.caption(_caption)
 
 # The shared sidebar footer (VRI logo + app/library version caption) is rendered
 # by the app.py router so it appears on every page.

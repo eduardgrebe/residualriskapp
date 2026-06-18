@@ -19,6 +19,7 @@ from .core import (
     risk_days_bs,
     sample_invgamma,
     sample_lnmix,
+    total_residual_risk_rd,
 )
 from .prep import risk_days_prep_bs
 
@@ -29,6 +30,7 @@ __all__ = [
     "risk_days_prep_bs",
     "iwp_from_lookback_data",
     "residual_risk_rd",
+    "total_residual_risk_rd",
     "get_cpu_core_count",
     "mode_kde",
     "mode_rounded",

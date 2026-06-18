@@ -2,6 +2,36 @@
 
 ## Open
 
+### Independent PrEP `drug_effect` for oral vs injectable (total-risk CrI refinement)
+
+The additive total-risk credible interval (`rr.total_residual_risk_rd`, wired
+into `estimator.py`) sums the component residual-risk samples per iteration and
+takes quantiles. It is a *valid joint* CrI because the component IWP bootstraps
+share their per-iteration draws of the common sampled parameters — `k`, viral
+doubling time, LOD, transfused volume — which the **Go backend guarantees**
+(same seed; those params are drawn before the baseline/PrEP branch). Incidence
+is drawn independently per population.
+
+Side-effect to fix: oral and injectable PrEP currently also share their
+**PrEP-specific** draws (`eclipse`, `a`, `b`, **and `drug_effect`**) because the
+two scenarios run off the same seed. `eclipse`/`a`/`b` are arguably the same
+biology, but **`drug_effect` should be specified AND drawn independently per
+scenario** — oral and injectable PrEP can use different antiretrovirals with
+different transmissibility-reduction distributions. (The UI already exposes a
+separate `drug_effect` value/range per scenario, but they are drawn
+comonotonically off the shared RNG stream.)
+
+Refactor: "inject pre-drawn shared arrays" — pre-draw the shared params
+(`k`, `doubling_time`, `lod50`, `volume`) once and pass them into each
+component's bootstrap (`core.py`, `prep.py`, `_go.py`, Go `models.go` /
+`riskdays.go`), so the shared params stay aligned across components while each
+component draws its PrEP-specific params (incl. `drug_effect`) independently.
+Seeds alone cannot do this: same-seed gives shared-everything; a different seed
+per component would break the shared-parameter alignment the total CrI relies
+on. Add Python/Go parity tests for the new independent-draw path. Until then the
+total CrI is captioned as assuming incidence independence with oral/injectable
+PrEP-specific draws shared.
+
 ### SESSION STATE (2026-05-29)
 
 On `feature_prep_model`; `main` is fully merged in (merge commit `31118a6`),
