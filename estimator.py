@@ -307,7 +307,7 @@ with sim_param_container:
             "Select number of CPU cores to use",
             min_value=1,
             max_value=n_cpu,
-            value=n_cpu,
+            value=max(1, n_cpu - 1),
             step=1,
             help="Placeholder help text",
         )
