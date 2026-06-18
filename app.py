@@ -27,7 +27,7 @@ import streamlit as st
 
 import residualrisk as rr
 
-APP_VERSION = "1.1.0a1"
+APP_VERSION = "1.1.0a2"
 
 _STATIC_DIR = Path(__file__).parent / "static"
 
@@ -38,13 +38,11 @@ st.set_page_config(
     page_icon=str(_STATIC_DIR / "transfusion_bag_purple.png"),
 )
 
-navigation = st.navigation(
-    [
-        st.Page("estimator.py", title="Estimator", default=True),
-        st.Page("pages/1_Documentation.py", title="Documentation"),
-        st.Page("pages/2_Credits.py", title="Credits"),
-    ]
-)
+navigation = st.navigation([
+    st.Page("estimator.py", title="Estimator", default=True),
+    st.Page("pages/1_Documentation.py", title="Documentation"),
+    st.Page("pages/2_Credits.py", title="Credits"),
+])
 navigation.run()
 
 # Shared sidebar footer — rendered on every page, after the active page's own
