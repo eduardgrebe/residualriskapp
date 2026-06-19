@@ -11,7 +11,7 @@ from pathlib import Path
 
 import streamlit as st
 
-st.set_page_config(page_title="Credits — Residual HIV-TT Risk Estimator")
+st.set_page_config(page_title="Credits — Residual HIV-TT Risk Estimator", layout="wide")
 
 _STATIC_DIR = Path(__file__).parent.parent / "static"
 

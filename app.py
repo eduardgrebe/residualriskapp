@@ -27,7 +27,7 @@ import streamlit as st
 
 import residualrisk as rr
 
-APP_VERSION = "1.1.0a3"
+APP_VERSION = "1.1.0a4"
 
 _STATIC_DIR = Path(__file__).parent / "static"
 
@@ -36,6 +36,7 @@ _STATIC_DIR = Path(__file__).parent / "static"
 st.set_page_config(
     page_title="Residual HIV-TT Risk Estimator",
     page_icon=str(_STATIC_DIR / "transfusion_bag_purple.png"),
+    layout="wide",
 )
 
 navigation = st.navigation([
