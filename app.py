@@ -36,7 +36,16 @@ _STATIC_DIR = Path(__file__).parent / "static"
 st.set_page_config(
     page_title="Residual HIV-TT Risk Estimator",
     page_icon=str(_STATIC_DIR / "transfusion_bag_purple.png"),
-    layout="wide",
+)
+
+# Widen the centered main column from Streamlit's default (~730px) to ~1100px
+# (≈50% wider) — enough for the results table to fit on one line, without the
+# stretched look of layout="wide". Injected from the router so it applies to
+# every page; the centered layout keeps the column horizontally centred.
+st.markdown(
+    "<style>.block-container, [data-testid='stMainBlockContainer']"
+    " { max-width: 1100px !important; }</style>",
+    unsafe_allow_html=True,
 )
 
 navigation = st.navigation([

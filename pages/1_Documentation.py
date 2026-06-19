@@ -12,7 +12,7 @@ from pathlib import Path
 
 import streamlit as st
 
-st.set_page_config(page_title="Documentation — Residual HIV-TT Risk Estimator", layout="wide")
+st.set_page_config(page_title="Documentation — Residual HIV-TT Risk Estimator")
 
 DOCS = Path(__file__).parent.parent / "docs"
 text = (DOCS / "theory.md").read_text()

@@ -76,8 +76,12 @@ if "iwp_pe_last" not in st.session_state:
 
 # PrEP session state
 for _k in (
-    "iwp_pe_prep_oral", "samp_prep_oral", "sim_df_prep_oral",
-    "iwp_pe_prep_inj", "samp_prep_inj", "sim_df_prep_inj",
+    "iwp_pe_prep_oral",
+    "samp_prep_oral",
+    "sim_df_prep_oral",
+    "iwp_pe_prep_inj",
+    "samp_prep_inj",
+    "sim_df_prep_inj",
 ):
     if _k not in st.session_state:
         st.session_state[_k] = None
@@ -143,7 +147,9 @@ def convert_for_download(df, file_format="csv"):
         return None
 
 
-def plot_histogram(data, x="iwp", colour=None, histnorm=None, title="Distribution of simulated RDEs"):
+def plot_histogram(
+    data, x="iwp", colour=None, histnorm=None, title="Distribution of simulated RDEs"
+):
     fig = px.histogram(
         data,
         x=x,
@@ -1066,9 +1072,7 @@ with incidence_param_container:
                 f"Relative standard error: {inc_prep_inj_per100k_sd / inc_prep_inj_per100k * 100:.1f}%"
             )
 
-button_label = (
-    "Run simulations" if is_mechanistic_ui else "Calculate RDEs"
-)
+button_label = "Run simulations" if is_mechanistic_ui else "Calculate RDEs"
 if st.sidebar.button(button_label):
     if rde_method == "Mechanistic model":
         progressbar = st.sidebar.progress(0, text="Running simulations...")
@@ -1203,7 +1207,8 @@ if st.sidebar.button(button_label):
 
         if include_prep_oral:
             prep_oral_bar = st.sidebar.progress(
-                0, text=f"Running oral PrEP simulations ({'Go' if use_go_acceleration else 'Python'})..."
+                0,
+                text=f"Running oral PrEP simulations ({'Go' if use_go_acceleration else 'Python'})...",
             )
             (
                 st.session_state["iwp_pe_prep_oral"],
@@ -1248,11 +1253,13 @@ if st.sidebar.button(button_label):
                 use_go=use_go_acceleration,
             )
             st.session_state["prep_oral_run"] = True
-            st.session_state["samp_prep_oral"] = pl.DataFrame(
-                {"iwp": st.session_state["bs_prep_oral"]}
-            )
+            st.session_state["samp_prep_oral"] = pl.DataFrame({
+                "iwp": st.session_state["bs_prep_oral"]
+            })
             if st.session_state["sim_df_prep_oral"] is None:
-                st.session_state["sim_df_prep_oral"] = st.session_state["samp_prep_oral"]
+                st.session_state["sim_df_prep_oral"] = st.session_state[
+                    "samp_prep_oral"
+                ]
             prep_oral_bar.progress(1.0, text="Oral PrEP simulations complete!")
             time.sleep(0.3)
             prep_oral_bar.empty()
@@ -1261,7 +1268,8 @@ if st.sidebar.button(button_label):
 
         if include_prep_inj:
             prep_inj_bar = st.sidebar.progress(
-                0, text=f"Running injectable PrEP simulations ({'Go' if use_go_acceleration else 'Python'})..."
+                0,
+                text=f"Running injectable PrEP simulations ({'Go' if use_go_acceleration else 'Python'})...",
             )
             (
                 st.session_state["iwp_pe_prep_inj"],
@@ -1306,9 +1314,9 @@ if st.sidebar.button(button_label):
                 use_go=use_go_acceleration,
             )
             st.session_state["prep_inj_run"] = True
-            st.session_state["samp_prep_inj"] = pl.DataFrame(
-                {"iwp": st.session_state["bs_prep_inj"]}
-            )
+            st.session_state["samp_prep_inj"] = pl.DataFrame({
+                "iwp": st.session_state["bs_prep_inj"]
+            })
             if st.session_state["sim_df_prep_inj"] is None:
                 st.session_state["sim_df_prep_inj"] = st.session_state["samp_prep_inj"]
             prep_inj_bar.progress(1.0, text="Injectable PrEP simulations complete!")
@@ -1393,13 +1401,19 @@ if st.session_state["sims_run"]:
         )
         _dl_frames.append(_bl_df)
 
-    if st.session_state.get("prep_oral_run") and st.session_state["sim_df_prep_oral"] is not None:
+    if (
+        st.session_state.get("prep_oral_run")
+        and st.session_state["sim_df_prep_oral"] is not None
+    ):
         _dl_frames.append(
             st.session_state["sim_df_prep_oral"].with_columns(
                 pl.lit("oral_prep").alias("scenario")
             )
         )
-    if st.session_state.get("prep_inj_run") and st.session_state["sim_df_prep_inj"] is not None:
+    if (
+        st.session_state.get("prep_inj_run")
+        and st.session_state["sim_df_prep_inj"] is not None
+    ):
         _dl_frames.append(
             st.session_state["sim_df_prep_inj"].with_columns(
                 pl.lit("injectable_prep").alias("scenario")
@@ -1467,7 +1481,11 @@ else:
             f"Range: {iwp_range[0]:.2f} to {iwp_range[1]:.2f})"
         )
 
-    fig = plot_histogram(st.session_state["samp"], histnorm=plot_norm, title="Distribution of simulated RDEs (baseline)")
+    fig = plot_histogram(
+        st.session_state["samp"],
+        histnorm=plot_norm,
+        title="Distribution of simulated RDEs (baseline)",
+    )
     output_container.plotly_chart(fig, width="stretch")
 
     # --- PrEP RDE results ---
@@ -1486,7 +1504,11 @@ else:
                 f"{oral_cri[0]:.2f} to {oral_cri[1]:.2f}; "
                 f"Range: {oral_range[0]:.2f} to {oral_range[1]:.2f})"
             )
-            fig_oral = plot_histogram(samp_oral, histnorm=plot_norm, title="Distribution of simulated RDEs (oral PrEP)")
+            fig_oral = plot_histogram(
+                samp_oral,
+                histnorm=plot_norm,
+                title="Distribution of simulated RDEs (oral PrEP)",
+            )
             output_container.plotly_chart(fig_oral, width="stretch")
 
     if st.session_state.get("prep_inj_run"):
@@ -1504,7 +1526,11 @@ else:
                 f"{inj_cri[0]:.2f} to {inj_cri[1]:.2f}; "
                 f"Range: {inj_range[0]:.2f} to {inj_range[1]:.2f})"
             )
-            fig_inj = plot_histogram(samp_inj, histnorm=plot_norm, title="Distribution of simulated RDEs (injectable PrEP)")
+            fig_inj = plot_histogram(
+                samp_inj,
+                histnorm=plot_norm,
+                title="Distribution of simulated RDEs (injectable PrEP)",
+            )
             output_container.plotly_chart(fig_inj, width="stretch")
 
     if calculate_rr:
@@ -1534,6 +1560,7 @@ else:
                 alpha=alpha,
                 one_in_x=True,
             )
+
             # Build one results table instead of a long list of lines. Each
             # scenario is a row; the point estimate is shown with its credible
             # interval in parentheses, per 10^6 transfusions and as "1 in N".
@@ -1547,12 +1574,24 @@ else:
             # Per-population (iwp_pe, iwp_bs, incidence, incidence_sd) for the
             # joint total-risk CrI (see rr.total_residual_risk_rd).
             total_components = [
-                (iwp_pe, st.session_state["samp"]["iwp"].to_numpy(), inc_perpy, inc_perpy_sd)
+                (
+                    iwp_pe,
+                    st.session_state["samp"]["iwp"].to_numpy(),
+                    inc_perpy,
+                    inc_perpy_sd,
+                )
             ]
 
-            if st.session_state.get("prep_oral_run") and st.session_state.get("samp_prep_oral") is not None:
+            if (
+                st.session_state.get("prep_oral_run")
+                and st.session_state.get("samp_prep_oral") is not None
+            ):
                 iwp_pe_oral = st.session_state.get("iwp_pe_prep_oral")
-                if iwp_pe_oral is not None and iwp_pe_oral > 0 and inc_prep_oral_perpy is not None:
+                if (
+                    iwp_pe_oral is not None
+                    and iwp_pe_oral > 0
+                    and inc_prep_oral_perpy is not None
+                ):
                     rr_oral_pe, rr_oral_cri, _ = rr.residual_risk_rd(
                         iwp_pe_oral,
                         st.session_state["samp_prep_oral"]["iwp"],
@@ -1574,20 +1613,31 @@ else:
                         one_in_x=True,
                     )
                     rr_rows.append(
-                        _rr_row("Oral PrEP", rr_oral_pe, rr_oral_cri, rr_oral_onein_pe, rr_oral_onein_cri)
-                    )
-                    total_components.append(
-                        (
-                            iwp_pe_oral,
-                            st.session_state["samp_prep_oral"]["iwp"].to_numpy(),
-                            inc_prep_oral_perpy,
-                            inc_prep_oral_perpy_sd,
+                        _rr_row(
+                            "Oral PrEP",
+                            rr_oral_pe,
+                            rr_oral_cri,
+                            rr_oral_onein_pe,
+                            rr_oral_onein_cri,
                         )
                     )
+                    total_components.append((
+                        iwp_pe_oral,
+                        st.session_state["samp_prep_oral"]["iwp"].to_numpy(),
+                        inc_prep_oral_perpy,
+                        inc_prep_oral_perpy_sd,
+                    ))
 
-            if st.session_state.get("prep_inj_run") and st.session_state.get("samp_prep_inj") is not None:
+            if (
+                st.session_state.get("prep_inj_run")
+                and st.session_state.get("samp_prep_inj") is not None
+            ):
                 iwp_pe_inj = st.session_state.get("iwp_pe_prep_inj")
-                if iwp_pe_inj is not None and iwp_pe_inj > 0 and inc_prep_inj_perpy is not None:
+                if (
+                    iwp_pe_inj is not None
+                    and iwp_pe_inj > 0
+                    and inc_prep_inj_perpy is not None
+                ):
                     rr_inj_pe, rr_inj_cri, _ = rr.residual_risk_rd(
                         iwp_pe_inj,
                         st.session_state["samp_prep_inj"]["iwp"],
@@ -1609,16 +1659,20 @@ else:
                         one_in_x=True,
                     )
                     rr_rows.append(
-                        _rr_row("Injectable PrEP", rr_inj_pe, rr_inj_cri, rr_inj_onein_pe, rr_inj_onein_cri)
-                    )
-                    total_components.append(
-                        (
-                            iwp_pe_inj,
-                            st.session_state["samp_prep_inj"]["iwp"].to_numpy(),
-                            inc_prep_inj_perpy,
-                            inc_prep_inj_perpy_sd,
+                        _rr_row(
+                            "Injectable PrEP",
+                            rr_inj_pe,
+                            rr_inj_cri,
+                            rr_inj_onein_pe,
+                            rr_inj_onein_cri,
                         )
                     )
+                    total_components.append((
+                        iwp_pe_inj,
+                        st.session_state["samp_prep_inj"]["iwp"].to_numpy(),
+                        inc_prep_inj_perpy,
+                        inc_prep_inj_perpy_sd,
+                    ))
 
             # Total (additive) residual risk with a joint credible interval.
             # The component IWP bootstrap arrays share their per-iteration k /
@@ -1649,22 +1703,28 @@ else:
 
             output_container.subheader("Residual risk of HIV transfusion transmission")
             _rr_table = (
-                "| Scenario | Residual risk (per 10⁶ transfusions) | Equivalent frequency |\n"
+                "| Scenario | Residual risk (per 10⁶ transfusions) | Residual risk (1 transmission in X transfusions) |\n"
                 "|:--|--:|--:|\n"
             )
             for _label, _per_m, _freq in rr_rows:
                 _rr_table += f"| {_label} | {_per_m} | {_freq} |\n"
+            # Centre the results table as a whole within the content column. The
+            # markdown table sizes to its content, so margin:auto centres the
+            # block. Scoped to this page; the results table is its only table.
+            output_container.markdown(
+                "<style>[data-testid='stMarkdown'] table"
+                " { margin-left: auto !important; margin-right: auto !important; }</style>",
+                unsafe_allow_html=True,
+            )
             output_container.markdown(_rr_table)
 
-            _caption = (
-                f"Point estimates; ranges in parentheses are {sig_level:.0f}% {interval_label}s."
-            )
+            _caption = f"Point estimates; ranges in parentheses are {sig_level:.0f}% {interval_label}s."
             if len(total_components) > 1:
                 if st.session_state.get("used_go", True):
                     _caption += (
                         f" The additive total's {interval_label} is computed per iteration "
                         "(components share the sampled k, viral-dynamics, LOD and volume "
-                        "draws; the populations' incidences are assumed independent)."
+                        "draws; the populations' incidence rates are assumed independent)."
                     )
                 else:
                     _caption += (
