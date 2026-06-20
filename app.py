@@ -27,7 +27,7 @@ import streamlit as st
 
 import residualrisk as rr
 
-APP_VERSION = "1.1.0a5"
+APP_VERSION = "1.1.0a6"
 
 _STATIC_DIR = Path(__file__).parent / "static"
 

@@ -15,7 +15,6 @@ import streamlit as st
 st.set_page_config(page_title="Documentation — Residual HIV-TT Risk Estimator")
 
 DOCS = Path(__file__).parent.parent / "docs"
-text = (DOCS / "theory.md").read_text()
 
 # Pattern for a markdown image reference: ![alt](path).
 _IMG = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
@@ -40,32 +39,48 @@ def render_markdown_with_figures(md: str) -> None:
             st.markdown(part)
 
 
-# Peel a short trailing footer (the note after the document's final horizontal
-# rule) so it renders below the accordion instead of being buried in the
-# collapsed References expander. Guarded so it only fires on a genuine short
-# trailing note (no section heading, modest length).
-body_text, sep, footer = text.rpartition("\n---\n")
-if not sep or "## " in footer or len(footer) > 800:
-    body_text, footer = text, ""
+def render_doc(text: str) -> None:
+    """Render a theory document as a scannable accordion: a visible preamble
+    (title + intro, before the first ``## `` section), one collapsible expander
+    per section, and any short trailing footer note below it.
 
-# Split the body into a preamble (title + intro, before the first "## " section)
-# and the numbered sections. The preamble stays visible; each section is rendered
-# inside a collapsible expander titled by its heading, so the page opens as a
-# scannable table of contents. theory.md itself remains a single document (it
-# still renders as one page on GitHub) — the accordion is purely a presentation
-# layer here.
-matches = list(_SECTION.finditer(body_text))
-preamble = body_text[: matches[0].start()] if matches else body_text
-render_markdown_with_figures(preamble)
+    The source ``.md`` stays a single document (it still renders as one page on
+    GitHub); the accordion is purely a presentation layer here.
+    """
+    # Peel a short trailing footer (the note after the document's final
+    # horizontal rule) so it renders below the accordion instead of being buried
+    # in the collapsed final expander. Guarded so it only fires on a genuine
+    # short trailing note (no section heading, modest length).
+    body_text, sep, footer = text.rpartition("\n---\n")
+    if not sep or "## " in footer or len(footer) > 800:
+        body_text, footer = text, ""
 
-for idx, m in enumerate(matches):
-    title = m.group(1).strip()
-    body_start = m.end()
-    body_end = matches[idx + 1].start() if idx + 1 < len(matches) else len(body_text)
-    body = body_text[body_start:body_end]
-    with st.expander(title, expanded=(idx == 0)):  # §1 open by default
-        render_markdown_with_figures(body)
+    matches = list(_SECTION.finditer(body_text))
+    preamble = body_text[: matches[0].start()] if matches else body_text
+    render_markdown_with_figures(preamble)
 
-if footer.strip():
-    st.markdown("---")
-    render_markdown_with_figures(footer)
+    for idx, m in enumerate(matches):
+        title = m.group(1).strip()
+        body_start = m.end()
+        body_end = matches[idx + 1].start() if idx + 1 < len(matches) else len(body_text)
+        body = body_text[body_start:body_end]
+        with st.expander(title, expanded=(idx == 0)):  # first section open by default
+            render_markdown_with_figures(body)
+
+    if footer.strip():
+        st.markdown("---")
+        render_markdown_with_figures(footer)
+
+
+tab_base, tab_prep = st.tabs(["Baseline model", "PrEP model"])
+
+with tab_base:
+    render_doc((DOCS / "theory.md").read_text())
+
+with tab_prep:
+    st.info(
+        "Draft documentation for the PrEP-breakthrough model — to be reviewed "
+        "and edited.",
+        icon="🚧",
+    )
+    render_doc((DOCS / "theory_prep.md").read_text())
