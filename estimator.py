@@ -849,11 +849,11 @@ if include_prep_oral:
             "Drug effect range (bootstrap)",
             min_value=0.05,
             max_value=1.0,
-            value=(1.0, 1.0),
+            value=(0.75, 1.0),
             step=0.05,
             help=(
                 "Uncertainty range for the oPrEP drug effect, sampled uniformly per "
-                "bootstrap iteration. Leave at (1.0, 1.0) for no reduction; e.g. "
+                "bootstrap iteration. Set to (1.0, 1.0) for no reduction; e.g. "
                 "(0.5, 1.0) reproduces the prior analysis."
             ),
         )
@@ -935,11 +935,11 @@ if include_prep_inj:
             "Drug effect range (bootstrap)",
             min_value=0.05,
             max_value=1.0,
-            value=(1.0, 1.0),
+            value=(0.75, 1.0),
             step=0.05,
             help=(
                 "Uncertainty range for the iPrEP drug effect, sampled uniformly per "
-                "bootstrap iteration. Leave at (1.0, 1.0) for no reduction; e.g. "
+                "bootstrap iteration. Set to (1.0, 1.0) for no reduction; e.g. "
                 "(0.5, 1.0) reproduces the prior analysis."
             ),
         )
