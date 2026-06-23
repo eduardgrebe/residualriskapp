@@ -4,6 +4,12 @@
 #
 # Builds and publishes multi-architecture Docker images to ghcr.io on version
 # tags (v*) only. Tag v1.2.3 produces images tagged 1.2.3, 1.2, and latest.
+#
+# Before any image is published, verify-version asserts that the App version in
+# app.py (APP_VERSION) matches the pushed tag. Git tags track the App version
+# (see AGENTS.md "Versioning"); the Library and Go versions are independent and
+# are intentionally not checked here. This guards against tagging a release
+# without bumping APP_VERSION (the slip that happened at v0.9.6).
 
 name: Publish Docker image
 
@@ -13,7 +19,34 @@ on:
       - 'v*'
 
 jobs:
+  verify-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Verify app.py APP_VERSION matches the tag
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          app_version="$(grep -E '^APP_VERSION[[:space:]]*=' app.py \
+            | head -1 | sed -E 's/.*"([^"]+)".*/\1/')"
+          echo "Tag:         ${GITHUB_REF_NAME} (implies ${tag_version})"
+          echo "APP_VERSION: ${app_version}"
+          if [ -z "${app_version}" ]; then
+            echo "::error::Could not parse APP_VERSION from app.py"
+            exit 1
+          fi
+          if [ "${app_version}" != "${tag_version}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} implies APP_VERSION '${tag_version}', but app.py has '${app_version}'. Bump APP_VERSION in app.py to match the tag (or retag)."
+            exit 1
+          fi
+          echo "OK: APP_VERSION '${app_version}' matches tag '${GITHUB_REF_NAME}'."
+
   build-and-push:
+    needs: verify-version
     runs-on: ubuntu-latest
     permissions:
       contents: read
