@@ -53,7 +53,8 @@ ESTIMATOR_PATH = Path(__file__).resolve().parent.parent / "estimator.py"
 def _load_constant(name):
     """Extract a module-level literal constant from estimator.py without
     importing (and thus executing) the Streamlit script."""
-    tree = ast.parse(ESTIMATOR_PATH.read_text())
+    source = ESTIMATOR_PATH.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(ESTIMATOR_PATH))
     for node in tree.body:
         if isinstance(node, ast.Assign):
             for target in node.targets:

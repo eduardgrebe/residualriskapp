@@ -624,10 +624,11 @@ if rde_method == "Mechanistic model":
             pool_size = 1
             retests = 0
 
+        nat_assay_options = list(NAT_ASSAYS.keys()) + [MANUAL_LOD_OPTION]
         nat_assay = col2.selectbox(
             "Select NAT assay",
-            options=list(NAT_ASSAYS.keys()) + [MANUAL_LOD_OPTION],
-            index=list(NAT_ASSAYS.keys()).index("Procleix Ultrio Plus (Tigris)"),
+            options=nat_assay_options,
+            index=nat_assay_options.index("Procleix Ultrio Plus (Tigris)"),
             help="Select a NAT assay to use its published 50%/95% limits of "
             "detection (copies/mL, HIV-1 Group M), or choose "
             f"'{MANUAL_LOD_OPTION}' to enter values manually.",
@@ -635,9 +636,10 @@ if rde_method == "Mechanistic model":
 
         if nat_assay == MANUAL_LOD_OPTION:
             # Manual entry, pre-populated with the cobas MPX defaults.
+            # lod50 must be strictly positive: lod95_lod50_ratio divides by it.
             lod50 = col2.number_input(
                 "NAT assay 50% LoD (copies/mL)",
-                min_value=0.0,
+                min_value=0.01,
                 max_value=500.0,
                 value=NAT_ASSAYS["cobas MPX (5800/6800/8800)"]["lod50"],
                 step=0.01,
