@@ -59,13 +59,21 @@ C0 = 0.00025
 # IU<->copies conversion, so it is computed in IU/mL and applied to the
 # copies/mL point estimate (lod50_sd = CoV * lod50). The Procleix Ultrio value
 # uses the discriminatory dHIV-1 (Tigris) CI; cobas MPX uses the EDTA-plasma CI.
+#
+# cp_per_iu is the IU/mL -> copies/mL conversion factor applied (upstream) to the
+# manufacturer IU/mL LoDs to obtain the copies/mL values stored here. It is NOT
+# constant: HIV-1 Group M is calibrated against three WHO International Standard
+# generations, each with its own factor (0.6 for the 1st IS 97/656, 0.58 for the
+# 2nd IS 97/650, 0.35 for the 3rd IS 10/152). iu_std records that standard. These
+# two fields are informational (surfaced in the UI); they feed no calculation.
+# See ../residualrisk_analysis/assays/ASSAYS.qmd for the full conversion rationale.
 NAT_ASSAYS = {
-    "Procleix Ultrio (Tigris)": {"lod50": 5.0, "lod50_sd": 0.364, "lod95": 12.2},
-    "Procleix Ultrio Plus (Tigris)": {"lod50": 2.7, "lod50_sd": 0.191, "lod95": 12.3},
-    "Procleix Ultrio Elite (Panther)": {"lod50": 3.1, "lod50_sd": 0.234, "lod95": 10.4},
-    "cobas TaqScreen MPX (s 201)": {"lod50": 5.5, "lod50_sd": 0.385, "lod95": 29.4},
-    "cobas TaqScreen MPX v2.0 (s 201)": {"lod50": 5.3, "lod50_sd": 0.250, "lod95": 26.8},
-    "cobas MPX (5800/6800/8800)": {"lod50": 1.3, "lod50_sd": 0.0785, "lod95": 9.0},
+    "Procleix Ultrio (Tigris)": {"lod50": 5.0, "lod50_sd": 0.364, "lod95": 12.2, "cp_per_iu": 0.6, "iu_std": "WHO 1st IS 97/656 (dHIV-1)"},
+    "Procleix Ultrio Plus (Tigris)": {"lod50": 2.7, "lod50_sd": 0.191, "lod95": 12.3, "cp_per_iu": 0.58, "iu_std": "WHO 2nd IS 97/650"},
+    "Procleix Ultrio Elite (Panther)": {"lod50": 3.1, "lod50_sd": 0.234, "lod95": 10.4, "cp_per_iu": 0.58, "iu_std": "WHO 2nd IS 97/650"},
+    "cobas TaqScreen MPX (s 201)": {"lod50": 5.5, "lod50_sd": 0.385, "lod95": 29.4, "cp_per_iu": 0.6, "iu_std": "WHO 1st IS 97/656"},
+    "cobas TaqScreen MPX v2.0 (s 201)": {"lod50": 5.3, "lod50_sd": 0.250, "lod95": 26.8, "cp_per_iu": 0.58, "iu_std": "WHO 2nd IS 97/650"},
+    "cobas MPX (5800/6800/8800)": {"lod50": 1.3, "lod50_sd": 0.0785, "lod95": 9.0, "cp_per_iu": 0.35, "iu_std": "WHO 3rd IS 10/152"},
 }
 MANUAL_LOD_OPTION = "Enter limits of detection"
 
@@ -628,7 +636,7 @@ if rde_method == "Mechanistic model":
         nat_assay = col2.selectbox(
             "Select NAT assay",
             options=nat_assay_options,
-            index=nat_assay_options.index("Procleix Ultrio Plus (Tigris)"),
+            index=nat_assay_options.index("Procleix Ultrio Elite (Panther)"),
             help="Select a NAT assay to use its published 50%/95% limits of "
             "detection (copies/mL, HIV-1 Group M), or choose "
             f"'{MANUAL_LOD_OPTION}' to enter values manually.",
@@ -662,11 +670,17 @@ if rde_method == "Mechanistic model":
                 step=0.01,
                 help="Placeholder help text",
             )
+            conversion_note = (
+                "Limits of detection entered directly in copies/mL "
+                "(no IU/mL → copies/mL conversion applied)."
+            )
         else:
             # Canned assay: populate from the lookup table and show (read-only).
             lod50 = NAT_ASSAYS[nat_assay]["lod50"]
             lod50_sd = NAT_ASSAYS[nat_assay]["lod50_sd"]
             lod95 = NAT_ASSAYS[nat_assay]["lod95"]
+            cp_per_iu = NAT_ASSAYS[nat_assay]["cp_per_iu"]
+            iu_std = NAT_ASSAYS[nat_assay]["iu_std"]
             col2.number_input(
                 "NAT assay 50% LoD (copies/mL)",
                 value=lod50,
@@ -686,8 +700,13 @@ if rde_method == "Mechanistic model":
                 step=0.01,
                 disabled=True,
             )
+            conversion_note = (
+                f"IU/mL → copies/mL conversion factor in use: {cp_per_iu} cp/IU "
+                f"(HIV-1 Group M, {iu_std})."
+            )
 
-        st.text("95% LoD : 50% LoD ratio will be fixed for simulations.")
+        st.caption(conversion_note)
+        st.caption("95% LoD : 50% LoD ratio will be fixed for simulations.")
         # fix_lod95_lod50_ratio = col2.checkbox(
         #     "Fix 95% LoD:50% LoD ratio",
         #     value = True
