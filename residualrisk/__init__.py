@@ -10,6 +10,7 @@
 """Residual HIV transfusion transmission risk estimation."""
 
 from ._go import find_go_binary, mode_hsm_go, mode_kde_go
+from .assays import NAT_ASSAYS, AssayLoD, list_assays, lods_for_assay
 from .core import (
     get_cpu_core_count,
     iwp_from_lookback_data,
@@ -21,7 +22,7 @@ from .core import (
     sample_lnmix,
 )
 
-__version__ = "0.9.6"
+__version__ = "0.9.8"
 
 __all__ = [
     "risk_days_bs",
@@ -35,4 +36,8 @@ __all__ = [
     "find_go_binary",
     "mode_hsm_go",
     "mode_kde_go",
+    "NAT_ASSAYS",
+    "AssayLoD",
+    "lods_for_assay",
+    "list_assays",
 ]

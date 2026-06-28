@@ -23,6 +23,8 @@ import numpy as np
 import polars as pl
 import scipy.stats as stats
 
+from .assays import lods_for_assay
+
 # Cap the viral-growth exponent to avoid float OverflowError when t is large
 # relative to a small doubling_time. 2**700 (~5e210) is well within the float64
 # range, yet large enough that the modelled viral load saturates every
@@ -633,13 +635,13 @@ def risk_days_bs(
     k,
     doubling_time,
     doubling_time_norm_sd,
-    lod50,
-    lod50_sd,
-    lod95_lod50_ratio,
-    volume_transfused,
-    volume_transfused_range,
-    pool_size,
-    retests,
+    lod50=None,
+    lod50_sd=None,
+    lod95_lod50_ratio=None,
+    volume_transfused=None,
+    volume_transfused_range=None,
+    pool_size=None,
+    retests=None,
     C0=0.00025,
     copies_per_virion=2,
     alpha=0.05,
@@ -664,6 +666,7 @@ def risk_days_bs(
     return_sim_df=False,
     use_go=False,
     integration_method="gauss-legendre",
+    assay=None,
 ):
     """
     Risk days bootstrap calculation with optional Go acceleration.
@@ -681,9 +684,51 @@ def risk_days_bs(
         Gauss-Kronrod quadrature and is provided for reproducing prior
         analyses computed with quad; it is only available on the Python path
         (use_go=False), since the Go backend always uses Gauss-Legendre.
+    assay : str or None, default=None
+        Canned NAT-assay slug (a key of ``residualrisk.NAT_ASSAYS``; see
+        ``list_assays()``) whose published 50%/95% LoDs are used. Mutually
+        exclusive with the explicit LoD triplet: pass *either* ``assay`` *or*
+        all of ``lod50``/``lod50_sd``/``lod95_lod50_ratio``, never both. When
+        ``assay`` is given those three must be left as None.
 
     All other parameters are passed through to the underlying implementation.
     """
+    # Resolve LoDs: accept either a canned `assay` slug or an explicit
+    # (lod50, lod50_sd, lod95_lod50_ratio) triplet, never both — mirroring the
+    # mutually-exclusive k-distribution dispatch in the Python/Go backends.
+    _explicit_lods = (lod50, lod50_sd, lod95_lod50_ratio)
+    if assay is not None:
+        if any(v is not None for v in _explicit_lods):
+            raise ValueError(
+                "Specify either `assay` or explicit LoDs "
+                "(lod50, lod50_sd, lod95_lod50_ratio), not both."
+            )
+        resolved = lods_for_assay(assay)  # raises ValueError on an unknown slug
+        lod50 = resolved.lod50
+        lod50_sd = resolved.lod50_sd
+        lod95_lod50_ratio = resolved.lod95_lod50_ratio
+    elif any(v is None for v in _explicit_lods):
+        raise ValueError(
+            "Provide all of lod50, lod50_sd and lod95_lod50_ratio, "
+            "or pass `assay=` to use a canned NAT assay."
+        )
+
+    # volume_transfused, volume_transfused_range, pool_size and retests are
+    # required; they carry None defaults only so the optional LoD/assay
+    # parameters can precede them in the signature.
+    _missing = [
+        name
+        for name, value in (
+            ("volume_transfused", volume_transfused),
+            ("volume_transfused_range", volume_transfused_range),
+            ("pool_size", pool_size),
+            ("retests", retests),
+        )
+        if value is None
+    ]
+    if _missing:
+        raise ValueError(f"Missing required argument(s): {', '.join(_missing)}")
+
     if use_go and integration_method != "gauss-legendre":
         raise ValueError(
             "Go acceleration only implements 'gauss-legendre' integration; "

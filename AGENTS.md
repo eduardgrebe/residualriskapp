@@ -54,15 +54,31 @@ residualriskapp/
 
 - `risk_days_bs`, `iwp_from_lookback_data`, `residual_risk_rd` — top-level estimation functions
   - `risk_days_bs` accepts `integration_method` (`"gauss-legendre"` default, or `"quad"`). The default is a fixed 1000-point Gauss-Legendre rule matching the Go backend (robust; immune to the adaptive-quad "missed peak" failure on compact-support integrands). `"quad"` selects scipy adaptive Gauss-Kronrod and is **Python-path only** (`use_go=False`) — provided for reproducing prior analyses computed with quad. `use_go=True` with `integration_method="quad"` raises `ValueError`.
+  - `risk_days_bs` also accepts `assay` — a canned-NAT-assay slug (see `NAT_ASSAYS` / `lods_for_assay` below) whose published 50%/95% LoDs are used in place of the explicit `lod50`/`lod50_sd`/`lod95_lod50_ratio`. It is **mutually exclusive** with that triplet: pass exactly one of the two (passing both, or neither, raises `ValueError`), mirroring the mutually-exclusive *k* input modes.
 - `get_cpu_core_count`, `mode_rounded` — utility helpers used by the UI
 - `mode_kde` — estimate the mode of a positive posterior via KDE on the log scale (pure-Python, slow on large posteriors; kept as fallback)
 - `mode_kde_go` — fast Go-backed KDE mode estimation via the `--kde-mode` subcommand; `cap=40_000, n_grid=5_000` by default (< 0.1% error, ~0.9s for all three posteriors); used by `estimator.py` at load time with Python fallback to hardcoded values
 - `sample_invgamma` — sample from an Inverse Gamma distribution; supports `alpha`+`beta` or `alpha`+`mode` parameterisations
 - `sample_lnmix` — sample from a two-component lognormal mixture; parameters: `n, w, mu1, sigma1, mu2, sigma2, seed=None`
+- `NAT_ASSAYS`, `lods_for_assay`, `list_assays`, `AssayLoD` — canned NAT-assay limit-of-detection presets (HIV-1 Group M, copies/mL), defined in `residualrisk/assays.py` as the **single source of truth** (consumed by both the API and `estimator.py`). `NAT_ASSAYS` is a dict keyed by **slug** (`ultrio`, `ultrio_plus`, `ultrio_elite`, `cobas_taqscreen_mpx`, `cobas_taqscreen_mpxv2`, `cobas_mpx`, `biomanguinhos`); each entry carries `display_name`, `lod50`, `lod50_sd`, `lod95`, and the informational `cp_per_iu` / `iu_std` provenance fields (the upstream IU/mL→copies/mL factor and its WHO IS — **not** constant across assays). `lods_for_assay(slug)` returns an `AssayLoD` namedtuple (adds the derived `lod95_lod50_ratio`) and raises `ValueError` on an unknown slug; `list_assays()` returns `{slug: display_name}` for menus. Prefer `risk_days_bs(assay=…)` (or these helpers) over transcribing LoD numbers. **Provisional SD:** `biomanguinhos` (Brazilian NAT Platform, Bio-Manguinhos) has no published LoD50 CI — Rocha et al. (2018) report point 50%/95% LoDs only — so its `lod50_sd` is an *assumed* relative SD of **13%** (6.08 IU/mL ≈ 3.527 cp/mL); **4.95 IU/mL (RSE 10.6%) was the value used in prior analyses.** Revisit if the per-dilution hit-rate table becomes available; see the note above `NAT_ASSAYS` in `residualrisk/assays.py`.
 - `find_go_binary` — locator for the Go binary (honors `$RESIDUALRISK_GO_BINARY` env var)
 - `__version__` — package version
 
 Downstream analyses (e.g. R scripts via `reticulate`) should call these rather than reaching into `residualrisk.core` or `residualrisk._go`. Test code may import `residualrisk.core` directly to exercise private `_`-prefixed functions.
+
+#### LoD50 relative standard error (RSE) by assay
+
+RSE = `lod50_sd / lod50` (the coefficient of variation of the 50% LoD; invariant under the IU/mL→copies/mL conversion). For every assay except Bio-Manguinhos the SD derives from a 95% CI of the 50% LoD; Bio-Manguinhos uses an *assumed* RSE (see the provisional-SD note above and in `residualrisk/assays.py`). Underlying LoD/CI data are compiled in the companion analysis `residualrisk_analysis/assays/ASSAYS.qmd`.
+
+| Assay | RSE on LoD50 | Source |
+|---|---|---|
+| `cobas_taqscreen_mpxv2` | 4.72% | Probit fit of Roche insert reactivity data (95% CI) |
+| `cobas_mpx` | 6.04% | Roche cobas MPX CE/IVD insert (95% CI of 50% LoD) |
+| `cobas_taqscreen_mpx` | 7.00% | Probit fit of Roche insert reactivity data (95% CI) |
+| `ultrio_plus` | 7.07% | Grifols Procleix Ultrio Plus insert (95% CI of 50% LoD) |
+| `ultrio` | 7.28% | Grifols Procleix Ultrio insert, dHIV-1 (95% CI of 50% LoD) |
+| `ultrio_elite` | 7.55% | Grifols Procleix Ultrio Elite insert (95% CI of 50% LoD) |
+| `biomanguinhos` | 13.00% (assumed, provisional) | Assumed RSE — Rocha et al. (2018) report point LoDs only (no CI) |
 
 ## Core Application Files
 
