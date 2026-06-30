@@ -28,11 +28,19 @@ residualriskapp/
 ├── app.py                 # Multipage entry point / st.navigation router
 ├── estimator.py           # Main estimator page (Streamlit web UI)
 ├── pages/                 # Secondary Streamlit pages
-│   ├── 1_Documentation.py
+│   ├── 1_Documentation.py # Tabbed docs (Baseline model & methods / NAT assay parameters / PrEP model)
 │   └── 2_Credits.py
+├── docs/                  # Markdown documentation rendered in-app, plus figures
+│   ├── theory.md          # Baseline model technical documentation
+│   ├── theory_prep.md     # PrEP-breakthrough model technical documentation
+│   ├── assays.md          # NAT assay parameters (LoD sources, WHO IS, IU→copies)
+│   ├── credits.md
+│   └── figures/           # Generated figures (+ make_*_figures.py generators)
 ├── residualrisk/          # Installable Python package (core calculation engine)
-│   ├── __init__.py        # Public API surface (re-exports from core and _go)
-│   ├── core.py            # Calculation engine (formerly residualrisk.py)
+│   ├── __init__.py        # Public API surface (re-exports from core, prep, assays, _go)
+│   ├── core.py            # Baseline calculation engine (formerly residualrisk.py)
+│   ├── prep.py            # PrEP-breakthrough model (viral dynamics, serology, bootstrap)
+│   ├── assays.py          # Canned NAT-assay LoD presets (single source of truth)
 │   └── _go.py             # Go binary wrapper (formerly residualrisk_go.py)
 ├── go/                    # High-performance Go reimplementation (10-50x faster)
 │   ├── main.go            # CLI interface with JSON I/O
@@ -41,15 +49,23 @@ residualriskapp/
 │       ├── riskdays.go    # Bootstrap orchestration
 │       ├── integration.go # Numerical integration
 │       ├── probability.go # Probability calculations
+│       ├── prep.go        # PrEP viral dynamics, detection & infectivity
+│       ├── prep_models.go # PrEP data structures
+│       ├── prep_integration.go # PrEP integrator (compact-support Gauss-Legendre)
+│       ├── kde.go         # KDE-log mode estimation (--kde-mode)
+│       ├── hsm.go         # Half-sample-mode estimator
 │       ├── helpers.go     # Utility functions
 │       ├── random.go      # Random sampling
-│       └── riskdays_test.go
+│       ├── version.go     # Go binary version (single source of truth)
+│       └── *_test.go      # Go tests (riskdays, prep, kde)
 ├── scripts/
-│   └── build_go.sh        # One-command wrapper for `make -C go build`
+│   ├── build_go.sh        # One-command wrapper for `make -C go build`
+│   └── run_tests.sh       # Go + Python test runner (sandbox-safe `fast` mode)
 ├── static/                # Pre-computed Bayesian posterior distributions (Parquet)
 ├── tests/                 # Python test suite
 ├── docker/                # Docker build and deployment scripts
 ├── .streamlit/            # Streamlit configuration
+├── TODO.md                # Canonical task tracker (see "Task Tracking")
 ├── pyproject.toml         # Python project config (managed by uv, hatchling build backend)
 └── uv.lock                # Locked dependency versions (do not edit manually)
 ```
@@ -99,15 +115,26 @@ RSE = `lod50_sd / lod50` (the coefficient of variation of the 50% LoD; invariant
 
 - **`estimator.py`** — Streamlit web UI (the Estimator page)
   - Parameter input interface with expandable sections
-  - Supports three RDE estimation methods: Mechanistic model, Lookback data, Mechanistic model with PrEP
+  - Two RDE estimation methods (selectbox): **Lookback data** and **Mechanistic model**
+  - Optional **oral- and/or injectable-PrEP** breakthrough-infection RDE components (oPrEP/iPrEP checkboxes) layered on top, with per-component and additive total residual risk
+  - NAT-assay dropdown (canned LoD presets from `residualrisk/assays.py`) or manual LoD entry
   - Real-time calculation and result visualization
   - Imports via the public API: `import residualrisk as rr`
 
-- **`residualrisk/core.py`** — Main calculation engine
+- **`residualrisk/core.py`** — Baseline calculation engine
   - Viral concentration dynamics
   - Infectivity probability calculations
-  - Bootstrap simulation methods
+  - Bootstrap simulation methods (`risk_days_bs`, `residual_risk_rd`, `total_residual_risk_rd`)
   - Integration with Go acceleration via `residualrisk/_go.py`
+
+- **`residualrisk/prep.py`** — PrEP-breakthrough model
+  - Breakthrough viral dynamics (eclipse → growth → oscillating plateau; analytic `tcrit`)
+  - NAT + serology (Weibull) detection; optional drug-effect transmissibility reduction
+  - `risk_days_prep_bs` bootstrap (compact-support Gauss-Legendre integrator), Go-accelerated
+
+- **`residualrisk/assays.py`** — Canned NAT-assay LoD presets
+  - `NAT_ASSAYS` table (single source of truth) + `lods_for_assay` / `list_assays` helpers
+  - Consumed by both the public API (`risk_days_bs(assay=…)`) and `estimator.py`; see the Public Python API section above
 
 - **`residualrisk/_go.py`** — Go binary wrapper
   - JSON-based communication with Go binary
@@ -224,10 +251,14 @@ this document first.
 
 ## PrEP Model Status
 
-- `estimator.py` has UI stubs for the "Mechanistic model with PrEP" dropdown (currently shows a "not yet available" message and halts)
-- No PrEP model source is present in the repo at this time; the prior `residualrisk_prep.py` was removed during the package restructure
-- Go implementation of PrEP model **does not exist yet**
-- Plan: release initial version without PrEP, then add a PrEP module (likely at `residualrisk/prep.py`) alongside a manuscript
+The PrEP-breakthrough model is **fully implemented** across the stack:
+
+- **Python** — `residualrisk/prep.py` (`risk_days_prep_bs`), exported from the public API. Supports the same *k* input distributions as the baseline, optional sinusoidal `a`/`b` uncertainty, and the optional `drug_effect` transmissibility-reduction factor (see the Public Python API section for the full kwarg set).
+- **Go** — `go/riskdays/prep*.go`, bridged via `risk_days_prep_bs_go` in `_go.py`, with Python↔Go parity tests.
+- **UI** — `estimator.py` exposes oral-PrEP (oPrEP) and injectable-PrEP (iPrEP) breakthrough risk via **checkboxes** (not a separate RDE-method dropdown option), each with its own parameter expander, plus per-component and additive total residual risk (`total_residual_risk_rd`).
+- **Documentation** — `docs/theory_prep.md`, rendered in the Documentation page's **"PrEP model"** tab; **awaiting EG review** (see `TODO.md`).
+
+Open follow-ups live in `TODO.md` — notably independent oral/injectable `drug_effect` draws for the total-risk credible interval, and the deferred PK/PD drug-concentration extension.
 
 ## Development Workflow
 
@@ -348,6 +379,11 @@ Both Python versions are displayed together in the app sidebar (`App vX.Y.Z · L
    git tag -a vX.Y.Z -m "Release vX.Y.Z"
    git push origin vX.Y.Z
    ```
+   On a `v*` tag push, the `docker-publish.yml` `verify-version` job asserts that
+   `APP_VERSION` in `app.py` equals the tag (minus the `v`) before any image is
+   published — so the tag and `APP_VERSION` must match (e.g. tag `v1.1.0a7` ⇔
+   `APP_VERSION = "1.1.0a7"`). Pre-release tags (PEP 440, e.g. `v1.1.0a7`) publish
+   only their full-version image and never move the `latest` / `X.Y` tags.
 
 ## Common Tasks
 

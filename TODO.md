@@ -32,19 +32,20 @@ on. Add Python/Go parity tests for the new independent-draw path. Until then the
 total CrI is captioned as assuming incidence independence with oral/injectable
 PrEP-specific draws shared.
 
-### SESSION STATE (2026-05-29)
+### SESSION STATE (2026-07-01)
 
-On `feature_prep_model`; `main` is fully merged in (merge commit `31118a6`),
-working tree clean, all three versions at `1.1.0.dev0`. Everything below the
-line — the PrEP model build-out, all code-review findings (H1, H2, M1, M2, M3,
-L1, L2, L4, L5), the integration-robustness / truncnorm-positivity /
-analytic-`tcrit` work, the marker-based test runner, and the sinusoidal
-`a`/`b` uniform-uncertainty feature (commit `40a6cb2`), and the PrEP drug-effect
-(transmissibility-reduction) parameter (commit `05b9e76`) — is **committed**.
-`bash scripts/run_tests.sh fast` is robust (marker-based) on both branches.
-(Note: the drug-effect `@multiprocessing` tests still need an outside-sandbox run;
-in-sandbox we verified ruff, Go tests, 33 sandbox-safe prep tests, and the Go
-bridge.)
+On `feature_prep_model`; `main` is fully merged in again (merge commit `bc70bad`,
+2026-07-01 — bringing the canned-NAT-assay LoD API, the NAT-assay documentation
+tab, the CI version-tag check, and dependency bumps; see Completed → "main →
+feature merge"). Working tree clean. **App + Library versions are `1.1.0a7`; Go is
+`1.1.0.dev0`.** The full suite (incl. the `@multiprocessing` `ProcessPoolExecutor`
+tests) passes **outside the sandbox**; in-sandbox `bash scripts/run_tests.sh fast`
+(marker-based) is green (Go + 223 sandbox-safe Python tests). Everything below the
+line — the PrEP model build-out, all code-review findings (H1, H2, M1, M2, M3, L1,
+L2, L4, L5), the integration-robustness / truncnorm-positivity / analytic-`tcrit`
+work, the marker-based test runner, the sinusoidal `a`/`b` uniform-uncertainty
+feature (commit `40a6cb2`), and the PrEP drug-effect (transmissibility-reduction)
+parameter (commit `05b9e76`) — is **committed**.
 
 This session ("prep-model-cleanup") then crystallised the **scope, validation, and
 documentation** of the tool: the Layer 1 (tool) vs Layer 2 (Python API / effective
@@ -72,33 +73,6 @@ documentation".
       2025; the baseline window-period numbers were not separately reproduced
       (same engine, covered by unit tests + the truncnorm-fix tests). A short
       baseline replication in `../residualriskapp_validation` would close this too.
-
-### Assay defaults & calibration
-
-- [ ] **Re-check and populate default NAT assay parameters (LoD50 / LoD95).**
-      Re-derive the tool's default assay parameters — LoD50, LoD95 (and the
-      implied `lod95_lod50_ratio`) — from manufacturer **package inserts**.
-      Assays to cover (at least):
-    - Roche cobas TaqScreen **MPX**
-    - Roche cobas TaqScreen **MPX v2.0**
-    - Grifols Procleix **Ultrio Plus**
-    - Grifols Procleix **Ultrio Elite**
-
-      Specifics to get right:
-    - **Revisit the IU/mL → copies/mL conversion** (the canonical home for the
-      IU↔copies/mL LOD-conversion question raised in the `rr_prep_v3` review).
-      Refer to the existing research already performed and applied in
-      `~/dev/residual_risk/roche_rr_latam/` — that repo also holds the Roche
-      package insert and the correct LoD numbers.
-    - **HIV type / group specificity matters:** LoD differs by HIV-1 vs HIV-2 and
-      by HIV-1 group (M vs O). **Provide defaults *only* for the most common HIV-1
-      group (Group M).** Do **not** ship defaults for HIV-2 or the less common
-      HIV-1 groups.
-    - **WHO International Standard version:** analytical-sensitivity LoD values are
-      calibrated against a specific WHO standard; the IU values (and hence the
-      IU→copies conversion) depend on which standard/version was used. Record, per
-      assay/insert, which WHO standard version the quoted LoD is calibrated to, and
-      keep that consistent across assays and the conversion factor.
 
 ---
 
@@ -269,8 +243,10 @@ document is preferred. **Awaiting EG review.**
       §11 Assumptions & limitations · §12 References
 - [x] Figures — `docs/figures/make_prep_figures.py` (faithful to `prep.py`): pipeline,
       viral dynamics, NAT/serology detection, RDE construction
-- [ ] **Wire into the app** — render `theory_prep.md` (a second Documentation page, or append
-      it to the existing accordion page); decide alongside the keep-separate-vs-merge question
+- [x] **Wire into the app** — `pages/1_Documentation.py` renders `theory_prep.md` in a
+      **"PrEP model"** tab (3-tab layout: Baseline model & methods / NAT assay parameters /
+      PrEP model). The keep-separate option was taken (`theory.md` / `assays.md` /
+      `theory_prep.md` stay as separate files, one per tab); merge-into-one remains EG's call.
 - [ ] **Resolve drafting flags** (marked "Reviewer note" / "to confirm" in the draft): the
       copies-vs-virions convention for `set_point`; the serology-derivation eclipse (6 d) vs
       model eclipse (7 d); injectable set-point provenance; incidence-input sources; and the
@@ -280,6 +256,39 @@ document is preferred. **Awaiting EG review.**
 ---
 
 ## Completed
+
+### main → feature merge: canned NAT-assay LoD API + docs tab (2026-07-01, merge commit `bc70bad`)
+
+- [x] **Merged `main` into `feature_prep_model`.** Brought in the canned-NAT-assay
+      LoD API (`residualrisk/assays.py`: `NAT_ASSAYS` / `lods_for_assay` /
+      `list_assays` / `AssayLoD`, and `risk_days_bs(assay=…)`), the NAT-assay
+      **documentation tab** (`docs/assays.md`), the CI `verify-version` tag check
+      (`docker-publish.yml`), and dependency bumps. Bumped **app + library to
+      `1.1.0a7`** (Go unchanged at `1.1.0.dev0`). Six conflicts resolved: versions;
+      unioned assays + PrEP exports (`__init__.py`); 3-tab Documentation page
+      (Baseline model & methods / NAT assay parameters / PrEP model); expanded
+      credits; both API-note blocks (`AGENTS.md`); composed `verify-version` + PEP 440
+      image tags (`docker-publish.yml`). Validated: lock consistent,
+      `run_tests.sh fast` green (Go + 223 Python), all pages render (estimator shows
+      the NAT-assay dropdown alongside oPrEP/iPrEP), full suite green outside the
+      sandbox, and a browser check confirmed canned assays work with oral + injectable
+      PrEP. `README.md` + `AGENTS.md` brought up to date (PrEP status, repo structure,
+      public API surface, versioning/CI). Safety ref:
+      `backup/feature_prep_model-pre-main-merge`.
+
+### Assay defaults & calibration — delivered via the canned-NAT-assay work (merged 2026-07-01)
+
+- [x] **Default NAT-assay LoD presets re-derived from package inserts.** `residualrisk/
+      assays.py` ships `NAT_ASSAYS` (HIV-1 **Group M only**, copies/mL) for seven
+      assays — Procleix Ultrio / Ultrio Plus / Ultrio Elite, cobas TaqScreen MPX /
+      MPX v2.0, cobas MPX, and the Bio-Manguinhos Brazilian platform — each with
+      `lod50` / `lod50_sd` / `lod95`, the **IU/mL→copies/mL `cp_per_iu` factor**, and
+      the **WHO International Standard (`iu_std`)** it is calibrated against. The
+      `estimator.py` default is **Ultrio Elite**. Full derivation, LoD sources, WHO IS
+      basis and the probit fitting are documented in `docs/assays.md` (in-app) and the
+      companion analysis `residualrisk_analysis/assays/ASSAYS.qmd`. **Known caveat:**
+      the Bio-Manguinhos `lod50_sd` is an *assumed* RSE of 13% (no published CI) —
+      revisit if the per-dilution hit-rate table appears.
 
 ### End-to-end PrEP validation — release gate discharged (2026-05-29)
 
@@ -554,7 +563,8 @@ directly in the webapp, instead of requiring users to pre-compute an "effective
 incidence." See **## Scope & validation** for the decision (Layer 2 stays out of
 the webapp for now), the recommended Python-API approach, and the full Layer 2
 component reference. (The IU/mL ↔ copies/mL LOD conversion surfaced in the same
-review is tracked under Open → "Assay defaults & calibration".)
+review was delivered via the canned-NAT-assay work — see Completed → "Assay
+defaults & calibration".)
 
 ---
 

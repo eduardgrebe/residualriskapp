@@ -16,9 +16,9 @@ Additional assistance by:
 
 Original framework for estimating risk-day equivalents:
 
-> Weusten, JJAM, Van Drimmelen HAJ, Lelie NP. Mathematic Modeling of the Risk of HBV, HCV, and HIV Transmission by Window‐phase Donations Not Detected by NAT. *Transfusion.* 2002;42(5):5. doi:[10.1046/j.1537-2995.2002.00099.x](https://doi.org/10.1046/j.1537-2995.2002.00099.x).
+> Weusten, JJAM, Van Drimmelen HAJ, Lelie NP. Mathematic Modeling of the Risk of HBV, HCV, and HIV Transmission by Window‐phase Donations Not Detected by NAT. *Transfusion.* 2002;42(5):537-548. doi:[10.1046/j.1537-2995.2002.00099.x](https://doi.org/10.1046/j.1537-2995.2002.00099.x).
 
-> Weusten, J, Vermeulen M, Van Drimmelen, Lelie N. Refinement of a Viral Transmission Risk Model for Blood Donations in Seroconversion Window Phase Screened by Nucleic Acid Testing in Different Pool Sizes and Repeat Test Algorithms. *Transfusion.* 2011;51(1):1. doi:[10.1111/j.1537-2995.2010.02804.x](https://doi.org/10.1111/j.1537-2995.2010.02804.x).
+> Weusten, J, Vermeulen M, Van Drimmelen, Lelie N. Refinement of a Viral Transmission Risk Model for Blood Donations in Seroconversion Window Phase Screened by Nucleic Acid Testing in Different Pool Sizes and Repeat Test Algorithms. *Transfusion.* 2011;51(1):203-215. doi:[10.1111/j.1537-2995.2010.02804.x](https://doi.org/10.1111/j.1537-2995.2010.02804.x).
 
 Baseline residual risk model and PrEP risk model framework:
 
@@ -46,7 +46,7 @@ You are free to use, copy and host instances of the app, for noncommercial and c
 
 We request that you cite the creators if you use this software in analysis, reports or publications, with the following suggested citation:
 
-> Grebe E. (2026). Residual HIV Transfusion Transmission Risk Estimator (Version 1.0.0) [Computer software]. Vitalant Research Institute. [https://codeberg.org/eduardgrebe/residualriskapp](https://codeberg.org/eduardgrebe/residualriskapp).
+> Grebe E. (2026). Residual HIV Transfusion Transmission Risk Estimator (Version 1.1.0) [Computer software]. Vitalant Research Institute. [https://codeberg.org/eduardgrebe/residualriskapp](https://codeberg.org/eduardgrebe/residualriskapp).
 
 BibTeX Entry:
 
@@ -54,7 +54,7 @@ BibTeX Entry:
 @software{grebe2026,
   author       = {Grebe, Eduard},
   title        = {Residual HIV Transfusion Transmission Risk Estimator},
-  version      = {1.0.0},
+  version      = {1.1.0},
   year         = {2026},
   publisher    = {Vitalant Research Institute},
   doi          = {},

@@ -16,6 +16,8 @@ A Streamlit-based interactive web interface is provided that can make use of eit
 
 - **Interactive Web Interface**: Streamlit-based UI for parameter exploration and visualization
 - **High-Performance Computation**: Go implementation provides 10-50x speedup over the Python fallback and is required for practical use
+- **PrEP-Breakthrough Modeling**: Optional oral (oPrEP) and injectable (iPrEP) breakthrough-infection risk components, layered additively on the baseline window-period risk
+- **Canned NAT-Assay Presets**: Built-in published 50%/95% limits of detection (HIV-1 Group M) for seven blood-screening NAT assays, selectable by name (or enter LoDs manually)
 - **Flexible Parameterization**: Supports various NAT assays, pooling strategies, and viral kinetics models
 - **Flexible k Input Distribution**: k can be sampled from posterior draws (human, animal, human-weighted) or a parametric distribution: Inverse Gamma(α, β) or a two-component lognormal mixture (90% human + 10% animal by default)
 - **Credible Interval Estimation**: Bootstrap-based credible intervals for risk estimates
@@ -276,7 +278,7 @@ print(f"Residual risk: {rr_pe:.3f} per million (95% CrI {rr_cri[0]:.3f}–{rr_cr
 print(f"residualrisk version: {rr.__version__}")
 ```
 
-**Public API surface** (see `residualrisk/__init__.py`): `risk_days_bs`, `iwp_from_lookback_data`, `residual_risk_rd`, `get_cpu_core_count`, `mode_rounded`, `mode_kde`, `sample_invgamma`, `sample_lnmix`, `NAT_ASSAYS`, `lods_for_assay`, `list_assays`, `AssayLoD`, `find_go_binary`, `__version__`.
+**Public API surface** (see `residualrisk/__init__.py`): `risk_days_bs`, `risk_days_prep_bs`, `iwp_from_lookback_data`, `residual_risk_rd`, `total_residual_risk_rd`, `get_cpu_core_count`, `mode_rounded`, `mode_kde`, `sample_invgamma`, `sample_lnmix`, `NAT_ASSAYS`, `lods_for_assay`, `list_assays`, `AssayLoD`, `find_go_binary`, `mode_hsm_go`, `mode_kde_go`, `risk_days_prep_bs_go`, `__version__`.
 
 > **Canned assays — provisional Bio-Manguinhos SD.** `NAT_ASSAYS` carries published 50%/95% LoDs (HIV-1 Group M, copies/mL) for the supported assays. One caveat: the `biomanguinhos` (Brazilian NAT Platform, Bio-Manguinhos) entry has **no published LoD50 confidence interval** — Rocha et al. (2018) report point estimates only — so its `lod50_sd` is an *assumed* relative SD of **13%** (6.08 IU/mL ≈ 3.527 copies/mL). A value of **4.95 IU/mL (RSE 10.6%) was used in prior analyses.** This is provisional pending the per-dilution hit-rate table; see the note above `NAT_ASSAYS` in `residualrisk/assays.py`.
 
@@ -387,9 +389,12 @@ residualriskapp/
 ├── app.py                   # Multipage entry point / st.navigation router
 ├── estimator.py             # Main estimator page (imports the residualrisk package)
 ├── pages/                   # Secondary Streamlit pages (Documentation, Credits)
+├── docs/                    # In-app docs (theory.md, theory_prep.md, assays.md) + figures
 ├── residualrisk/            # Installable Python package (core calculation engine)
 │   ├── __init__.py          # Public API surface
-│   ├── core.py              # Core calculation engine (bootstrap, integration, IWP)
+│   ├── core.py              # Baseline calculation engine (bootstrap, integration, IWP)
+│   ├── prep.py              # PrEP-breakthrough model
+│   ├── assays.py            # Canned NAT-assay LoD presets
 │   └── _go.py               # Wrapper around the Go binary
 ├── static/                  # Pre-computed posterior distributions (Parquet)
 │   ├── k_param_human.parquet
@@ -407,10 +412,14 @@ residualriskapp/
 └── .venv/                   # Virtual environment (created by uv sync)
 ```
 
-## License
+## License and usage terms
 
-Copyright (C) 2025–2026 Vitalant and Eduard Grebe Consulting
+Source code and text copyright © 2025–2026 Vitalant, with components © Eduard Grebe Consulting. All code is released under the GNU Affero General Public License v3.0 (AGPL).
 Author: Eduard Grebe <egrebe@vitalant.org> <eduard@grebe.consulting>
+
+You are free to use, copy and host instances of the app, for both noncommercial and commercial applications, as long as the creators are credited and the terms of the AGPL are complied with.
+
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
@@ -426,14 +435,17 @@ You should have received a copy of the GNU Affero General Public License along w
 - Institution: Vitalant Research Institute
 
 Contributors:
-- Brian Custer
-- Michael P. Busch
+- **Brian Custer** (Vitalant Research Institute) — conceptualization, supervision, oversight, guidance, and financial support
+- **Vivian I. Avelino-Silva** — conceptualization
+- **Marjorie D. Bravo** — collaboration and data curation
+- **Michael P. Busch** (Vitalant Research Institute) — conceptualization and guidance
+- **Artur Belov** (U.S. Food and Drug Administration) — infectivity model development and *k*-parameter posterior distributions (human and animal data)
 
 ## Citation
 
 If you use this tool in your research, please cite it as:
 
-> Grebe, E. (2026). *Residual HIV Transfusion Transmission Risk Estimation Tool* (Version 0.9.4) [Software]. Vitalant Research Institute. https://codeberg.org/eduardgrebe/residualriskapp
+> Grebe, E. (2026). *Residual HIV Transfusion Transmission Risk Estimation Tool* (Version 1.1.0) [Software]. Vitalant Research Institute. https://codeberg.org/eduardgrebe/residualriskapp
 
 BibTeX:
 
@@ -442,8 +454,7 @@ BibTeX:
   author       = {Grebe, Eduard},
   title        = {{Residual HIV Transfusion Transmission Risk Estimation Tool}},
   year         = {2026},
-  month        = {5},
-  version      = {0.9.4},
+  version      = {1.1.0},
   url          = {https://codeberg.org/eduardgrebe/residualriskapp},
   organization = {Vitalant Research Institute},
   license      = {AGPL-3.0-or-later}
@@ -458,9 +469,13 @@ The model makes use of established methodology and novel approaches for HIV tran
 
 - Fiebig, E.W., et al. (2003). Dynamics of HIV viremia and antibody seroconversion in plasma donors: implications for diagnosis and staging of primary HIV infection. *AIDS*, 17(13):1871-1879. doi:[10.1097/00002030-200309050-00005](https://doi.org/10.1097/00002030-200309050-00005).
 
-- Weusten J., et al. (2011) Refinement of a viral transmission risk model for blood donations in seroconversion window phase screened by nucleic acid testing in different pool sizes and repeat test algorithms. *Transfusion*, 51(1):203-15. doi:[10.1111/j.1537-2995.2010.02804.x](https://doi.org/10.1111/j.1537-2995.2010.02804.x).
+- Weusten, J.J.A.M., van Drimmelen, H.A.J., Lelie, N.P. (2002) Mathematic modeling of the risk of HBV, HCV, and HIV transmission by window-phase donations not detected by NAT. *Transfusion*, 42(5):537-548. doi:[10.1046/j.1537-2995.2002.00099.x](https://doi.org/10.1046/j.1537-2995.2002.00099.x).
+
+- Weusten J., et al. (2011) Refinement of a viral transmission risk model for blood donations in seroconversion window phase screened by nucleic acid testing in different pool sizes and repeat test algorithms. *Transfusion*, 51(1):203-215. doi:[10.1111/j.1537-2995.2010.02804.x](https://doi.org/10.1111/j.1537-2995.2010.02804.x).
 
 - Grebe E., et al. (2020) HIV incidence in US first-time blood donors and transfusion risk with a 12-month deferral for men who have sex with men. *Blood*, 136(11):1359-1367. doi:[10.1182/blood.2020007003](https://doi.org/10.1182/blood.2020007003).
+
+- Grebe E, Avelino-Silva VI, Bravo MD, Busch MP, Custer B. (2025) Development of a risk assessment model of HIV transfusion transmission associated with undisclosed use of pre-exposure prophylaxis (PrEP) by blood donors. [ISBT Abstract PA28-L04; 35th Regional Congress of the ISBT, Milan, Italy.] *Vox Sanguinis*, 120(Suppl. 1):110.
 
 - Belov A., et al. (2023) Modeling the Risk of HIV Transfusion Transmission. *J Acquir Immune Defic Syndr*, 92(2):173-179. doi:[10.1097/QAI.0000000000003115](https://doi.org/10.1097/QAI.0000000000003115).
 
@@ -497,6 +512,6 @@ go get package-name
 go mod tidy
 ```
 
-## Acknowledgments
+## Funding and acknowledgments
 
-Developed at [Vitalant Research Institute](https://research.vitalant.org) for blood safety research.
+Developed at [Vitalant Research Institute](https://research.vitalant.org) for blood safety research. Development of this tool was primarily sponsored by Vitalant Research Institute, with additional support from [Eduard Grebe Consulting](https://grebe.consulting).
