@@ -200,6 +200,26 @@ rd_pe, rd_cri, rd_range, rdests = rr.risk_days_bs(
     use_go=True,                      # use Go acceleration (10-50x faster)
 )
 
+# Shortcut: use a canned NAT assay's published LoDs instead of the explicit
+# lod50 / lod50_sd / lod95_lod50_ratio triplet (mutually exclusive with them).
+rr.list_assays()                      # {'ultrio': 'Procleix Ultrio (Tigris)', ...}
+rd_pe, rd_cri, rd_range, rdests = rr.risk_days_bs(
+    k=0.013,
+    doubling_time=20.5 / 24,
+    doubling_time_norm_sd=1.33 / 24,
+    assay="ultrio_elite",             # in place of lod50/lod50_sd/lod95_lod50_ratio
+    volume_transfused=20,
+    volume_transfused_range=(15, 30),
+    pool_size=16,
+    retests=1,
+    k_posterior_sample=k_samples,
+    n_bs=10000,
+    use_go=True,
+)
+# Inspect a preset's numbers (+ provenance) without running a simulation:
+lod = rr.lods_for_assay("ultrio_elite")
+# lod.lod50, lod.lod50_sd, lod.lod95_lod50_ratio, lod.cp_per_iu, lod.iu_std
+
 # Alternative: sample k from an Inverse Gamma distribution (α=2, β=0.002019)
 # k_pe can be the mode (β/(α+1)), median, or mean (β/(α-1)) of the distribution
 rd_pe, rd_cri, rd_range, rdests = rr.risk_days_bs(
@@ -256,7 +276,23 @@ print(f"Residual risk: {rr_pe:.3f} per million (95% CrI {rr_cri[0]:.3f}–{rr_cr
 print(f"residualrisk version: {rr.__version__}")
 ```
 
-**Public API surface** (see `residualrisk/__init__.py`): `risk_days_bs`, `iwp_from_lookback_data`, `residual_risk_rd`, `get_cpu_core_count`, `mode_rounded`, `mode_kde`, `sample_invgamma`, `sample_lnmix`, `find_go_binary`, `__version__`.
+**Public API surface** (see `residualrisk/__init__.py`): `risk_days_bs`, `iwp_from_lookback_data`, `residual_risk_rd`, `get_cpu_core_count`, `mode_rounded`, `mode_kde`, `sample_invgamma`, `sample_lnmix`, `NAT_ASSAYS`, `lods_for_assay`, `list_assays`, `AssayLoD`, `find_go_binary`, `__version__`.
+
+> **Canned assays — provisional Bio-Manguinhos SD.** `NAT_ASSAYS` carries published 50%/95% LoDs (HIV-1 Group M, copies/mL) for the supported assays. One caveat: the `biomanguinhos` (Brazilian NAT Platform, Bio-Manguinhos) entry has **no published LoD50 confidence interval** — Rocha et al. (2018) report point estimates only — so its `lod50_sd` is an *assumed* relative SD of **13%** (6.08 IU/mL ≈ 3.527 copies/mL). A value of **4.95 IU/mL (RSE 10.6%) was used in prior analyses.** This is provisional pending the per-dilution hit-rate table; see the note above `NAT_ASSAYS` in `residualrisk/assays.py`.
+
+#### LoD50 relative standard error (RSE) by assay
+
+RSE = `lod50_sd / lod50` (the coefficient of variation of the 50% LoD; invariant under the IU/mL→copies/mL conversion). For every assay except Bio-Manguinhos the SD derives from a 95% CI of the 50% LoD; Bio-Manguinhos uses an *assumed* RSE (see above). Underlying LoD/CI data are compiled in the companion analysis `residualrisk_analysis/assays/ASSAYS.qmd`.
+
+| Assay | RSE on LoD50 | Source |
+|---|---|---|
+| `cobas_taqscreen_mpxv2` | 4.72% | Probit fit of Roche insert reactivity data (95% CI) |
+| `cobas_mpx` | 6.04% | Roche cobas MPX CE/IVD insert (95% CI of 50% LoD) |
+| `cobas_taqscreen_mpx` | 7.00% | Probit fit of Roche insert reactivity data (95% CI) |
+| `ultrio_plus` | 7.07% | Grifols Procleix Ultrio Plus insert (95% CI of 50% LoD) |
+| `ultrio` | 7.28% | Grifols Procleix Ultrio insert, dHIV-1 (95% CI of 50% LoD) |
+| `ultrio_elite` | 7.55% | Grifols Procleix Ultrio Elite insert (95% CI of 50% LoD) |
+| `biomanguinhos` | 13.00% (assumed, provisional) | Assumed RSE — Rocha et al. (2018) report point LoDs only (no CI) - ballparked from 24 replicates/dilution |
 
 ### R integration (reticulate)
 

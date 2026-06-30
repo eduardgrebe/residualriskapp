@@ -14,6 +14,12 @@ Additional assistance by:
 
 ## References
 
+Original framework for estimating risk-day equivalents:
+
+> Weusten, JJAM, Van Drimmelen HAJ, Lelie NP. Mathematic Modeling of the Risk of HBV, HCV, and HIV Transmission by Window‐phase Donations Not Detected by NAT. *Transfusion.* 2002;42(5):5. doi:[10.1046/j.1537-2995.2002.00099.x](https://doi.org/10.1046/j.1537-2995.2002.00099.x).
+
+> Weusten, J, Vermeulen M, Van Drimmelen, Lelie N. Refinement of a Viral Transmission Risk Model for Blood Donations in Seroconversion Window Phase Screened by Nucleic Acid Testing in Different Pool Sizes and Repeat Test Algorithms. *Transfusion.* 2011;51(1):1. doi:[10.1111/j.1537-2995.2010.02804.x](https://doi.org/10.1111/j.1537-2995.2010.02804.x).
+
 Baseline residual risk model and PrEP risk model framework:
 
 > Grebe E, Busch MP, Notari EP, et al. HIV incidence in US first-time blood donors and transfusion risk with a 12-month deferral for men who have sex with men. *Blood.* 2020;136(11):1359-1367. doi:[10.1182/blood.2020007003](https://doi.org/10.1182/blood.2020007003).
@@ -35,3 +41,23 @@ Source code and text copyright (c) 2025-2026 Vitalant, with components (c) Eduar
 You are free to use, copy and host instances of the app, for noncommercial and commercial applications, as long as the the creators are credited, and the terms of the AGPL are complied with.
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+
+## Citation
+
+We request that you cite the creators if you use this software in analysis, reports or publications, with the following suggested citation:
+
+> Grebe E. (2026). Residual HIV Transfusion Transmission Risk Estimator (Version 1.0.0) [Computer software]. Vitalant Research Institute. [https://codeberg.org/eduardgrebe/residualriskapp](https://codeberg.org/eduardgrebe/residualriskapp).
+
+BibTeX Entry:
+
+```
+@software{grebe2026,
+  author       = {Grebe, Eduard},
+  title        = {Residual HIV Transfusion Transmission Risk Estimator},
+  version      = {1.0.0},
+  year         = {2026},
+  publisher    = {Vitalant Research Institute},
+  doi          = {},
+  url          = {https://codeberg.org/eduardgrebe/residualriskapp}
+}
+```

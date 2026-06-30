@@ -53,6 +53,14 @@ C0 = 0.00025
 # pool_size = 16
 # retests = 1
 
+# Canned NAT-assay LoD presets now live in the installable package
+# (residualrisk/assays.py) as the single source of truth; the API and this UI
+# consume the same table. NAT_ASSAYS is keyed by slug, each entry carrying a
+# display_name plus lod50 / lod50_sd / lod95 / cp_per_iu / iu_std. See the
+# residualrisk.assays module docstring for the derivation and conversion notes.
+NAT_ASSAYS = rr.NAT_ASSAYS
+MANUAL_LOD_OPTION = "Enter limits of detection"
+
 if "seed" not in st.session_state:
     st.session_state["seed"] = random.randint(1, 999999)
 
@@ -651,31 +659,84 @@ if is_mechanistic_ui:
             pool_size = 1
             retests = 0
 
-        lod50 = col2.number_input(
-            "NAT assay 50% LoD (copies/mL)",
-            min_value=0.0,
-            max_value=500.0,
-            value=2.73,
-            step=0.01,
-            help="Placeholder help text",
+        nat_assay_options = list(NAT_ASSAYS) + [MANUAL_LOD_OPTION]
+        nat_assay = col2.selectbox(
+            "Select NAT assay",
+            options=nat_assay_options,
+            index=nat_assay_options.index("ultrio_elite"),
+            format_func=lambda key: (
+                NAT_ASSAYS[key]["display_name"] if key in NAT_ASSAYS else key
+            ),
+            help="Select a NAT assay to use its published 50%/95% limits of "
+            "detection (copies/mL, HIV-1 Group M), or choose "
+            f"'{MANUAL_LOD_OPTION}' to enter values manually.",
         )
-        lod50_sd = col2.number_input(
-            "NAT assay 50% LoD SD (copies/mL)",
-            min_value=0.0,
-            max_value=500.0,
-            value=0.193,
-            step=0.001,
-            help="Placeholder help text",
-        )
-        lod95 = col2.number_input(
-            "NAT assay 95% LoD (copies/mL)",
-            min_value=0.0,
-            max_value=500.0,
-            value=12.33,
-            step=0.01,
-            help="Placeholder help text",
-        )
-        st.text("95% LoD : 50% LoD ratio will be fixed for simulations.")
+
+        if nat_assay == MANUAL_LOD_OPTION:
+            # Manual entry, pre-populated with the cobas MPX defaults.
+            # lod50 must be strictly positive: lod95_lod50_ratio divides by it.
+            lod50 = col2.number_input(
+                "NAT assay 50% LoD (copies/mL)",
+                min_value=0.01,
+                max_value=500.0,
+                value=NAT_ASSAYS["cobas_mpx"]["lod50"],
+                step=0.01,
+                help="Placeholder help text",
+            )
+            lod50_sd = col2.number_input(
+                "NAT assay 50% LoD SD (copies/mL)",
+                min_value=0.0,
+                max_value=500.0,
+                value=NAT_ASSAYS["cobas_mpx"]["lod50_sd"],
+                step=0.001,
+                format="%.4f",
+                help="Placeholder help text",
+            )
+            lod95 = col2.number_input(
+                "NAT assay 95% LoD (copies/mL)",
+                min_value=0.0,
+                max_value=500.0,
+                value=NAT_ASSAYS["cobas_mpx"]["lod95"],
+                step=0.01,
+                help="Placeholder help text",
+            )
+            conversion_note = (
+                "Limits of detection entered directly in copies/mL "
+                "(no IU/mL → copies/mL conversion applied)."
+            )
+        else:
+            # Canned assay: populate from the lookup table and show (read-only).
+            lod50 = NAT_ASSAYS[nat_assay]["lod50"]
+            lod50_sd = NAT_ASSAYS[nat_assay]["lod50_sd"]
+            lod95 = NAT_ASSAYS[nat_assay]["lod95"]
+            cp_per_iu = NAT_ASSAYS[nat_assay]["cp_per_iu"]
+            iu_std = NAT_ASSAYS[nat_assay]["iu_std"]
+            col2.number_input(
+                "NAT assay 50% LoD (copies/mL)",
+                value=lod50,
+                step=0.01,
+                disabled=True,
+            )
+            col2.number_input(
+                "NAT assay 50% LoD SD (copies/mL)",
+                value=lod50_sd,
+                step=0.001,
+                format="%.4f",
+                disabled=True,
+            )
+            col2.number_input(
+                "NAT assay 95% LoD (copies/mL)",
+                value=lod95,
+                step=0.01,
+                disabled=True,
+            )
+            conversion_note = (
+                f"IU/mL → copies/mL conversion factor in use: {cp_per_iu} cp/IU "
+                f"(HIV-1 Group M, {iu_std})."
+            )
+
+        st.caption(conversion_note)
+        st.caption("95% LoD : 50% LoD ratio will be fixed for simulations.")
         # fix_lod95_lod50_ratio = col2.checkbox(
         #     "Fix 95% LoD:50% LoD ratio",
         #     value = True

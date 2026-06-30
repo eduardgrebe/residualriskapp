@@ -40,7 +40,7 @@ def render_markdown_with_figures(md: str) -> None:
 
 
 def render_doc(text: str) -> None:
-    """Render a theory document as a scannable accordion: a visible preamble
+    """Render a documentation file as a scannable accordion: a visible preamble
     (title + intro, before the first ``## `` section), one collapsible expander
     per section, and any short trailing footer note below it.
 
@@ -72,10 +72,15 @@ def render_doc(text: str) -> None:
         render_markdown_with_figures(footer)
 
 
-tab_base, tab_prep = st.tabs(["Baseline model", "PrEP model"])
+tab_base, tab_assays, tab_prep = st.tabs(
+    ["Baseline model & methods", "NAT assay parameters", "PrEP model"]
+)
 
 with tab_base:
     render_doc((DOCS / "theory.md").read_text())
+
+with tab_assays:
+    render_doc((DOCS / "assays.md").read_text())
 
 with tab_prep:
     st.info(
