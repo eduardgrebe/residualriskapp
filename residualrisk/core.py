@@ -577,7 +577,6 @@ def _risk_days_bs_python(
         volume_transfused_range[0], volume_transfused_range[1], n_bs
     )
     print("Starting parallel risk days calculation on ", threads, " cores...")
-    rdests = []
     args_list = [
         (
             copies_per_virion,
@@ -598,11 +597,17 @@ def _risk_days_bs_python(
     from functools import partial
 
     _rd = partial(_risk_days, integration_method=integration_method)
+    # Fill results by SUBMISSION index (not completion order) so sim_df's parameter
+    # columns (built from args_list, in submission order) stay row-aligned with each
+    # iteration's iwp. as_completed only drives the (order-independent) progress counter.
+    rdests = [None] * n_bs
     with ProcessPoolExecutor(max_workers=threads) as executor:
-        futures = [executor.submit(_rd, *args) for args in args_list]
+        future_to_index = {
+            executor.submit(_rd, *args): i for i, args in enumerate(args_list)
+        }
         completed_count = 0
-        for future in as_completed(futures):
-            rdests.append(future.result())
+        for future in as_completed(future_to_index):
+            rdests[future_to_index[future]] = future.result()
             completed_count += 1
             # Update progress bar only when percentage changes (reduces warnings from multiprocessing)
             # Note: Streamlit warnings about missing ScriptRunContext are expected and harmless when using ProcessPoolExecutor

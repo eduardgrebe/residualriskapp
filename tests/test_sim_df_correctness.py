@@ -8,14 +8,16 @@
 # (at your option) any later version.
 
 """
-Tests that sim_df returned by the Go path contains the REAL per-iteration
-parameter values that were used to compute each IWP — not fabricated values.
+Tests that sim_df (returned by both the Go and Python paths) contains the REAL
+per-iteration parameter values that were used to compute each IWP — not fabricated
+or row-misaligned values.
 
 The key invariant: for every row i,
     RiskDays(row.k, row.doubling_time, row.lod50, row.volume_transfused, ...) == row.iwp
 
-These tests are intentionally slow (they call the Go binary) but fast enough for
-the full test suite.  They are NOT in the ProcessPoolExecutor-dependent category.
+The Go-path tests call the Go binary (not ProcessPoolExecutor-dependent). The
+Python-path alignment test uses ProcessPoolExecutor and is marked
+@pytest.mark.multiprocessing (runs outside semaphore-restricted sandboxes).
 """
 
 import time
@@ -24,6 +26,27 @@ import numpy as np
 import pytest
 
 import residualrisk as rr
+from residualrisk import core
+
+
+def _assert_rows_recompute_iwp(sim_df, rtol=1e-9):
+    """Every row's stored parameters must reproduce that row's iwp via
+    ``core._risk_days``. This is the real correctness invariant of sim_df and
+    catches any parameter<->iwp row misalignment (e.g. a Python bootstrap that
+    pairs submission-order params with completion-order results). Both the Go
+    binary and ``core._risk_days`` use the same fixed 1000-point Gauss-Legendre
+    rule, so the recompute is exact (~1e-13) for correctly aligned rows.
+    """
+    for row in sim_df.iter_rows(named=True):
+        rd = core._risk_days(
+            row["copies_per_virion"], row["C0"], row["doubling_time"],
+            row["volume_transfused"], row["k"], int(row["pool_size"]),
+            row["lod50"], row["lod95_lod50_ratio"], int(row["retests"]), z=row["z"],
+        )
+        assert np.isclose(rd, row["iwp"], rtol=rtol), (
+            f"row param->iwp mismatch: recomputed {rd:.10g} vs stored {row['iwp']:.10g} "
+            f"(k={row['k']:.6g}, dt={row['doubling_time']:.4g}, lod50={row['lod50']:.4g})"
+        )
 
 # ---------------------------------------------------------------------------
 # Shared parameters (small n_bs for speed)
@@ -120,16 +143,10 @@ class TestSimDfParamsAreReal:
     """
 
     def _check_row_consistency(self, sim_df, n_check=20):
-        """
-        Re-derive IWP from stored params for a sample of rows.
-        We can't call the Python single-iteration function directly because
-        the Go binary uses numerical integration that may differ slightly from
-        scipy. Instead we verify via the Go TestRiskDaysBS_ReturnsParams logic:
-        the IWP column must be consistent with the param columns.
-
-        Approach: verify that the iwp values are not constant (they vary with k
-        and other params) and that the correlation between k and iwp is positive
-        and plausible (higher k → longer window period).
+        """Re-derive IWP from each stored row's parameters and assert it matches
+        the stored iwp (the core sim_df row-alignment invariant), plus
+        positivity/finiteness. The Go binary and ``core._risk_days`` share the
+        fixed 1000-point Gauss-Legendre rule, so the recompute is exact.
         """
         assert len(sim_df) >= n_check
         sample = sim_df.sample(n=n_check, seed=42)
@@ -142,6 +159,9 @@ class TestSimDfParamsAreReal:
         for col in ("k", "doubling_time", "lod50", "volume_transfused"):
             assert (sample[col] > 0).all(), f"non-positive in {col}"
             assert sample[col].is_finite().all(), f"non-finite in {col}"
+
+        # Each row's params must reproduce its iwp (catches param<->iwp misalignment)
+        _assert_rows_recompute_iwp(sample)
 
     def test_invgamma_params_consistent(self):
         _, _, _, _, sim_df = rr.risk_days_bs(**_invgamma_kwargs())
@@ -231,3 +251,29 @@ class TestBinaryFormatCorrectness:
         _, _, _, _, df2 = rr.risk_days_bs(**{**kw, "seed": 77777})
         assert not np.array_equal(df1["k"].to_numpy(), df2["k"].to_numpy()), \
             "k samples should differ across seeds"
+
+
+# ---------------------------------------------------------------------------
+# Tests: Python (use_go=False) bootstrap keeps sim_df rows aligned
+# ---------------------------------------------------------------------------
+
+class TestSimDfPythonPathAlignment:
+    """The Python bootstrap fills results by submission index so each sim_df row
+    stays aligned with its iwp. Regression test for the ``as_completed``
+    completion-order bug (parameter columns in submission order paired with the
+    iwp column in worker-completion order). Uses ProcessPoolExecutor, so it is
+    marked @pytest.mark.multiprocessing and runs outside sandboxes that block
+    semaphore creation.
+    """
+
+    @pytest.mark.multiprocessing
+    def test_python_path_rows_recompute_to_iwp(self):
+        # threads>1 and enough rows so worker completion order differs from
+        # submission order — the exact condition the old code got wrong.
+        kw = {**_invgamma_kwargs(), "use_go": False, "threads": 4, "n_bs": 400}
+        _, _, _, rdests, sim_df = rr.risk_days_bs(**kw)
+        np.testing.assert_array_equal(
+            np.array(rdests), sim_df["iwp"].to_numpy(),
+            err_msg="rdests must equal sim_df.iwp",
+        )
+        _assert_rows_recompute_iwp(sim_df, rtol=1e-9)
