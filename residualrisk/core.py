@@ -72,7 +72,13 @@ def _prob_pos_init(C, doubling_time, pool_size, lod50, lod95_lod50_ratio, z):
         raise Exception("pool_size must be an integer of at least 1")
 
     # C is in copies copies_per_virion * C when C in virions
-    X = z * (math.log10(((C) / (pool_size * lod50))) / math.log10(lod95_lod50_ratio))
+    ratio = C / (pool_size * lod50)
+    if ratio <= 0:
+        # Concentration underflowed to 0 at the far integration node -> the
+        # initial test cannot be positive. Guard the log10 below (mirrors Go
+        # ProbPosInit, which returns 0 when ratio <= 0).
+        return 0.0
+    X = z * (math.log10(ratio) / math.log10(lod95_lod50_ratio))
     # print(X)
     from scipy.stats import norm
 
@@ -90,7 +96,12 @@ def _prob_neg_retest(C, doubling_time, pool_size, lod50, lod95_lod50_ratio, rete
         return 0
     elif retests >= 1:
         # C is in copies copies_per_virion * C when C in virions
-        X = z * (math.log10(((C) / lod50)) / math.log10(lod95_lod50_ratio))
+        ratio = C / lod50
+        if ratio <= 0:
+            # No detectable virus -> every retest is negative (mirrors Go
+            # ProbNegRetest, which returns 1 when ratio <= 0).
+            return 1.0
+        X = z * (math.log10(ratio) / math.log10(lod95_lod50_ratio))
         # print(X)
         from scipy.stats import norm
 

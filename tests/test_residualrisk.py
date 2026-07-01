@@ -232,6 +232,19 @@ class TestProbPosInit:
                 DEFAULTS["z"],
             )
 
+    def test_zero_concentration_returns_zero(self):
+        # Guard: when C underflows to 0 the initial test cannot be positive.
+        # Mirrors Go ProbPosInit (returns 0 for ratio<=0); avoids math.log10(0).
+        p = rr._prob_pos_init(
+            0.0,
+            DEFAULTS["doubling_time"],
+            DEFAULTS["pool_size"],
+            DEFAULTS["lod50"],
+            DEFAULTS["lod95_lod50_ratio"],
+            DEFAULTS["z"],
+        )
+        assert p == 0.0
+
 
 # ---------------------------------------------------------------------------
 # _prob_neg_retest
@@ -297,6 +310,21 @@ class TestProbNegRetest:
                 -1,
                 DEFAULTS["z"],
             )
+
+    def test_zero_concentration_all_retests_negative(self):
+        # Guard: when C underflows to 0 there is no detectable virus, so every
+        # retest is negative. Mirrors Go ProbNegRetest (returns 1 for ratio<=0);
+        # avoids math.log10(0).
+        result = rr._prob_neg_retest(
+            0.0,
+            DEFAULTS["doubling_time"],
+            DEFAULTS["pool_size"],
+            DEFAULTS["lod50"],
+            DEFAULTS["lod95_lod50_ratio"],
+            1,
+            DEFAULTS["z"],
+        )
+        assert result == 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -380,6 +408,17 @@ class TestRiskDays:
 
     def test_result_is_positive(self):
         assert self._call() > 0
+
+    def test_small_doubling_time_does_not_crash(self):
+        # Regression (core.py:75/93): a doubling_time below ~0.093 d makes the
+        # concentration underflow to 0.0 at the far integration node, where
+        # _prob_pos_init / _prob_neg_retest previously called math.log10(0) and
+        # raised ValueError — aborting the whole Python bootstrap. The ratio<=0
+        # guards (mirroring Go) now return finite values.
+        for dt in (0.09, 0.05, 0.02):
+            rd = self._call(doubling_time=dt)
+            assert math.isfinite(rd), f"doubling_time={dt} -> {rd}"
+            assert rd >= 0
 
 
 # ---------------------------------------------------------------------------

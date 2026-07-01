@@ -26,7 +26,7 @@ Go-unavailable deployments (fallback) rather than the normal app.
       errors → degenerate inputs (`ser_max<ser_min`, `ser_alpha=0`, `ser_beta=0`, `n_bs<=0`) produce garbage
       RDEs on **both** backends (even Go users). Fix: move validation above the dispatch, add
       set_point/eclipse/ser_* range checks mirroring Go `Validate()`, and stop swallowing validation errors.
-- [ ] **`core.py:75`** (+`:93`) — unguarded `math.log10(C)` raises `ValueError` when a bootstrap
+- [x] **`core.py:75`** ✅ FIXED (`ratio<=0` guards in `_prob_pos_init`→0 / `_prob_neg_retest`→1, mirroring Go; + no-crash/parity tests) — unguarded `math.log10(C)` raises `ValueError` when a bootstrap
       `doubling_time` draw < ~0.093 d underflows the concentration to 0.0 at the far integration node,
       aborting the entire Python bootstrap. **Round-2 confirmed reachable on the default `use_go=False`
       path with UI-allowed doubling-time SD** (546/10000 iters at dt=12h/SD=10h; 59/10000 at default dt with
