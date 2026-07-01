@@ -940,22 +940,22 @@ if include_prep_oral:
             help="Maximum time from infection to seroconversion in oPrEP users.",
         )
         seroconversion_weibull_alpha_oral = col2.number_input(
-            "Seroconversion Weibull shape (α)",
+            "Seroconversion Weibull scale (α)",
             min_value=0.0,
             max_value=500.0,
             value=50.49434,
             step=0.001,
             format="%.5f",
-            help="Shape parameter of the Weibull-family seroconversion curve for oPrEP.",
+            help="Scale parameter of the Weibull-family seroconversion curve for oPrEP.",
         )
         seroconversion_weibull_beta_oral = col2.number_input(
-            "Seroconversion Weibull scale (β)",
+            "Seroconversion Weibull shape (β)",
             min_value=0.0,
             max_value=500.0,
             value=1.15062,
             step=0.001,
             format="%.5f",
-            help="Scale parameter of the Weibull-family seroconversion curve for oPrEP.",
+            help="Shape parameter of the Weibull-family seroconversion curve for oPrEP.",
         )
 
 if include_prep_inj:
@@ -1026,22 +1026,22 @@ if include_prep_inj:
             help="Maximum time from infection to seroconversion in iPrEP users.",
         )
         seroconversion_weibull_alpha_inj = col2.number_input(
-            "Seroconversion Weibull shape (α)",
+            "Seroconversion Weibull scale (α)",
             min_value=0.0,
             max_value=500.0,
             value=90.88988,
             step=0.001,
             format="%.5f",
-            help="Shape parameter of the Weibull-family seroconversion curve for iPrEP.",
+            help="Scale parameter of the Weibull-family seroconversion curve for iPrEP.",
         )
         seroconversion_weibull_beta_inj = col2.number_input(
-            "Seroconversion Weibull scale (β)",
+            "Seroconversion Weibull shape (β)",
             min_value=0.0,
             max_value=500.0,
             value=3.048339,
             step=0.001,
             format="%.5f",
-            help="Scale parameter of the Weibull-family seroconversion curve for iPrEP.",
+            help="Shape parameter of the Weibull-family seroconversion curve for iPrEP.",
         )
 
 inc_prep_oral_perpy = None

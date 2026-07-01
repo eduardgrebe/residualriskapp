@@ -43,7 +43,9 @@ Go-unavailable deployments (fallback) rather than the normal app.
 - [ ] **`estimator.py:816`** — scalar amplitude `prep_a` (default 0.7) is never capped to `prep_offset`, so
       lowering Offset below 0.7 and clicking Run raises an uncaught `ValueError` → full-page traceback
       (default, fixed-amplitude path). Fix: cap the number_input at `prep_offset` or pre-validate with
-      `st.error`.
+      `st.error`. _(Same UI-uncaught-`ValueError` class: the serology `ser_alpha`/`ser_beta` number_inputs
+      still allow `min_value=0.0`, which Fix 3's library validation now rejects on Run — fold a general
+      "catch library `ValueError` → `st.error`" guard around the Run handler into this fix.)_
 - [ ] **`estimator.py:855`** — with "Vary sinusoidal oscillation parameters" on and Offset=0.0, the
       amplitude-range slider is built with `min==max==0.0` → `StreamlitAPIException` crashes the page on
       render. Fix: skip the slider when `offset==0`, or raise the Offset min above 0.
@@ -58,7 +60,7 @@ Go-unavailable deployments (fallback) rather than the normal app.
 - [ ] **`core.py:737`** — no `lod95_lod50_ratio>1` or `lod50>0` validation (Python or Go): `ratio=1` →
       `ZeroDivisionError` in Python / finite garbage in Go; `ratio<1` silently inverts the detection curve
       on both. Fix: validate `lod50>0`, `ratio>1` in both backends.
-- [ ] `[doc/UI]` **`estimator.py:942`/`951`/`1028`/`1037`** — PrEP serology Weibull "shape (α)" / "scale (β)"
+- [x] `[doc/UI]` **`estimator.py:942`/`951`/`1028`/`1037`** ✅ FIXED (swapped labels+help so α=scale, β=shape, oral & injectable; + AppTest label regression test) — PrEP serology Weibull "shape (α)" / "scale (β)"
       labels + help are swapped vs the model math (`α` is the scale, `β` is the shape) → invites silent
       misconfiguration. Fix: swap the labels/help in both the oral and injectable blocks.
 - [x] `[test]` **`test_sim_df_correctness.py:122`** ✅ FIXED (closed by the Fix-1 recompute in `_check_row_consistency` + the new Python-path alignment test) — the headline correctness test never verifies the
