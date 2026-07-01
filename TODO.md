@@ -2,6 +2,121 @@
 
 ## Open
 
+### Release review findings (2026-07-01) — fix before public release
+
+Source: multi-agent adversarial code + docs review (18 parallel reviewers over Python/Go/UI/docs/tests,
+each finding independently reproduce-or-refuted by skeptic agents; 46 raised → 42 verified → 37 after dedup)
+plus a second round that actively **ran** numerical probes. Grouped by severity; `file:line` anchors.
+Unless tagged `[doc]`/`[test]`, these are code defects. The deployed app defaults to the **Go** backend, so
+several Python-path bugs bite library/`reticulate` users (Python is the library default `use_go=False`) and
+Go-unavailable deployments (fallback) rather than the normal app.
+
+**HIGH — silent wrong output or aborts a run:**
+
+- [ ] **`core.py:640`** — Python bootstrap builds `sim_df` parameter columns in submission order but the
+      `iwp` column in `as_completed` completion order, so every exported row pairs input draws with a
+      *different* simulation's IWP (corrupts "Download simulations" correlation/sensitivity analysis;
+      non-reproducible despite the seed). Python-path only; Go path is correctly aligned. Fix: iterate the
+      ordered futures list / `executor.map`, drive the progress bar off a separate counter.
+- [ ] **`prep.py:311`** — `_risk_days_prep` omits `z` from the integrand args tuple, so a user-supplied `z`
+      is silently ignored on the Python PrEP path (always 1.6449) while Go honors it → entire Python PrEP
+      output wrong for non-default `z`. Fix: append `z` as the final args element.
+- [ ] **`prep.py:478`** (+`:172`/`:475`) — `risk_days_prep_bs` validation is incomplete **and** placed
+      after the `use_go` early-return, **and** a bare `except Exception: pass` swallows Go's clean validation
+      errors → degenerate inputs (`ser_max<ser_min`, `ser_alpha=0`, `ser_beta=0`, `n_bs<=0`) produce garbage
+      RDEs on **both** backends (even Go users). Fix: move validation above the dispatch, add
+      set_point/eclipse/ser_* range checks mirroring Go `Validate()`, and stop swallowing validation errors.
+- [ ] **`core.py:75`** (+`:93`) — unguarded `math.log10(C)` raises `ValueError` when a bootstrap
+      `doubling_time` draw < ~0.093 d underflows the concentration to 0.0 at the far integration node,
+      aborting the entire Python bootstrap. **Round-2 confirmed reachable on the default `use_go=False`
+      path with UI-allowed doubling-time SD** (546/10000 iters at dt=12h/SD=10h; 59/10000 at default dt with
+      SD=8h). Go guards `ratio<=0` and returns finite → crash-vs-number divergence. Fix: add
+      `if ratio<=0: return 0.0` in `_prob_pos_init`/`_prob_neg_retest` (mirror Go `probability.go:42` and
+      `prep.py:206`). Consider narrowing the UI doubling-time SD max.
+
+**MEDIUM — reachable crash/hang, or silent parity divergence:**
+
+- [ ] **`random.go:54`** — `GenerateTruncatedNormal` rejection loop never terminates when `sd=0` and
+      `mean<=0` (e.g. `lod50=0` or `doubling_time=0`), **hanging the Go backend forever** and freezing the
+      app; `Validate()` never checks `lod50>0`/`doubling_time>0`. Fix: fill `mean` when `sd<=0`; add
+      positivity validation; cap the loop.
+- [ ] **`estimator.py:816`** — scalar amplitude `prep_a` (default 0.7) is never capped to `prep_offset`, so
+      lowering Offset below 0.7 and clicking Run raises an uncaught `ValueError` → full-page traceback
+      (default, fixed-amplitude path). Fix: cap the number_input at `prep_offset` or pre-validate with
+      `st.error`.
+- [ ] **`estimator.py:855`** — with "Vary sinusoidal oscillation parameters" on and Offset=0.0, the
+      amplitude-range slider is built with `min==max==0.0` → `StreamlitAPIException` crashes the page on
+      render. Fix: skip the slider when `offset==0`, or raise the Offset min above 0.
+- [ ] **`estimator.py:1245`** — `used_go` records the *requested* backend, not the actual one, so on a
+      silent Go→Python fallback the additive total-risk CrI (misaligned Python arrays) is mislabeled the
+      "exact shared-parameter interval". Fix: report the backend actually used; make `prep.py`'s fallback
+      log (not swallow).
+- [ ] **`models.go:180`/`:189`** — Go `SetDefaults` uses `==0` as the "unset" sentinel for PrEP scalars and
+      runs before `Validate()`, so legit zero inputs are silently replaced by defaults; notably
+      `drug_effect=0` (perfect protection) → `1.0` (no reduction, the opposite) with no error, while Python
+      raises. Fix: pointer sentinels / omit-in-bridge; validate PrEP ranges before defaulting.
+- [ ] **`core.py:737`** — no `lod95_lod50_ratio>1` or `lod50>0` validation (Python or Go): `ratio=1` →
+      `ZeroDivisionError` in Python / finite garbage in Go; `ratio<1` silently inverts the detection curve
+      on both. Fix: validate `lod50>0`, `ratio>1` in both backends.
+- [ ] `[doc/UI]` **`estimator.py:942`/`951`/`1028`/`1037`** — PrEP serology Weibull "shape (α)" / "scale (β)"
+      labels + help are swapped vs the model math (`α` is the scale, `β` is the shape) → invites silent
+      misconfiguration. Fix: swap the labels/help in both the oral and injectable blocks.
+- [ ] `[test]` **`test_sim_df_correctness.py:122`** — the headline correctness test never verifies the
+      param→IWP invariant it claims (only positivity/finiteness), so the `core.py:640` misalignment class
+      passes silently. Fix: recompute `core._risk_days(...)` from each row's columns and assert
+      `np.isclose(rd, row['iwp'])` (exact now that both defaults share the 1000-pt GL rule).
+
+**LOW — code robustness / edge cases:**
+
+- [ ] **`core.py:549`** (+`prep.py`) — `threads=0` (single-core host, or explicit) → `ProcessPoolExecutor(max_workers=0)` `ValueError`. Fix: `max(1, threads)`.
+- [ ] **`core.py:361`** — k input modes are a silent priority cascade, not mutually exclusive (contradicts AGENTS.md); `_sample_k` prefers invgamma `beta` over `mode` where public `sample_invgamma()` raises. Fix: raise on multiple modes, or correct the doc + align.
+- [ ] **`models.go:218`** — an empty (non-nil) `k_posterior_sample` passes `Validate()` then panics in `Intn(0)`, crashing the binary; Python raises cleanly. Fix: require `len>0`.
+- [ ] **`prep.py:83`** — analytic `tcrit` gives growth→plateau continuity only at `offset==1`; other UI-reachable offsets create a VL discontinuity at `tcrit` (both backends; modelling gap). Fix: constrain offset to 1, or retarget `tcrit`.
+- [ ] **`core.py:974`** (`residual_risk_rd`) — all-zeros/empty `iwp_bs` → opaque `IndexError` from `np.quantile([])`; unreachable in practice (real IWP never ≤0) but a hard crash. Fix: guard empty result. `[round-2]`
+- [ ] **`helpers.go:95`** — `ModeRounded` tie-break is nondeterministic vs the documented scipy "smallest tied"; currently unused by the engine. Fix: deterministic smallest, or drop the claim.
+- [ ] **`kde.go:54`** — Go KDE `cap` pre-sampling draws *with* replacement vs Python *without*; the API never reaches it (`cap=0`). Fix: sample without replacement, or document.
+
+**LOW `[doc]` — fix before publishing docs/manuscript:**
+
+- [ ] `README.md:189`/`208`/`227` — 3 of 4 API examples unpack 4 vars but `risk_days_bs` returns a 5-tuple → `ValueError` on copy-paste. Fix: 5-target unpack.
+- [ ] `README.md:170` — Go CLI JSON example is incomplete (no k distribution etc.) → returns an error JSON. Fix: complete it or relabel as a schema fragment.
+- [ ] `docs/theory.md:641` — doubling-time sampling SD printed as `0.00306` (that is the *variance*); true SD ≈ `0.0554` (~18× understated). Fix: use the SD.
+- [ ] `docs/theory.md:643` — §8 Ultrio Plus 50% LoD SD `0.1100` (RSE 4%) vs the shipped preset `0.191` (RSE 7.07%). Fix.
+- [ ] `docs/theory.md:503` — §5.2.5 50/50-weight mixture median `0.001841` vs analytic ≈`0.0027`. Fix or drop (unstable quantity).
+- [ ] `docs/theory.md:167` — symbol `n` is absolute copies in §3.2 but used as concentration in the §3.3 detection curve. Fix: distinct symbol.
+- [ ] `docs/theory.md:191` — documented `(1-Φ)^m_retest` at the doc-recommended `m_retest=0` gives 1 (divergent), but the code special-cases `retests=0`. Fix: state `P_{-,retest}≡0` at `m_retest=0`.
+- [ ] `docs/theory.md:697` (rendered footer) — claims library `v0.9.6` / Go `v0.9.5` vs actual `1.1.0a7` / `1.1.0.dev0`, contradicting the sidebar. Fix or make version-agnostic.
+- [ ] `docs/theory_prep.md:254` — injectable serology median stated `105 d`, implemented `122.6 d`; "p90≈151" mislabeled (β fit to p99≈192); oral `64.7`→`65.4`; soften the "matches target median/quantile" claim.
+- [ ] `docs/theory_prep.md:261` — unreconciled reviewer note: 6-day serology eclipse vs 7-day RDE eclipse. Resolve or justify + remove the note.
+- [ ] `docs/assays.md:30` — RSE-derivation sentence is over-broad (cobas TaqScreen MPX/MPX v2.0 50% LoD + CI are our probit-fit, not manufacturer-published). Fix wording.
+- [ ] `AGENTS.md:77` — Public API list omits `total_residual_risk_rd`, `mode_hsm_go`, `risk_days_prep_bs_go` (all in `__all__`). Fix.
+- [ ] `AGENTS.md:85` — `mode_kde_go` defaults documented `cap=40_000, n_grid=5_000`; actual `n_grid=1_000_000, cap=None`. Fix (and the perf figures' configuration).
+- [ ] `core.py:289` — `_kde_mode_log` docstring says `n_grid` default `100_000`; actual (and `mode_kde`) is `5_000`. Fix.
+- [ ] `_go.py:93` — `mode_kde_go` docstring claims `1_000_000` "matches the Go auto-default"; Go auto-default clamps to 100k–200k. Fix.
+- [ ] `random.go:43` — `GenerateTruncatedNormal` comment cites the wrong scipy idiom (`truncnorm.rvs(0,inf,…)` truncates at the mean, not 0). Fix the comment.
+- [ ] `TODO.md:357` — states the `a<=offset` guard is "capped in the UI", but only the sampled range is capped, not scalar `prep_a` (ties to `estimator.py:816`). Fix the doc or implement the cap.
+- [ ] `[test]` `test_prep_bootstrap.py:161`/`243` — no PrEP `sim_df` param→IWP recompute invariant; `test_primary_parameters` asserts `rd_pe>0` twice (no range check). Fix: add recompute assertions.
+
+**VERIFIED SOUND (round-2 probes ran clean — recorded so we don't re-litigate):**
+
+- The fixed **1000-point Gauss-Legendre** baseline rule is accurate to **<0.5% across the whole realistic
+  parameter box** (0.004% at the UI dt floor; ~1e-8 at defaults) — no silent quadrature bias, both backends.
+- The **PrEP integrand is exactly 0 past `ser_max`** (default 250 < 500 d domain) — the t=500 upper limit
+  truncates nothing; extending the domain does not raise the RDE.
+- The heavy **InvGamma(α=2) k-tail stays finite** (RDE → asymptote ~114; `k=inf` gives a number, not NaN) —
+  no NaN propagation into the CrI on either backend.
+- The **load-time posterior-mode fallbacks are bit-identical** to `mode_kde_go` → the default InvGamma β is
+  the same in Go-enabled and Python-fallback deployments.
+- The **"1 in N (CrI …)" rendering orientation is correct** (worst/smallest-N bound shown as the high-risk
+  end) — risk is not understated.
+
+**Recommended hardening (from the completeness critic; not yet run):**
+
+- [ ] Add a **golden regression test** pinning the default-config headline RDE + CrI at a fixed seed, under both `use_go=True` and `use_go=False`.
+- [ ] Add a **load-time Go-binary smoke test** (`riskdays_go --version`) to detect a present-but-broken binary (arch mismatch, missing libs) instead of silently degrading to Python (ties to `estimator.py:1245`).
+- [ ] Document/track that under one fixed seed the Python **shared draws differ by k-mode** (entropy ordering) and that `total_residual_risk_rd`'s joint-CrI validity requires the *same k-distribution* across components.
+- [ ] Remove dead Go `RiskDaysInput.LimitMin/LimitMax` fields (or wire them to Python's `limits`) — single source of truth for the integration domain.
+
 ### Independent PrEP `drug_effect` for oral vs injectable (total-risk CrI refinement)
 
 The additive total-risk credible interval (`rr.total_residual_risk_rd`, wired
