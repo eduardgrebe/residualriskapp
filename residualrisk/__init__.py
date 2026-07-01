@@ -24,7 +24,7 @@ from .core import (
 )
 from .prep import risk_days_prep_bs
 
-__version__ = "1.1.0a7"
+__version__ = "1.1.0a8"
 
 __all__ = [
     "risk_days_bs",
