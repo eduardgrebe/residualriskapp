@@ -308,7 +308,7 @@ def _risk_days_prep(
         eclipse, C0, doubling_time, set_point, a, b, offset,
         volume_transfused, k, copies_per_virion, pool_size,
         lod50, lod95_lod50_ratio, retests, ser_min, ser_max,
-        ser_alpha, ser_beta, drug_effect,
+        ser_alpha, ser_beta, drug_effect, z,
     )
     if integration_method == "gauss-legendre":
         # Fixed 1000-point Gauss-Legendre, matching the Go backend. The default:

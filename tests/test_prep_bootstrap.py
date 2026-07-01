@@ -619,6 +619,22 @@ class TestPrepIntegrationMethod(unittest.TestCase):
             _risk_days_prep(**_PREP_SINGLE, **_SER_PROD, drug_effect=1.0),
         )
 
+    def test_z_is_honored_and_monotone(self):
+        # Regression: _risk_days_prep must forward z into the integrand. z is the
+        # NAT detection z-score, so a higher z raises the non-detection threshold
+        # -> more detection -> shorter infectious-and-undetected window -> smaller
+        # RDE. Previously z was dropped from the integrand args tuple and silently
+        # ignored (every z gave the same RDE, diverging from the Go backend, which
+        # honors z). _PREP_SINGLE fixes z=1.6449, so override it per call.
+        rd_lo = _risk_days_prep(**{**_PREP_SINGLE, "z": 0.5}, **_SER_PROD)
+        rd_def = _risk_days_prep(**{**_PREP_SINGLE, "z": 1.6449}, **_SER_PROD)
+        rd_hi = _risk_days_prep(**{**_PREP_SINGLE, "z": 3.0}, **_SER_PROD)
+        # z must actually change the result (the dropped-arg bug made these equal).
+        self.assertNotAlmostEqual(rd_lo, rd_hi)
+        # ...and monotonically decreasing: higher z -> more detection -> smaller RDE.
+        self.assertGreater(rd_lo, rd_def)
+        self.assertGreater(rd_def, rd_hi)
+
     def test_scalar_drug_effect_out_of_range_raises(self):
         # drug_effect must be in (0, 1]; rejected before the pool (sandbox-safe).
         for bad in (1.5, 0.0, -0.1):
