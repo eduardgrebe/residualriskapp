@@ -13,12 +13,12 @@ Go-unavailable deployments (fallback) rather than the normal app.
 
 **HIGH — silent wrong output or aborts a run:**
 
-- [ ] **`core.py:640`** — Python bootstrap builds `sim_df` parameter columns in submission order but the
+- [x] **`core.py:640`** ✅ FIXED (indexed-fill; + recompute regression test) — Python bootstrap built `sim_df` parameter columns in submission order but the
       `iwp` column in `as_completed` completion order, so every exported row pairs input draws with a
       *different* simulation's IWP (corrupts "Download simulations" correlation/sensitivity analysis;
       non-reproducible despite the seed). Python-path only; Go path is correctly aligned. Fix: iterate the
       ordered futures list / `executor.map`, drive the progress bar off a separate counter.
-- [ ] **`prep.py:311`** — `_risk_days_prep` omits `z` from the integrand args tuple, so a user-supplied `z`
+- [x] **`prep.py:311`** ✅ FIXED (appended `z` to args tuple; + monotonicity/parity test) — `_risk_days_prep` omits `z` from the integrand args tuple, so a user-supplied `z`
       is silently ignored on the Python PrEP path (always 1.6449) while Go honors it → entire Python PrEP
       output wrong for non-default `z`. Fix: append `z` as the final args element.
 - [ ] **`prep.py:478`** (+`:172`/`:475`) — `risk_days_prep_bs` validation is incomplete **and** placed
@@ -61,7 +61,7 @@ Go-unavailable deployments (fallback) rather than the normal app.
 - [ ] `[doc/UI]` **`estimator.py:942`/`951`/`1028`/`1037`** — PrEP serology Weibull "shape (α)" / "scale (β)"
       labels + help are swapped vs the model math (`α` is the scale, `β` is the shape) → invites silent
       misconfiguration. Fix: swap the labels/help in both the oral and injectable blocks.
-- [ ] `[test]` **`test_sim_df_correctness.py:122`** — the headline correctness test never verifies the
+- [x] `[test]` **`test_sim_df_correctness.py:122`** ✅ FIXED (closed by the Fix-1 recompute in `_check_row_consistency` + the new Python-path alignment test) — the headline correctness test never verifies the
       param→IWP invariant it claims (only positivity/finiteness), so the `core.py:640` misalignment class
       passes silently. Fix: recompute `core._risk_days(...)` from each row's columns and assert
       `np.isclose(rd, row['iwp'])` (exact now that both defaults share the 1000-pt GL rule).
