@@ -652,6 +652,59 @@ class TestPrepIntegrationMethod(unittest.TestCase):
                 risk_days_prep_bs(**kw)
 
 
+class TestPrepBsInputValidation(unittest.TestCase):
+    """Degenerate PrEP inputs must raise ValueError up front on BOTH backends —
+    validation now runs before the use_go dispatch, so use_go=True no longer
+    bypasses it and the Go-error fallback no longer swallows a clean validation
+    error into a garbage Python-path RDE. Mirrors go/riskdays/models.go
+    Validate(). These raise before the ProcessPoolExecutor / Go binary, so they
+    are sandbox-safe (no @multiprocessing marker needed).
+    """
+
+    _VALID = {**PREP_BS_KWARGS, "k_invgamma_alpha": 2.0, "k_invgamma_beta": 0.002019}
+
+    def _assert_raises_both_backends(self, **overrides):
+        for use_go in (False, True):
+            kw = {**self._VALID, **overrides, "use_go": use_go}
+            with self.assertRaises(ValueError, msg=f"use_go={use_go} {overrides}"):
+                risk_days_prep_bs(**kw)
+
+    def test_n_bs_zero(self):
+        self._assert_raises_both_backends(n_bs=0)
+
+    def test_pool_size_below_one(self):
+        self._assert_raises_both_backends(pool_size=0)
+
+    def test_retests_negative(self):
+        self._assert_raises_both_backends(retests=-1)
+
+    def test_set_point_not_positive(self):
+        self._assert_raises_both_backends(set_point=0)
+        self._assert_raises_both_backends(set_point=-1.0)
+
+    def test_eclipse_negative(self):
+        self._assert_raises_both_backends(eclipse=-1.0)
+
+    def test_ser_min_negative(self):
+        self._assert_raises_both_backends(ser_min=-1.0)
+
+    def test_ser_max_not_greater_than_ser_min(self):
+        self._assert_raises_both_backends(ser_min=250, ser_max=100)  # ser_max < ser_min
+        self._assert_raises_both_backends(ser_min=250, ser_max=250)  # ser_max == ser_min
+
+    def test_ser_alpha_not_positive(self):
+        self._assert_raises_both_backends(ser_alpha=0.0)
+
+    def test_ser_beta_not_positive(self):
+        self._assert_raises_both_backends(ser_beta=0.0)
+
+    def test_drug_effect_zero_rejected_not_defaulted(self):
+        # Guards the models.go:180 "drug_effect=0 -> 1.0" inversion for the Python
+        # API: pre-dispatch validation rejects 0 before Go's SetDefaults can flip
+        # it to 1.0 (no reduction).
+        self._assert_raises_both_backends(drug_effect=0.0)
+
+
 @pytest.mark.multiprocessing
 class TestPrepBsDrugEffect(unittest.TestCase):
     """drug_effect threaded through the full Python bootstrap (ProcessPoolExecutor).

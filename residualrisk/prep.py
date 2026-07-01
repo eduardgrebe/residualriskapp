@@ -419,6 +419,50 @@ def risk_days_prep_bs(
             "Go acceleration only implements 'gauss-legendre' integration; "
             "set use_go=False to use integration_method='quad'."
         )
+
+    # Validate all inputs up front — BEFORE the backend dispatch — so the Go and
+    # Python paths reject the same degenerate inputs identically and cleanly.
+    # These mirror the Go RiskDaysInput.Validate() PrEP checks
+    # (go/riskdays/models.go); keep the two in sync.
+    if n_bs <= 0:
+        raise ValueError("n_bs must be greater than zero to perform simulations.")
+    if pool_size < 1:
+        raise ValueError(f"pool_size must be at least 1, got {pool_size}.")
+    if retests < 0:
+        raise ValueError(f"retests must be non-negative, got {retests}.")
+    if set_point <= 0:
+        raise ValueError(f"set_point must be positive, got {set_point}.")
+    if eclipse < 0:
+        raise ValueError(f"eclipse must be non-negative, got {eclipse}.")
+    if ser_min < 0:
+        raise ValueError(f"ser_min must be non-negative, got {ser_min}.")
+    if ser_max <= ser_min:
+        raise ValueError(
+            f"ser_max ({ser_max}) must be greater than ser_min ({ser_min})."
+        )
+    if ser_alpha <= 0:
+        raise ValueError(f"ser_alpha must be positive, got {ser_alpha}.")
+    if ser_beta <= 0:
+        raise ValueError(f"ser_beta must be positive, got {ser_beta}.")
+    # The sinusoidal amplitude must not exceed the offset, or the plateau viral
+    # load would go negative (it would otherwise be clamped to 0 in _vl_postbt).
+    if a > offset:
+        raise ValueError(f"a ({a}) must be <= offset ({offset}).")
+    if a_dist_uniform is not None and a_dist_uniform[1] > offset:
+        raise ValueError(
+            f"a_dist_uniform upper bound ({a_dist_uniform[1]}) must be <= offset ({offset})."
+        )
+    # Drug effect is a transmissibility-reduction factor in (0, 1] (1.0 = none).
+    if not 0 < drug_effect <= 1:
+        raise ValueError(f"drug_effect ({drug_effect}) must be in (0, 1].")
+    if drug_effect_dist_uniform is not None:
+        de_lo, de_hi = drug_effect_dist_uniform
+        if not 0 < de_lo <= de_hi <= 1:
+            raise ValueError(
+                "drug_effect_dist_uniform must satisfy 0 < lo <= hi <= 1, "
+                f"got {drug_effect_dist_uniform}."
+            )
+
     if use_go:
         try:
             from ._go import risk_days_prep_bs_go
@@ -472,29 +516,16 @@ def risk_days_prep_bs(
                 progress=progress,
                 return_sim_df=return_sim_df,
             )
-        except Exception:
-            pass  # fall back to Python
-
-    if n_bs <= 0:
-        raise ValueError("n_bs must be greater than zero to perform simulations.")
-    # The sinusoidal amplitude must not exceed the offset, or the plateau viral
-    # load would go negative (it would otherwise be clamped to 0 in _vl_postbt).
-    if a > offset:
-        raise ValueError(f"a ({a}) must be <= offset ({offset}).")
-    if a_dist_uniform is not None and a_dist_uniform[1] > offset:
-        raise ValueError(
-            f"a_dist_uniform upper bound ({a_dist_uniform[1]}) must be <= offset ({offset})."
-        )
-    # Drug effect is a transmissibility-reduction factor in (0, 1] (1.0 = none).
-    if not 0 < drug_effect <= 1:
-        raise ValueError(f"drug_effect ({drug_effect}) must be in (0, 1].")
-    if drug_effect_dist_uniform is not None:
-        de_lo, de_hi = drug_effect_dist_uniform
-        if not 0 < de_lo <= de_hi <= 1:
-            raise ValueError(
-                "drug_effect_dist_uniform must satisfy 0 < lo <= hi <= 1, "
-                f"got {drug_effect_dist_uniform}."
+        except ValueError:
+            # A validation/logic error is a real problem — surface it rather than
+            # silently returning a different (Python) result.
+            raise
+        except Exception as e:
+            print(
+                f"Warning: Go PrEP implementation failed ({e}), "
+                "falling back to Python"
             )
+            # Fall through to the Python implementation.
 
     np.random.seed(seed)
     ks = _sample_k(

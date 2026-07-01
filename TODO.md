@@ -21,7 +21,7 @@ Go-unavailable deployments (fallback) rather than the normal app.
 - [x] **`prep.py:311`** ✅ FIXED (appended `z` to args tuple; + monotonicity/parity test) — `_risk_days_prep` omits `z` from the integrand args tuple, so a user-supplied `z`
       is silently ignored on the Python PrEP path (always 1.6449) while Go honors it → entire Python PrEP
       output wrong for non-default `z`. Fix: append `z` as the final args element.
-- [ ] **`prep.py:478`** (+`:172`/`:475`) — `risk_days_prep_bs` validation is incomplete **and** placed
+- [x] **`prep.py:478`** ✅ FIXED (pre-dispatch validation mirroring Go `Validate()`; fallback re-raises `ValueError` + logs; 10 both-backends validation tests) — `risk_days_prep_bs` validation is incomplete **and** placed
       after the `use_go` early-return, **and** a bare `except Exception: pass` swallows Go's clean validation
       errors → degenerate inputs (`ser_max<ser_min`, `ser_alpha=0`, `ser_beta=0`, `n_bs<=0`) produce garbage
       RDEs on **both** backends (even Go users). Fix: move validation above the dispatch, add
@@ -54,7 +54,7 @@ Go-unavailable deployments (fallback) rather than the normal app.
 - [ ] **`models.go:180`/`:189`** — Go `SetDefaults` uses `==0` as the "unset" sentinel for PrEP scalars and
       runs before `Validate()`, so legit zero inputs are silently replaced by defaults; notably
       `drug_effect=0` (perfect protection) → `1.0` (no reduction, the opposite) with no error, while Python
-      raises. Fix: pointer sentinels / omit-in-bridge; validate PrEP ranges before defaulting.
+      raises. Fix: pointer sentinels / omit-in-bridge; validate PrEP ranges before defaulting. _(Partially mitigated by Fix 3: pre-dispatch Python validation now rejects these zeros for `residualrisk`-API callers before Go is invoked; remaining scope is the **direct `riskdays_go` binary** path.)_
 - [ ] **`core.py:737`** — no `lod95_lod50_ratio>1` or `lod50>0` validation (Python or Go): `ratio=1` →
       `ZeroDivisionError` in Python / finite garbage in Go; `ratio<1` silently inverts the detection curve
       on both. Fix: validate `lod50>0`, `ratio>1` in both backends.
