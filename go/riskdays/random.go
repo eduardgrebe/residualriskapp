@@ -44,20 +44,39 @@ func NewRandomGenerator(seed int64) *RandomGenerator {
 // This implementation uses rejection sampling
 func (rg *RandomGenerator) GenerateTruncatedNormal(mean, sd float64, n int) []float64 {
 	samples := make([]float64, n)
+
+	// Degenerate distribution (sd<=0): there is no spread, so distuv.Normal.Rand()
+	// always returns `mean` and the rejection loop below would spin forever when
+	// mean<=0. Mirror the Python _sample_positive_normal helper and fill with the
+	// mean. (Non-positive lod50 / doubling_time should be rejected upstream by
+	// Validate(); see the core.py:737 follow-up.)
+	if sd <= 0 {
+		for i := range samples {
+			samples[i] = mean
+		}
+		return samples
+	}
+
 	normal := distuv.Normal{
 		Mu:    mean,
 		Sigma: sd,
 		Src:   rg.rng,
 	}
 
+	// Backstop against a non-terminating rejection loop when mean is far below 0
+	// (positive draws virtually impossible). For valid inputs (mean>0) the first
+	// draw is positive, so this is draw-for-draw identical to the original loop.
+	const maxAttempts = 10000
 	for i := 0; i < n; i++ {
-		for {
-			sample := normal.Rand()
-			if sample > 0 { // truncated at 0
-				samples[i] = sample
+		sample := normal.Rand()
+		for attempt := 1; sample <= 0; attempt++ { // truncated at 0
+			if attempt >= maxAttempts {
+				sample = math.Abs(mean)
 				break
 			}
+			sample = normal.Rand()
 		}
+		samples[i] = sample
 	}
 
 	return samples

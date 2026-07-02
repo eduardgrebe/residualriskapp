@@ -36,7 +36,7 @@ Go-unavailable deployments (fallback) rather than the normal app.
 
 **MEDIUM — reachable crash/hang, or silent parity divergence:**
 
-- [ ] **`random.go:54`** — `GenerateTruncatedNormal` rejection loop never terminates when `sd=0` and
+- [x] **`random.go:54`** ✅ FIXED (`sd<=0` fills mean like Python; `maxAttempts` backstop for `mean≪0`; 3 Go tests + end-to-end no-hang check — the reported case now returns in 0.13s) — `GenerateTruncatedNormal` rejection loop never terminates when `sd=0` and
       `mean<=0` (e.g. `lod50=0` or `doubling_time=0`), **hanging the Go backend forever** and freezing the
       app; `Validate()` never checks `lod50>0`/`doubling_time>0`. Fix: fill `mean` when `sd<=0`; add
       positivity validation; cap the loop.
@@ -59,7 +59,7 @@ Go-unavailable deployments (fallback) rather than the normal app.
       raises. Fix: pointer sentinels / omit-in-bridge; validate PrEP ranges before defaulting. _(Partially mitigated by Fix 3: pre-dispatch Python validation now rejects these zeros for `residualrisk`-API callers before Go is invoked; remaining scope is the **direct `riskdays_go` binary** path.)_
 - [ ] **`core.py:737`** — no `lod95_lod50_ratio>1` or `lod50>0` validation (Python or Go): `ratio=1` →
       `ZeroDivisionError` in Python / finite garbage in Go; `ratio<1` silently inverts the detection curve
-      on both. Fix: validate `lod50>0`, `ratio>1` in both backends.
+      on both. Fix: validate `lod50>0`, `ratio>1` in both backends. _(Also add `doubling_time>0` here — the `random.go:54` fix stops the resulting Go hang, but these degenerate inputs should be rejected cleanly in both `risk_days_bs` (Python) and Go `Validate()`.)_
 - [x] `[doc/UI]` **`estimator.py:942`/`951`/`1028`/`1037`** ✅ FIXED (swapped labels+help so α=scale, β=shape, oral & injectable; + AppTest label regression test) — PrEP serology Weibull "shape (α)" / "scale (β)"
       labels + help are swapped vs the model math (`α` is the scale, `β` is the shape) → invites silent
       misconfiguration. Fix: swap the labels/help in both the oral and injectable blocks.

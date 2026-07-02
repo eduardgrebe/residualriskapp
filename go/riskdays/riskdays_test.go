@@ -606,6 +606,55 @@ func TestRiskDaysBS_InvalidNBS_ReturnsError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// GenerateTruncatedNormal
+// ---------------------------------------------------------------------------
+
+func TestGenerateTruncatedNormal_ZeroSDFillsMeanNoHang(t *testing.T) {
+	// Regression: sd=0 makes distuv.Normal.Rand() always return the mean, so the
+	// rejection loop spun forever when mean<=0 (lod50=0 / doubling_time=0 with
+	// sd=0), hanging the Go backend. It now fills with the mean, matching the
+	// Python _sample_positive_normal helper. (A hang would trip the go-test
+	// timeout rather than return.)
+	rng := NewRandomGenerator(42)
+	for _, mean := range []float64{0.0, 2.73, 0.8542} {
+		got := rng.GenerateTruncatedNormal(mean, 0.0, 5)
+		if len(got) != 5 {
+			t.Fatalf("mean=%v: got len %d, want 5", mean, len(got))
+		}
+		for i, v := range got {
+			if v != mean {
+				t.Errorf("mean=%v sd=0: sample[%d]=%v, want %v", mean, i, v, mean)
+			}
+		}
+	}
+}
+
+func TestGenerateTruncatedNormal_PositiveMeanAllPositive(t *testing.T) {
+	// Normal case (mean>0, sd>0): every returned sample is finite and > 0; the
+	// truncation and the maxAttempts backstop leave valid inputs untouched.
+	rng := NewRandomGenerator(42)
+	got := rng.GenerateTruncatedNormal(2.73, 0.53, 1000)
+	for i, v := range got {
+		if v <= 0 || math.IsNaN(v) || math.IsInf(v, 0) {
+			t.Errorf("sample[%d]=%v, want finite > 0", i, v)
+		}
+	}
+}
+
+func TestGenerateTruncatedNormal_NegativeMeanDoesNotHang(t *testing.T) {
+	// Pathological: mean far below 0 with a tiny sd makes positive draws
+	// virtually impossible. The maxAttempts backstop returns finite positive
+	// fallback values instead of hanging (a hang would trip the test timeout).
+	rng := NewRandomGenerator(42)
+	got := rng.GenerateTruncatedNormal(-10.0, 0.001, 5)
+	for i, v := range got {
+		if v <= 0 || math.IsNaN(v) || math.IsInf(v, 0) {
+			t.Errorf("sample[%d]=%v, want finite > 0 fallback", i, v)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
 // GenerateInvGamma
 // ---------------------------------------------------------------------------
 
