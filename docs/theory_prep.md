@@ -244,23 +244,29 @@ Weibull seroconversion *delay* measured from the onset $t_0$.
 documented PrEP breakthrough seroconverters (Seed et al., 2021). For oral PrEP this interval
 ranged from 3.1 to 30.3 weeks. The onset, median, and an upper quantile are set from these
 data (taking onset $= \tau_\text{ecl}^{\,(\text{sero})} + 1 + 3.1{\times}7 = 28.7$ days for
-oral), and the scale $\alpha_s$ and shape $\beta_s$ are then chosen to match the target
-median and high quantile (the fit is in
-`residualrisk_analysis/exploration/scripts/weibull_serology_nondetection.R`):
+oral), and the scale $\alpha_s$ and shape $\beta_s$ are then fitted to approximate a target
+median and high quantile of the seroconversion delay (the fit is in
+`residualrisk_analysis/exploration/scripts/weibull_serology_nondetection.R`). The median and
+upper-quantile columns below are the values the **fitted** $(\alpha_s,\beta_s)$ actually
+produce (time from infection to serological detectability), which the fit approximates rather
+than hits exactly:
 
 | Modality | $t_0$ (onset) | median delay | upper quantile | $\alpha_s$ (scale) | $\beta_s$ (shape) | $t_1$ (cutoff) |
 |---|---|---|---|---|---|---|
-| Oral PrEP | 28.7 d | ≈ 64.7 d | ≈ 219 d (p99) | 50.49434 | 1.15062 | 250 d |
-| Injectable PrEP | 42 d | ≈ 105 d | ≈ 151 d (p90) | 90.88988 | 3.048339 | 250 d |
+| Oral PrEP | 28.7 d | ≈ 65.4 d | ≈ 219 d (p99) | 50.49434 | 1.15062 | 250 d |
+| Injectable PrEP | 42 d | ≈ 122.6 d | ≈ 192 d (p99) | 90.88988 | 3.048339 | 250 d |
 
 The oral fit is nearly exponential ($\beta_s \approx 1.15$), reflecting a wide,
 right-skewed delay; the injectable fit is markedly later and steeper ($\beta_s \approx
 3.05$), reflecting the longer, more concentrated seroconversion delay seen with long-acting
 injectable PrEP. Figure 3 shows both curves.
 
-*[Reviewer note: the serology derivation uses its own eclipse assumption of 6 days in
-constructing $t_0$; the RDE model's eclipse $\tau_\text{ecl}$ is 7 days (range 4–10). These
-are close but not identical — confirm whether they should be reconciled.]*
+Note that the serology onset $t_0$ is placed using a 6-day eclipse assumption (in dating the
+first NAT-reactive result), whereas the RDE viral-dynamics model uses $\tau_\text{ecl}=7$ days
+(range 4–10). These are distinct constructs — one fixes the absolute origin of the
+seroconversion-delay data, the other governs the modelled viral outgrowth — and the one-day
+difference shifts $t_0$ by a day at most, immaterial against a seroconversion window spanning
+months.
 
 ### 4.3 The combined screen
 
@@ -308,7 +314,7 @@ multiplicative **transmissibility-reduction factor** $\delta\in(0,1]$ applied to
 per-time infection probability (`_drug_effect`):
 
 $$
-P_\text{inf}^\text{PrEP}(t) = \delta\,(t)\cdot\Big(1 - \exp\!\big(-k\,\chi\,C(t)\,V_\text{trans}\big)\Big),
+P_\text{inf}^\text{PrEP}(t) = \delta(t)\cdot\Big(1 - \exp\!\big(-k\,\chi\,C(t)\,V_\text{trans}\big)\Big),
 $$
 
 with $\delta=1$ meaning no reduction and a reduction fraction $1-\delta$. In the current
@@ -387,7 +393,7 @@ $a,b,o$, NAT parameters, dose-response, volumes) shared:
 | Serology cutoff $t_1$ | 250 d | 250 d |
 | Serology scale $\alpha_s$ | 50.49434 | 90.88988 |
 | Serology shape $\beta_s$ | 1.15062 | 3.048339 |
-| (median seroconversion delay) | ≈ 64.7 d | ≈ 105 d |
+| (median seroconversion delay) | ≈ 65.4 d | ≈ 122.6 d |
 | Eclipse, $a$, $b$, $o$, NAT, $k$, volumes | shared | shared |
 
 The two differences pull in the same direction operationally. Injectable PrEP suppresses the
@@ -478,6 +484,16 @@ per-product residual risk per million transfusions is then
 $$
 RR_\text{product} = \Big(\pi_\text{oral}\,\tfrac{\mathrm{RDE}^\text{oral}_\text{product}}{365.25} + \pi_\text{inj}\,\tfrac{\mathrm{RDE}^\text{inj}_\text{product}}{365.25}\Big)\cdot \delta \cdot 10^6 .
 $$
+
+Here $\mathrm{RDE}^g_\text{product}$ is the **drug-effect-free** ($\delta=1$)
+risk-day-equivalents, and the transmissibility factor $\delta$ is applied **once**, as the
+external multiplier shown — the convention of the published Layer-2 analysis, which drew
+$\delta$ as a Layer-2 quantity (§9.2). Equivalently, and as the tool does by default, $\delta$
+may be folded into $\mathrm{RDE}^g$ through the integrand (§5.2, §6, where it factors out
+because it is constant in $t$); because the two are numerically identical, $\delta$ must be
+applied in **one** place only, never both. (If oral and injectable use different
+antiretrovirals, they take separate $\delta_g$ inside their respective terms rather than the
+single common $\delta$ written here.)
 
 ### 9.2 Layer-2 priors (published analysis)
 
@@ -659,7 +675,8 @@ shared viral-growth, dose-response, NAT-detection, $k$-distribution, and numeric
 
 ---
 
-*This documentation describes the PrEP-breakthrough extension as implemented in the
-`residualrisk` library (PrEP model, `prep.py` / `prep*.go`; library v1.1.0 development line)
-and corresponds to the analysis presented at ISBT 2025 (Grebe et al., PA28-L04). It is a
-first draft for review; passages marked "Reviewer note" flag points requiring confirmation.*
+*This documentation describes the PrEP-breakthrough extension as implemented in the current
+`residualrisk` library (PrEP model, `prep.py` / `prep*.go`; see the app sidebar for the exact
+version numbers in this deployment) and corresponds to the analysis presented at ISBT 2025
+(Grebe et al., PA28-L04). It is a first draft for review; the remaining passage marked
+"Reviewer note" flags a point requiring confirmation.*

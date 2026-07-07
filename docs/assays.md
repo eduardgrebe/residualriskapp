@@ -27,9 +27,13 @@ Two things to keep in mind throughout:
 
 HIV-1 Group M, screening (multiplex) assay, in **copies/mL**. `RSE` is the
 relative standard error of the 50% LoD (`SD ÷ 50% LoD`); for every assay except
-Bio-Manguinhos it derives from the manufacturer's 95% CI of the 50% LoD (the
-coefficient of variation `CoV = (CI_hi − CI_lo) / 3.92 / PE`, computed in IU/mL
-and invariant under the conversion). `cp/IU` is the conversion factor applied.
+Bio-Manguinhos it derives from a 95% CI of the 50% LoD (the coefficient of
+variation `CoV = (CI_hi − CI_lo) / 3.92 / PE`, computed in IU/mL and invariant
+under the conversion). That CI is the manufacturer's where the insert publishes a
+50% LoD; for the cobas TaqScreen MPX and MPX v2.0 — whose inserts give only the 95%
+LoD — both the 50% LoD and its CI come from our probit fit of the insert's
+per-concentration reactivity data (see *Probit-fitted 50% LoDs*). `cp/IU` is the
+conversion factor applied.
 
 | Assay | 50% LoD | 95% LoD | 50% LoD SD | RSE | WHO IS (HIV-1) | cp/IU |
 |---|---:|---:|---:|---:|---|---:|

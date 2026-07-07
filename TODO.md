@@ -2,6 +2,72 @@
 
 ## Open
 
+### HIGH — PrEP set-point units: copies/mL vs virions/mL (possible ~2× dose/detection error) (2026-07-07)
+
+**Flagged by EG (2026-07-07) — not just a documentation issue; a possible model/code bug in
+the PrEP set-point units.** Surfaced during the docs correctness pass (the `theory_prep.md` §2
+"Reviewer note"). EG to review.
+
+**Established from the code.** The model's viral-concentration state `C` (hence `C0` and the
+PrEP `set_point`) is in **virions/mL**: the transfused dose is `n = χ·C·V` (copies) and NAT
+detection compares `χ·C` (copies/mL) with `lod50` (copies/mL). Both require `C` in virions/mL
+so that `χ·C` is copies/mL — consistent with the copies-calibrated dose-response `k`
+(Belov 2023 / Ma 2009) and the copies/mL LoDs. `prep.py` `_vl_postbt` sets the plateau to
+`set_point·(o + a·sin(…))` in those units, and `_prob_infectious_prep` / `_prob_nondetection_prep`
+then apply `χ` to it — i.e. the code treats `set_point` as **virions/mL**.
+
+**Belov units — VERIFIED (2026-07-07, EG-requested).** Belov et al. 2023 (p.174, "Dose–Response
+Models") give the model verbatim as `Pr(I) = 1 − e^(−kD)` with **`D` = "the dose (HIV RNA copies
+in transfused units)"** and **`k` per RNA copy** ("2 copies of RNA = 1 virion"). Corroborated
+numerically: the shipped posteriors are `k = ln(2)/ID50` with ID50 in **RNA copies** — human
+`ln2/918 = 0.000755` = posterior mean 0.000755 (exact); animal `ln2/26 = 0.02666` ≈ posterior
+mean 0.02699. So `n = χ·C·V` **must** be RNA copies ⇒ `C` is **virions/mL** and `χ·C` is
+copies/mL — **the model structure and the χ-multiplication are correct.** The open question
+therefore reduces entirely to the **input value**: whether `set_point` 336/25 is a clinical
+copies/mL figure that should have been entered as `clinical/χ`. (`rr_prep_v3.py` carries the same
+`n_copies = C·copies_per_virion·V` and "C is in copies … when C in virions" comment — same
+convention, so this is not a tool regression.)
+
+**The concern.** The oral `set_point` 336 (and injectable 25) are sourced from **clinical
+breakthrough viral loads** (Seed et al. 2021), reported in **copies/mL**. Entered directly as
+`set_point` (virions/mL), the model represents a plateau of `χ·set_point` = **2× the clinical
+copies/mL** (672 / 50 c/mL instead of 336 / 25). If the source is copies/mL, `set_point` should
+be `clinical/χ` (168 / 12.5) — the current values are then 2× too high.
+
+**Quantified impact** (nominal params, animal-`k`, primary-parameters RDE). Halving the
+set-point — the correction, if confirmed — *raises* the RDE (a lower plateau is detected less
+reliably, lengthening the infectious-undetected window):
+- Oral: RBC 4.96 → 6.74 d (+36%); plasma 7.80 → 9.57 d (+23%).
+- Injectable: RBC 54.8 → 79.0 d (+44%); plasma 57.6 → 82.2 d (+43%).
+Injectable is most affected: `χ·set_point` = 50 sits just above the minipool NAT threshold
+`S_pool·lod50` = 43.7 c/mL; halving drops it below, so NAT fails across the plateau.
+**Direction is safety-relevant — if real, the tool currently _under_-estimates the PrEP RDE and
+residual risk by ~20–45%.**
+
+**Inherited, not a regression.** This convention comes from the original `rr_prep_v3.py`
+analysis, which the tool faithfully reproduces (Completed → "End-to-end PrEP validation"), so it
+would also affect the **published ISBT 2025 numbers**. A fix makes the tool *correctly diverge*
+from them — needs EG's call vs the manuscript.
+
+**To verify (EG):**
+- [x] Units of the Belov/Ma `k`-calibration dose axis + base-model `C` convention — **DONE
+      (2026-07-07): `k` is per RNA copy, `C` is virions/mL, `χ·C` = copies (see "Belov units —
+      VERIFIED" above). The model structure is correct; only the `set_point` input is in
+      question.**
+- [ ] Units Seed et al. 2021 report the breakthrough viral loads in (expect copies/mL — the
+      universal HIV VL unit; if so, `set_point` should be halved).
+- [ ] Whether the `set_point` 336/25 was entered raw from Seed (no `/χ`) — the docs (§10.1) and
+      `rr_prep_v3.py` show no `/2` conversion, which is what makes this look like a real 2× error.
+- [ ] Base-model `C0` is unaffected (it only sets the growth time-origin, §3.1) — this is
+      **PrEP-specific**.
+
+**Fix (if confirmed copies/mL):** divide the oral/injectable set-point **point values and their
+uniform ranges** by `χ` (2) across `prep.py` defaults, `estimator.py` UI defaults, Go
+`SetDefaults`, `docs/figures/make_prep_figures.py`, and `docs/theory_prep.md` §7/§10.1 — with a
+validation re-run and a documented, explained shift vs the ISBT numbers. Do **not** instead stop
+applying `χ` — Belov confirms `χ·C` = copies is correct, so the fix (if any) is purely to the
+input value, not the model structure. Then update the §2 reviewer note to record the resolution.
+
 ### Release review findings (2026-07-01) — fix before public release
 
 Source: multi-agent adversarial code + docs review (18 parallel reviewers over Python/Go/UI/docs/tests,
@@ -82,15 +148,16 @@ Go-unavailable deployments (fallback) rather than the normal app.
 
 - [ ] `README.md:189`/`208`/`227` — 3 of 4 API examples unpack 4 vars but `risk_days_bs` returns a 5-tuple → `ValueError` on copy-paste. Fix: 5-target unpack.
 - [ ] `README.md:170` — Go CLI JSON example is incomplete (no k distribution etc.) → returns an error JSON. Fix: complete it or relabel as a schema fragment.
-- [ ] `docs/theory.md:641` — doubling-time sampling SD printed as `0.00306` (that is the *variance*); true SD ≈ `0.0554` (~18× understated). Fix: use the SD.
-- [ ] `docs/theory.md:643` — §8 Ultrio Plus 50% LoD SD `0.1100` (RSE 4%) vs the shipped preset `0.191` (RSE 7.07%). Fix.
-- [ ] `docs/theory.md:503` — §5.2.5 50/50-weight mixture median `0.001841` vs analytic ≈`0.0027`. Fix or drop (unstable quantity).
-- [ ] `docs/theory.md:167` — symbol `n` is absolute copies in §3.2 but used as concentration in the §3.3 detection curve. Fix: distinct symbol.
-- [ ] `docs/theory.md:191` — documented `(1-Φ)^m_retest` at the doc-recommended `m_retest=0` gives 1 (divergent), but the code special-cases `retests=0`. Fix: state `P_{-,retest}≡0` at `m_retest=0`.
-- [ ] `docs/theory.md:697` (rendered footer) — claims library `v0.9.6` / Go `v0.9.5` vs actual `1.1.0a7` / `1.1.0.dev0`, contradicting the sidebar. Fix or make version-agnostic.
-- [ ] `docs/theory_prep.md:254` — injectable serology median stated `105 d`, implemented `122.6 d`; "p90≈151" mislabeled (β fit to p99≈192); oral `64.7`→`65.4`; soften the "matches target median/quantile" claim.
-- [ ] `docs/theory_prep.md:261` — unreconciled reviewer note: 6-day serology eclipse vs 7-day RDE eclipse. Resolve or justify + remove the note.
-- [ ] `docs/assays.md:30` — RSE-derivation sentence is over-broad (cobas TaqScreen MPX/MPX v2.0 50% LoD + CI are our probit-fit, not manufacturer-published). Fix wording.
+- [x] `docs/theory.md:641` ✅ FIXED (2026-07-07 docs pass) — doubling-time sampling SD printed as `0.00306` (that is the *variance*); corrected to SD `0.0553` (matches the app default 1.33 h/24 and `theory_prep.md` §10.1).
+- [x] `docs/theory.md:643` ✅ FIXED (2026-07-07 docs pass) — §8 Ultrio Plus 50% LoD SD `0.1100` → `0.191`, matching the shipped preset (RSE ~7%).
+- [x] `docs/theory.md:503` ✅ FIXED (2026-07-07 docs pass) — §5.2.5 50/50-weight mixture median `0.001841` → analytic ≈`0.0027` with an instability footnote (the median is ill-conditioned in the inter-mode valley).
+- [x] `docs/theory.md:167` ✅ FIXED (2026-07-07 docs pass) — the §3.3 detection curve now uses a distinct concentration symbol `c̃` (copies/mL), separate from the absolute copy dose `n(t)=χCV` used in the dose-response.
+- [x] `docs/theory.md:191` ✅ FIXED (2026-07-07 docs pass) — added the note that `P_{-,retest} ≡ 0` at `m_retest=0` (overriding `x^0=1`), so non-detection reduces to `1 − P_{+,init}` as the code special-cases.
+- [x] `docs/theory.md:697` ✅ FIXED (2026-07-07 docs pass) — stale `v0.9.6`/`v0.9.5` footer made version-agnostic (points to the app sidebar).
+- [x] `docs/theory_prep.md:254` ✅ FIXED (2026-07-07 docs pass) — injectable serology median `105`→`122.6 d`, upper quantile `151 (p90)`→`192 (p99)`; oral `64.7`→`65.4 d`; "chosen to match" softened to "fitted to approximate" (columns now state they are what the fitted α_s,β_s produce). Verified numerically against the shipped/UI parameters.
+- [x] `docs/theory_prep.md:261` ✅ FIXED (2026-07-07 docs pass) — 6-day serology eclipse vs 7-day RDE eclipse reviewer note resolved into settled prose (distinct constructs; ≤1-day shift in `t_0`, immaterial).
+- [x] `docs/assays.md:30` ✅ FIXED (2026-07-07 docs pass) — RSE-derivation sentence narrowed: the cobas TaqScreen MPX / MPX v2.0 50% LoD **and its CI** come from our probit fit (inserts give only the 95% LoD), not the manufacturer.
+- [x] _(same pass)_ additional docs-only fixes not separately logged: `theory_prep.md` §9.1 clarified that the drug-effect `δ` is applied **once** (it appears both inside the §6 RDE integrand and as the external Layer-2 multiplier → would double-count as written); `theory_prep.md` §5.2 `δ(t)` spacing; version-agnostic `theory_prep.md` footer; `credits.md` "the the" typo. **Left in place — the C_sp copies-vs-virions convention (`theory_prep.md` §2 "Reviewer note"):** now **escalated to a HIGH-priority potential model/code bug** (a possible ~2× set-point error), not a doc fix — see Open → "HIGH — PrEP set-point units".
 - [ ] `AGENTS.md:77` — Public API list omits `total_residual_risk_rd`, `mode_hsm_go`, `risk_days_prep_bs_go` (all in `__all__`). Fix.
 - [ ] `AGENTS.md:85` — `mode_kde_go` defaults documented `cap=40_000, n_grid=5_000`; actual `n_grid=1_000_000, cap=None`. Fix (and the perf figures' configuration).
 - [ ] `core.py:289` — `_kde_mode_log` docstring says `n_grid` default `100_000`; actual (and `mode_kde`) is `5_000`. Fix.
@@ -190,6 +257,27 @@ documentation".
       2025; the baseline window-period numbers were not separately reproduced
       (same engine, covered by unit tests + the truncnorm-fix tests). A short
       baseline replication in `../residualriskapp_validation` would close this too.
+
+### Milestone: 1.2.0
+
+Next planned feature milestone (post the 1.1.0 PrEP release). Both items begin to
+surface parts of Layer 2 / the serology calibration in the tool itself, rather than
+leaving them to the user's upstream scripting.
+
+- [ ] **Population PrEP-use → donor-population breakthrough incidence tooling.** Add
+      tools (Python API, and optionally UI) that take **population PrEP-use numbers**
+      and **PrEP breakthrough-infection incidence** and compute the **donor-population
+      PrEP breakthrough incidence** — i.e. surface part of the Layer 2 aggregation
+      currently left to the user (folded into an "effective incidence"). See
+      `## Scope & validation` (Layer 1 vs Layer 2) and Deferred → "Population PrEP-use
+      & stratified-incidence modelling in the webapp" for the full component list and
+      the effective-incidence approach this would assist/replace.
+- [ ] **Interpretable PrEP serology Weibull specification (quantiles / median delay).**
+      Add tools to tweak the PrEP serology Weibull distribution by specifying
+      **quantiles and/or the median seroconversion delay** rather than the raw scale
+      `α_s` / shape `β_s` — solving for `(α_s, β_s)` from the targets (the inverse of
+      the fit documented in `docs/theory_prep.md` §4.2). Follow / take inspiration from
+      the patterns in the context-specific MDRI estimation Shiny app built for UNAIDS.
 
 ---
 
@@ -364,10 +452,12 @@ document is preferred. **Awaiting EG review.**
       **"PrEP model"** tab (3-tab layout: Baseline model & methods / NAT assay parameters /
       PrEP model). The keep-separate option was taken (`theory.md` / `assays.md` /
       `theory_prep.md` stay as separate files, one per tab); merge-into-one remains EG's call.
-- [ ] **Resolve drafting flags** (marked "Reviewer note" / "to confirm" in the draft): the
-      copies-vs-virions convention for `set_point`; the serology-derivation eclipse (6 d) vs
-      model eclipse (7 d); injectable set-point provenance; incidence-input sources; and the
-      Custer 2020 / Eshleman 2023 citations (DOIs unverified)
+- [ ] **Resolve drafting flags** (marked "Reviewer note" / "to confirm" in the draft):
+      injectable set-point provenance; incidence-input sources; and the Custer 2020 /
+      Eshleman 2023 citations (DOIs unverified). _Resolved in the 2026-07-07 docs pass: the
+      serology-derivation eclipse (6 d) vs model eclipse (7 d) note (§4.2)._ **The
+      copies-vs-virions convention for `set_point` was escalated out of this doc flag — see
+      Open → "HIGH — PrEP set-point units" (a possible ~2× model/code bug, not a doc issue).**
 - [ ] **EG review pass (PrEP)** — verify equations, prose, citations, and worked numbers
 
 ---

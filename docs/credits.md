@@ -38,7 +38,7 @@ Development of this tool was primarily sponsored by [Vitalant Research Institute
 
 Source code and text copyright (c) 2025-2026 Vitalant, with components (c) Eduard Grebe Consulting. All code released under the AGPL. 
 
-You are free to use, copy and host instances of the app, for noncommercial and commercial applications, as long as the the creators are credited, and the terms of the AGPL are complied with.
+You are free to use, copy and host instances of the app, for noncommercial and commercial applications, as long as the creators are credited, and the terms of the AGPL are complied with.
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 

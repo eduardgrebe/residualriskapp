@@ -159,23 +159,26 @@ difference in $k$ shifts the curve by more than an order of magnitude in dose.*
 Following Weusten et al. (2011), the probability that a screened donation escapes
 detection is parameterised through the probability of a positive result on the
 initial (minipool) test and the probability that all pool-resolution retests are
-negative (which could lead to release of the component). The probability that any
-single test is positive given $n$ copies in the tested sample is a probit
-(log-dose) detection curve (Weusten eq. A5):
+negative (which could lead to release of the component). NAT responds to the viral
+RNA **concentration** in the tested sample, so — unlike the dose-response, which is
+driven by the absolute copy dose $n(t) = \chi\,C(t)\,V_\text{trans}$ — the detection
+curve is written in terms of a concentration $\tilde c$ (copies/mL). The probability
+that any single test is positive at a tested-sample concentration $\tilde c$ is a
+probit (log-dose) detection curve (Weusten eq. A5):
 
 $$
-P_{+}(n) = \Phi\!\left( z \, \frac{\log_{10}\!\big(n / X_{50}\big)}
+P_{+}(\tilde c) = \Phi\!\left( z \, \frac{\log_{10}\!\big(\tilde c / X_{50}\big)}
 {\log_{10}\!\big(X_{95}/X_{50}\big)} \right),
 $$
 
-with $X_{50}$ and $X_{95}$ the 50% and 95% limits of detection, $\Phi$ the
-standard normal CDF, and $z = 1.6449$ so that $\Phi(z)=0.95$. The calibration is
-anchored by the LoD ratio: at $n = X_{50}$ the argument is $0$ and $P_+ = 0.5$; at
-$n = X_{95}$ the argument is $z$ and $P_+ \approx 0.95$.
+with $X_{50}$ and $X_{95}$ the 50% and 95% limits of detection (copies/mL), $\Phi$
+the standard normal CDF, and $z = 1.6449$ so that $\Phi(z)=0.95$. The calibration is
+anchored by the LoD ratio: at $\tilde c = X_{50}$ the argument is $0$ and
+$P_+ = 0.5$; at $\tilde c = X_{95}$ the argument is $z$ and $P_+ \approx 0.95$.
 
 For an initial test of a **minipool of $S_\text{pool}$ samples**, the donor sample
-is diluted by the pool, so the effective concentration is divided by
-$S_\text{pool}$ (Weusten eq. A7):
+is diluted by the pool, so the tested-sample concentration is
+$\tilde c = \chi\,C(t)/S_\text{pool}$ (Weusten eq. A7):
 
 $$
 P_{+,\text{init}}(t) = \Phi\!\left( z \,
@@ -184,8 +187,9 @@ P_{+,\text{init}}(t) = \Phi\!\left( z \,
 $$
 
 Components are released only if **all** retests are negative. Pool-resolution
-retests are performed on the **individual donation** (undiluted), so $S_\text{pool}$
-does not appear:
+retests are performed on the **individual donation** (undiluted), so the
+tested-sample concentration is $\tilde c = \chi\,C(t)$ and $S_\text{pool}$ does not
+appear:
 
 $$
 P_{-,\text{retest}}(t) = \left( 1 - \Phi\!\left( z \,
@@ -200,6 +204,12 @@ eq. A6):
 $$
 P_\text{non-detection}(t) = 1 - P_{+,\text{init}}(t)\,\big(1 - P_{-,\text{retest}}(t)\big).
 $$
+
+When no retest can release a unit ($m_\text{retest}=0$), $P_{-,\text{retest}}$ is
+defined as $0$ — not the $x^0 = 1$ that the power above would otherwise give —
+because with no retest there is no retest-based release path. Detection then reduces
+to the initial test, $P_\text{non-detection}(t) = 1 - P_{+,\text{init}}(t)$, and the
+implementation special-cases $m_\text{retest}=0$ to this value.
 
 Notes on the testing algorithm:
 
@@ -500,7 +510,13 @@ analysis. The production UI default uses these parameters.
 | 10% (90/10) | 0.000751 | 6.3% | 9.5% |
 | 20% | 0.000795 | 12.5% | 19.0% |
 | 30% | 0.000861 | 18.8% | 28.4% |
-| 50% | 0.001841 | 31.3% | 47.4% |
+| 50% | ≈ 0.0027 † | 31.3% | 47.4% |
+
+† At a 50/50 weight the two lognormal components are so well separated that the
+mixture CDF is nearly flat across the inter-mode valley ($k \approx 0.002$–$0.008$),
+so the median is ill-conditioned — a small change in weight moves it a long way, and
+the empirical (sampled) median is noticeably higher than this CDF-crossing value. The
+figure is indicative only; the 50/50 mixture is not a recommended configuration.
 
 The tail probability in the animal range scales almost linearly with the animal
 weight; the global mode is stable at the human location for all weights (the human
@@ -638,9 +654,9 @@ incidence 10 / 100,000 person-years.
 | Parameter | Point estimate | Distribution | Reference |
 |---|---|---|---|
 | $C_0$ | 0.00025 | fixed | arbitrary low value |
-| $\lambda$ | 0.8542 days | $\mathcal{N}(0.8542, 0.00306)$, truncated $>0$ | Fiebig et al. (2003) |
+| $\lambda$ | 0.8542 days | $\mathcal{N}(0.8542, 0.0553)$, truncated $>0$ | Fiebig et al. (2003) |
 | $k$ | see §5.2 | InvGamma / mixture / posterior | Belov et al. (2023); Ma et al. (2009) |
-| $X_{50}$ | 2.73 c/mL | $\mathcal{N}(2.73, 0.1100)$, truncated $>0$ | Gen-Probe (2012) |
+| $X_{50}$ | 2.73 c/mL | $\mathcal{N}(2.73, 0.191)$, truncated $>0$ | Gen-Probe (2012) |
 | $X_{95}$ | 12.33 c/mL | fixed $X_{95}/X_{50}$ ratio | Gen-Probe (2012) |
 | $V_\text{trans}$ (pRBC) | 20 mL | $\mathcal{U}(15, 50)$ | Bruhn et al. (2013); Nguyen et al. (2016) |
 | $V_\text{trans}$ (FFP) | 200 mL | $\mathcal{U}(180, 300)$ | Bruhn et al. (2013) |
@@ -693,7 +709,8 @@ values of $k$.
 
 ---
 
-*This documentation describes the model as implemented in `residualrisk` library
-v0.9.6 (Go engine v0.9.5). The companion document
+*This documentation describes the model as implemented in the current `residualrisk`
+library and its Go engine (see the app sidebar for the exact version numbers in this
+deployment). The companion document
 `residualrisk_analysis/exploration/K_PARAM_INPUTDIST.md` provides the full
 investigation of the input distribution for $k$.*
