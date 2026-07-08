@@ -374,9 +374,9 @@ Both Python versions are displayed together in the app sidebar (`App vX.Y.Z · L
    - Go: `go/riskdays/version.go` → `Version`
 3. Rebuild the Go binary if the Go version changed: `bash scripts/build_go.sh`
 4. Commit the change.
-5. Tag the commit with the new app version and push:
+5. Tag the commit with the new app version and push (signed tag — this project's maintainer signs tags):
    ```bash
-   git tag -a vX.Y.Z -m "Release vX.Y.Z"
+   git tag -s vX.Y.Z -m "Release vX.Y.Z"
    git push origin vX.Y.Z
    ```
    On a `v*` tag push, the `docker-publish.yml` `verify-version` job asserts that

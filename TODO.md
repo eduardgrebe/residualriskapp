@@ -2,11 +2,13 @@
 
 ## Open
 
-### HIGH — PrEP set-point units: copies/mL vs virions/mL (possible ~2× dose/detection error) (2026-07-07)
+### HIGH — PrEP set-point units: copies/mL entered as virions/mL (CONFIRMED ~2× overstatement, oral) (2026-07-07)
 
-**Flagged by EG (2026-07-07) — not just a documentation issue; a possible model/code bug in
-the PrEP set-point units.** Surfaced during the docs correctness pass (the `theory_prep.md` §2
-"Reviewer note"). EG to review.
+**Flagged by EG (2026-07-07) — not a documentation issue; a model/code bug in the PrEP set-point
+units.** Surfaced during the docs correctness pass (the `theory_prep.md` §2 "Reviewer note").
+**Both halves of the units question are now verified (2026-07-07, see below): the oral set-point
+is a clinical copies/mL median entered as if it were virions/mL, so the model runs it 2× too
+high.** EG to decide the fix (and to confirm the doubling was not intentional).
 
 **Established from the code.** The model's viral-concentration state `C` (hence `C0` and the
 PrEP `set_point`) is in **virions/mL**: the transfused dose is `n = χ·C·V` (copies) and NAT
@@ -28,11 +30,18 @@ copies/mL figure that should have been entered as `clinical/χ`. (`rr_prep_v3.py
 `n_copies = C·copies_per_virion·V` and "C is in copies … when C in virions" comment — same
 convention, so this is not a tool regression.)
 
-**The concern.** The oral `set_point` 336 (and injectable 25) are sourced from **clinical
-breakthrough viral loads** (Seed et al. 2021), reported in **copies/mL**. Entered directly as
-`set_point` (virions/mL), the model represents a plateau of `χ·set_point` = **2× the clinical
-copies/mL** (672 / 50 c/mL instead of 336 / 25). If the source is copies/mL, `set_point` should
-be `clinical/χ` (168 / 12.5) — the current values are then 2× too high.
+**Seed 2021 set-point units — VERIFIED (2026-07-07).** The oral `set_point_o = 336` is the
+**median of the 8 per-case oral TDF/FTC breakthrough viral loads** quoted from Seed et al. 2021,
+all in **copies/mL**: `median([1, 19.1, 71, 70.4, 2265, 2265, 601, 25340]) = 336` (verbatim in
+`rr_prep_v3.py` lines 911–919; the paper's per-case values are all stated "copies/mL"). It is
+entered **raw — no `/χ`** — then multiplied by `copies_per_virion = 2` downstream, so the model
+runs a plateau of **672 copies/mL where the clinical median is 336**. Combined with the Belov
+result (model wants `C` in virions/mL), this **confirms a 2× overstatement**: `set_point_o`
+should be `336/2 = 168`. The injectable `set_point_i = 25` (range 5–2500) is an **assumed** value
+("# viral loads", no derivation — weaker provenance) treated the same way (→ 50 copies/mL); if
+intended as a copies/mL VL it has the same 2× issue, but EG may prefer to re-specify it rather
+than mechanically halve. _(The same file also corroborates two of the docs fixes:
+`doubling_time_sigma = sqrt(0.00306) = 0.0553`, and `lod50_sd = (5.3−4.0)/(2·1.96)/1.72 = 0.193`.)_
 
 **Quantified impact** (nominal params, animal-`k`, primary-parameters RDE). Halving the
 set-point — the correction, if confirmed — *raises* the RDE (a lower plateau is detected less
@@ -54,19 +63,58 @@ from them — needs EG's call vs the manuscript.
       (2026-07-07): `k` is per RNA copy, `C` is virions/mL, `χ·C` = copies (see "Belov units —
       VERIFIED" above). The model structure is correct; only the `set_point` input is in
       question.**
-- [ ] Units Seed et al. 2021 report the breakthrough viral loads in (expect copies/mL — the
-      universal HIV VL unit; if so, `set_point` should be halved).
-- [ ] Whether the `set_point` 336/25 was entered raw from Seed (no `/χ`) — the docs (§10.1) and
-      `rr_prep_v3.py` show no `/2` conversion, which is what makes this look like a real 2× error.
+- [x] Units Seed et al. 2021 report the breakthrough viral loads in — **DONE: copies/mL** (all 8
+      oral per-case values are quoted in copies/mL; see "Seed 2021 set-point units — VERIFIED").
+- [x] Whether `set_point_o` = 336 was entered raw from Seed (no `/χ`) — **DONE: yes** (336 = raw
+      median of the copies/mL values, then ×2 downstream). Injectable 25 is an assumption.
+- [ ] **Decision for EG:** confirm the ×2 was unintentional, then halve `set_point_o` → 168 and
+      its range, and re-specify / halve `set_point_i`; re-validate vs the ISBT numbers.
 - [ ] Base-model `C0` is unaffected (it only sets the growth time-origin, §3.1) — this is
       **PrEP-specific**.
 
-**Fix (if confirmed copies/mL):** divide the oral/injectable set-point **point values and their
-uniform ranges** by `χ` (2) across `prep.py` defaults, `estimator.py` UI defaults, Go
-`SetDefaults`, `docs/figures/make_prep_figures.py`, and `docs/theory_prep.md` §7/§10.1 — with a
-validation re-run and a documented, explained shift vs the ISBT numbers. Do **not** instead stop
-applying `χ` — Belov confirms `χ·C` = copies is correct, so the fix (if any) is purely to the
-input value, not the model structure. Then update the §2 reviewer note to record the resolution.
+**Fix (oral confirmed; injectable EG's call):** divide the set-point **point values and their
+uniform ranges** by `χ` (2) — oral `set_point_o` 336 → 168 (range 19.1–2265 → 9.55–1132.5),
+injectable per EG — across `prep.py` defaults, `estimator.py` UI defaults, Go `SetDefaults`,
+`docs/figures/make_prep_figures.py`, and `docs/theory_prep.md` §7/§10.1, with a validation re-run
+and a documented, explained shift vs the ISBT numbers. Do **not** instead stop applying `χ` —
+Belov confirms `χ·C` = copies is correct, so the fix is purely to the input value, not the model
+structure. Then update the §2 reviewer note to record the resolution.
+
+### UI: sidebar logo — theme-aware + linked to institute site (2026-07-08) ✅ verified working
+
+The shared sidebar-footer logo (`app.py`) was hard-coded to the **white** VRI wordmark, invisible
+on the light theme. **Three attempts failed** before the current one — all because Streamlit's
+theme handling and HTML sanitisers block the obvious paths (findings verified offline: exact HTML
+through the real DOMPurify with Streamlit's `st.html` config; bundle inspection; curl. Browser
+automation is unusable in this sandbox — chromium segfaults, webkit times out, firefox can't open
+a page):
+  - `st.context.theme.type` is server-side → no live update (Streamlit #11920). **Dead.**
+  - `st.markdown` rehype path strips `<style>`/`class` and force-adds `rel="noopener noreferrer"`.
+    **Dead.**
+  - `st.html` (DOMPurify) drops `<style>`, inline `<svg>`, and `data:` URIs in `<source srcset>`;
+    a `<picture>` with **real URLs** (static serving) *does* switch — but only on
+    `prefers-color-scheme`, i.e. the **OS** theme. EG switches via Streamlit's **Settings menu**
+    (OS dark, menu light → white logo on white bg). **Dead** for the menu case.
+
+Final approach — **JS in a `components.html` iframe** (its sandbox is `allow-same-origin
+allow-scripts`, so its script can read the parent). Streamlit applies the *active* (menu) theme via
+emotion with no CSS hook, so JS is the only way to track it:
+
+- [x] **Switch live on ANY theme change (menu or OS)** — the iframe script reads the parent app's
+      theme (`color-scheme`, with a **background-luminance** fallback that's always right) and swaps
+      the logo, re-checking on a MutationObserver + a 400 ms poll. Logos inlined as `data:` URIs (the
+      iframe HTML isn't sanitised). `enableStaticServing` reverted; downscaled logos kept
+      (`static/vri_logo_web.png` 68 KB / `_white_web.png` 38 KB).
+- [x] **New-tab link** via `window.parent.open(url,'_blank')` (the iframe sandbox has no
+      allow-popups, so a plain `target="_blank"` inside it is blocked; opening from the parent
+      context isn't). Text "A project of …" link kept as normal `st.sidebar.markdown`.
+- [x] **VRI-stats attribution** via `?utm_source=residualrisk.org` (a Referer header is impossible —
+      Streamlit strips it on new-tab links, and an iframe navigation wouldn't carry the app URL). **EG
+      to confirm** this suits VRI's analytics.
+- [x] **Verified in Firefox (EG, 2026-07-08):** switches reliably on the Settings-menu toggle —
+      Light → colour, Dark → white, System → follows OS. No reload needed.
+- [ ] **Remaining before commit:** run the full test suite (app-only change, expected green); confirm
+      `utm_source` suits VRI's analytics; then commit + `git tag -s v1.1.0a9`.
 
 ### Release review findings (2026-07-01) — fix before public release
 

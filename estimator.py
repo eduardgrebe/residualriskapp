@@ -311,9 +311,19 @@ with sim_param_container:
 
     n_sims = col2.select_slider(
         "Select number of simulations",
-        options=[1000, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1000000],
-        value=25000,
-        help="Placeholder help text",
+        options=[
+            1_000,
+            5_000,
+            10_000,
+            25_000,
+            50_000,
+            100_000,
+            250_000,
+            500_000,
+            1_000_000,
+        ],
+        value=100_000,
+        help="Number of simulations to obtain uncertainty distribution of RDEs",
     )
 
     if is_mechanistic_ui:
@@ -323,7 +333,7 @@ with sim_param_container:
             max_value=n_cpu,
             value=max(1, n_cpu - 1),
             step=1,
-            help="Placeholder help text",
+            help="Number of CPU cores to use for parallel simulation runs",
         )
 
 if is_mechanistic_ui:
