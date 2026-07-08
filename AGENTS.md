@@ -371,7 +371,10 @@ Both Python versions are displayed together in the app sidebar (`App vX.Y.Z · L
 
 ### Releasing a new version
 
-1. Decide which version(s) to bump (app, library, Go, or any combination).
+1. Decide which version(s) to bump (app, library, Go, or any combination). If a
+   version currently carries an in-development `.dev0` suffix (see "In-development
+   versions" below), drop it to the clean release version now — the `verify-version`
+   gate rejects a tag whose `APP_VERSION` still has `.dev0`.
 2. Edit the relevant file(s):
    - App: `app.py` → `APP_VERSION`
    - Library: `residualrisk/__init__.py` → `__version__`
@@ -388,6 +391,25 @@ Both Python versions are displayed together in the app sidebar (`App vX.Y.Z · L
    published — so the tag and `APP_VERSION` must match (e.g. tag `v1.1.0a7` ⇔
    `APP_VERSION = "1.1.0a7"`). Pre-release tags (PEP 440, e.g. `v1.1.0a7`) publish
    only their full-version image and never move the `latest` / `X.Y` tags.
+
+### In-development versions (between releases)
+
+Between tagged releases, set the version(s) under active change to the **next intended
+release plus a PEP 440 dev segment** — e.g. `1.1.0b3.dev0` (use the canonical dotted
+form, *not* `1.1.0b3dev0`). This marks `main` as unreleased work heading toward that
+version:
+
+- **Ordering is correct:** `1.1.0b2 < 1.1.0b3.dev0 < 1.1.0b3`. The `.dev0` target is
+  only an intention — if the next release turns out different (e.g. the stable `1.1.0`),
+  bump straight to it; ordering still holds.
+- **Never tagged:** CI/Docker fire only on `v*` tags, so a `.dev0` version publishes
+  nothing. The app sidebar shows e.g. `App v1.1.0b3.dev0`, flagging a running instance
+  (including the live deployment) as an unreleased build rather than a tagged release.
+- **Drop `.dev0` before tagging** (Releasing step 1): the `verify-version` gate rejects
+  a tag whose `APP_VERSION` still carries `.dev0` — the safety net working as intended.
+- Apply to whichever of the three versions have unreleased changes; the convention here
+  is to **re-sync all three** to the same value when a change spans them (as with the
+  `.dev0` bump itself).
 
 ## Common Tasks
 
