@@ -331,7 +331,7 @@ with sim_param_container:
             "Select number of CPU cores to use",
             min_value=1,
             max_value=n_cpu,
-            value=max(1, n_cpu - 1),
+            value=max(1, n_cpu),
             step=1,
             help="Number of CPU cores to use for parallel simulation runs",
         )
