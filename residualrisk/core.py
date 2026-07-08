@@ -788,6 +788,15 @@ def risk_days_bs(
             "Go acceleration only implements 'gauss-legendre' integration; "
             "set use_go=False to use integration_method='quad'."
         )
+    if lod50 <= 0:
+        raise ValueError(f"lod50 must be > 0, got {lod50}.")
+    if lod95_lod50_ratio <= 1:
+        raise ValueError(
+            "lod95_lod50_ratio must be > 1 (the 95% LoD exceeds the 50% LoD), "
+            f"got {lod95_lod50_ratio}."
+        )
+    if doubling_time <= 0:
+        raise ValueError(f"doubling_time must be > 0, got {doubling_time}.")
     if use_go:
         try:
             from ._go import risk_days_bs_go

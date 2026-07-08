@@ -228,13 +228,18 @@ Go-unavailable deployments (fallback) rather than the normal app.
       silent Go→Python fallback the additive total-risk CrI (misaligned Python arrays) is mislabeled the
       "exact shared-parameter interval". Fix: report the backend actually used; make `prep.py`'s fallback
       log (not swallow).
-- [ ] **`models.go:180`/`:189`** — Go `SetDefaults` uses `==0` as the "unset" sentinel for PrEP scalars and
-      runs before `Validate()`, so legit zero inputs are silently replaced by defaults; notably
-      `drug_effect=0` (perfect protection) → `1.0` (no reduction, the opposite) with no error, while Python
-      raises. Fix: pointer sentinels / omit-in-bridge; validate PrEP ranges before defaulting. _(Partially mitigated by Fix 3: pre-dispatch Python validation now rejects these zeros for `residualrisk`-API callers before Go is invoked; remaining scope is the **direct `riskdays_go` binary** path.)_
-- [ ] **`core.py:737`** — no `lod95_lod50_ratio>1` or `lod50>0` validation (Python or Go): `ratio=1` →
-      `ZeroDivisionError` in Python / finite garbage in Go; `ratio<1` silently inverts the detection curve
-      on both. Fix: validate `lod50>0`, `ratio>1` in both backends. _(Also add `doubling_time>0` here — the `random.go:54` fix stops the resulting Go hang, but these degenerate inputs should be rejected cleanly in both `risk_days_bs` (Python) and Go `Validate()`.)_
+- [x] **`models.go:180`/`:189`** ✅ FIXED (`fix-engine-input-validation`, **B2**) — removed the PrEP scalar
+      `==0` defaulting from `SetDefaults`, so an explicit `0` reaches the (already-present) `Validate()`
+      checks: `drug_effect=0` now errors (was silently `1.0`, the opposite), and a valid `a=0`/`b=0` (flat
+      plateau) is preserved rather than overwritten with `0.7`/`0.6` — fixing an app-reachable Python↔Go
+      divergence (Go clobbered, Python honoured it). The `_go.py` bridge already sends every scalar; a
+      direct-binary caller must now supply them. Go `Validate` tests + a Go-path `sim_df` regression (`a=0`
+      preserved). _Original:_ `SetDefaults` used `==0` as the "unset" sentinel and ran before `Validate()`.
+- [x] **`core.py:737`** ✅ FIXED (`fix-engine-input-validation`) — added `lod50>0`, `lod95_lod50_ratio>1`,
+      `doubling_time>0` validation in both `risk_days_bs` (Python, pre-dispatch) and Go `Validate()`;
+      regression tests in `test_residualrisk.py` (Python raises) + `prep_test.go` (Go `Validate` rejects).
+      _Original:_ `ratio=1` → `ZeroDivisionError` (Python) / garbage (Go); `ratio<1` silently inverted the
+      detection curve; `lod50=0` → division by zero.
 - [x] `[doc/UI]` **`estimator.py:942`/`951`/`1028`/`1037`** ✅ FIXED (swapped labels+help so α=scale, β=shape, oral & injectable; + AppTest label regression test) — PrEP serology Weibull "shape (α)" / "scale (β)"
       labels + help are swapped vs the model math (`α` is the scale, `β` is the shape) → invites silent
       misconfiguration. Fix: swap the labels/help in both the oral and injectable blocks.

@@ -161,45 +161,22 @@ func (input *RiskDaysInput) SetDefaults() {
 		input.ModePrecision = 2
 	}
 
-	// PrEP defaults — must mirror Python risk_days_prep_bs() production
-	// defaults so a direct CLI caller that omits them gets the same model as
-	// the Python reference (the _go.py bridge always passes explicit values).
+	// PrEP: the scalar parameters (set_point, eclipse, a, b, offset, drug_effect,
+	// ser_*) are deliberately NOT defaulted from a 0 sentinel. A 0 sentinel cannot
+	// tell an omitted field from a meaningful 0, so defaulting silently corrupted
+	// two cases: a legitimate 0 (e.g. a=0 for a flat plateau) was overwritten — so
+	// the Go backend disagreed with Python, which honours it — and an invalid 0
+	// (e.g. drug_effect=0) was turned into 1.0 before Validate() could reject it.
+	// The _go.py bridge always sends explicit values; a direct CLI caller must
+	// supply them (Validate() rejects missing/degenerate ones). Only the sampling
+	// *ranges*, whose "unset" sentinel is the zero array (distinct from a scalar 0),
+	// keep their defaults.
 	if input.PrepMode {
-		if input.SetPoint == 0 {
-			input.SetPoint = 336
-		}
 		if input.SetPointDistUniform == ([2]float64{}) {
 			input.SetPointDistUniform = [2]float64{19.1, 2265}
 		}
-		if input.Eclipse == 0 {
-			input.Eclipse = 7
-		}
 		if input.EclipseDistUniform == ([2]float64{}) {
 			input.EclipseDistUniform = [2]float64{4.0, 10.0}
-		}
-		if input.A == 0 {
-			input.A = 0.7
-		}
-		if input.B == 0 {
-			input.B = 0.6
-		}
-		if input.Offset == 0 {
-			input.Offset = 1.0
-		}
-		if input.DrugEffect == 0 {
-			input.DrugEffect = 1.0
-		}
-		if input.SerMin == 0 {
-			input.SerMin = 28.7
-		}
-		if input.SerMax == 0 {
-			input.SerMax = 250
-		}
-		if input.SerAlpha == 0 {
-			input.SerAlpha = 50.49434
-		}
-		if input.SerBeta == 0 {
-			input.SerBeta = 1.15062
 		}
 	}
 }
@@ -214,6 +191,15 @@ func (input *RiskDaysInput) Validate() error {
 	}
 	if input.Retests < 0 {
 		return fmt.Errorf("retests must be non-negative")
+	}
+	if input.LOD50 <= 0 {
+		return fmt.Errorf("lod50 must be positive")
+	}
+	if input.LOD95LOD50Ratio <= 1 {
+		return fmt.Errorf("lod95_lod50_ratio must be greater than 1 (the 95%% LoD exceeds the 50%% LoD)")
+	}
+	if input.DoublingTime <= 0 {
+		return fmt.Errorf("doubling_time must be positive")
 	}
 	if input.KPosteriorSample == nil &&
 		(input.KGammaShape == nil || input.KGammaScale == nil) &&

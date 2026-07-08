@@ -135,6 +135,14 @@ class TestPrepGoParity(unittest.TestCase):
         self.assertAlmostEqual(sim_df["a"][0], COMMON_KWARGS["a"])
         self.assertAlmostEqual(sim_df["b"][0], COMMON_KWARGS["b"])
 
+    def test_go_prep_preserves_amplitude_zero(self):
+        """a=0 (a flat plateau) is a valid input; Go must use it, not silently
+        substitute the old 0.7 default. Regression for the models.go SetDefaults
+        ==0-sentinel that overrode explicit zeros and diverged from Python."""
+        _, _, _, _, sim_df = risk_days_prep_bs_go(**{**COMMON_KWARGS, "n_bs": 100, "a": 0.0})
+        self.assertEqual(sim_df["a"].n_unique(), 1)
+        self.assertEqual(sim_df["a"][0], 0.0)
+
     def test_go_prep_varied_ab(self):
         """With ranges, Go samples a and b uniformly per iteration; sim_df
         carries the real per-iteration values, within range and a <= offset."""

@@ -92,6 +92,22 @@ BS_KWARGS = dict(
 )
 
 
+class TestRiskDaysBSInputValidation:
+    """risk_days_bs rejects degenerate LoD / doubling-time inputs before running
+    (regression for the missing lod50>0 / lod95_lod50_ratio>1 / doubling_time>0
+    guards; ratio=1 previously raised ZeroDivisionError deep in the bootstrap,
+    ratio<1 silently inverted the detection curve). Validation runs before the
+    bootstrap, so this is sandbox-safe (no ProcessPoolExecutor)."""
+
+    @pytest.mark.parametrize(
+        "field, value",
+        [("lod50", 0.0), ("lod95_lod50_ratio", 1.0), ("doubling_time", 0.0)],
+    )
+    def test_degenerate_inputs_raise_valueerror(self, field, value):
+        with pytest.raises(ValueError):
+            rr.risk_days_bs(**{**BS_KWARGS, field: value})
+
+
 # ---------------------------------------------------------------------------
 # _concentration
 # ---------------------------------------------------------------------------

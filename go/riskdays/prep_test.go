@@ -328,6 +328,7 @@ func prepInput(nbs int, seed int64) RiskDaysInput {
 		A:                   0.7,
 		B:                   0.6,
 		Offset:              1.0,
+		DrugEffect:          1.0,
 		SerMin:              10,
 		SerMax:              500,
 		SerAlpha:            9.1,
@@ -335,6 +336,39 @@ func prepInput(nbs int, seed int64) RiskDaysInput {
 		KInvGammaAlpha:      &alpha,
 		KInvGammaBeta:       &beta,
 		ReturnParams:        true,
+	}
+}
+
+func TestValidate_RejectsDegenerateLoDsDoublingAndDrugEffect(t *testing.T) {
+	cases := []struct {
+		name   string
+		mutate func(*RiskDaysInput)
+	}{
+		{"lod50=0", func(in *RiskDaysInput) { in.LOD50 = 0 }},
+		{"lod95_lod50_ratio=1", func(in *RiskDaysInput) { in.LOD95LOD50Ratio = 1 }},
+		{"doubling_time=0", func(in *RiskDaysInput) { in.DoublingTime = 0 }},
+		{"drug_effect=0", func(in *RiskDaysInput) { in.DrugEffect = 0 }},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			in := prepInput(100, 1)
+			c.mutate(&in)
+			in.SetDefaults()
+			if err := in.Validate(); err == nil {
+				t.Fatalf("expected Validate() to reject %s, got nil", c.name)
+			}
+		})
+	}
+}
+
+func TestSetDefaults_PreservesExplicitZeroAmplitude(t *testing.T) {
+	// a=0 (flat plateau) is a valid input; SetDefaults must NOT overwrite it with
+	// the old 0.7 default (which made the Go backend silently disagree with Python).
+	in := prepInput(100, 1)
+	in.A = 0
+	in.SetDefaults()
+	if in.A != 0 {
+		t.Fatalf("SetDefaults overwrote explicit a=0 with %v", in.A)
 	}
 }
 
