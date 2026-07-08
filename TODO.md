@@ -891,6 +891,48 @@ distributions); **median** would be **more conservative** (higher, further into 
 Both stay user-selectable, and the "primary parameters" plug-in remains available with its
 tail-caveat warning. See Open → "PrEP RDE point-estimate default".
 
+**Why the "primary parameters" plug-in PE lands in the tail — *outside* the CrI (the counterintuitive
+part, for future me):** the trap is the intuition *"the plug-in uses point values that are all inside
+the sampled ranges, so the result must be central."* It is not, for two compounding reasons.
+
+1. **"Inside the range" ≠ "central in the range".** The plug-in evaluates at the *scalar* set point
+   (iPrEP **30 c/mL**), which is inside the sampled range (10–2500) but sits at roughly its **1st
+   percentile** — not its median (~1255). The scalar is *labelled* "median" yet is paired with a
+   **uniform** law whose true median is 1255, so the plug-in is effectively evaluating at a
+   near-**minimum** set point. (Same defaults inconsistency as the set-point-sampling deferred item.)
+2. **RDE is a near-step, monotone-*decreasing* function of set point, with the step at the pooled NAT
+   LoD** (≈ `pool_size × lod50` ≈ 16 × 2.73 ≈ **44 c/mL**). Below the LoD the plateau viral load never
+   trips NAT → the window runs all the way to seroconversion (weeks–months) → **large** RDE; above it
+   NAT catches the donation quickly → **small** RDE. The plug-in's set point (30) is **below** the LoD
+   → firmly on the large-RDE side.
+
+Combine them: the plug-in evaluates at a near-minimum set point that is *also* below the detection
+threshold → a near-**maximal** RDE. Meanwhile the bootstrap draws set point ~ Uniform(10, 2500), where
+~**98–99%** of draws are **above** the LoD → mostly small RDEs, and only the ~**1.4%** below 44 c/mL
+form the large-RDE tail. So the single plug-in value sits inside that thin upper tail — above the
+97.5th percentile → **outside the CrI**. (Crucially it is the set point *alone* that does this; the
+other point inputs are near-central in their ranges.)
+
+**General principle (why plug-in point estimates are untrustworthy here):** a plug-in `f(point params)`
+equals a central summary of the *output* distribution only when **(i)** each point value is central
+within its own **sampling** distribution *and* **(ii)** `f` is ~linear over the sampled ranges. Both
+fail here — (i) the scalar set point is at the low extreme of its range, (ii) `f` is a near-step
+function at the NAT LoD. For a *single monotone* parameter neither issue arises (a median passes
+straight through a monotone map, so plug-in = output median), which is exactly why this is so
+unintuitive: it only bites once the plug-in value is off-centre **and** the response is sharply
+nonlinear, and here both land on the set point at once.
+
+**Quantitative anchors (reproduced 2026-07-08; InvGamma-`k` repro, so absolutes differ from the app's
+posterior-`k` run but the pattern is identical):** plug-in PE at set point = 30 / 100 / 500 / 1255 →
+**66.5 / 27.0 / 3.8 / 2.9**; bootstrap median 4.1, 97.5th pct 39.8 → PE(30) = 66.5 is outside. The
+**oral** scenario escapes the symptom only because its scalar (340 c/mL) is **above** the LoD, so its
+plug-in sits on the small-RDE side (high-ish, but still inside the CrI).
+
+**Bearing on the mode-vs-median choice:** both mode and median are percentile summaries of the
+bootstrap *output*, so both are *always* inside the CrI — the plug-in pathology above does **not**
+touch them. The decision is purely how conservative the headline number should be, independent of this
+diagnosis.
+
 ### DEFERRED — Migrate primary hosting to Codeberg (Forgejo Actions → quay.io; GitHub mirror)
 
 > **STATUS: DEFERRED (2026-07-08) — planned, NOT scheduled for implementation.** Full plan embedded
