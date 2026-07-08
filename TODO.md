@@ -881,6 +881,16 @@ document is preferred. **Awaiting EG review.**
 
 ## Deferred
 
+### DEFERRED — Default point-estimate method: mode vs median
+
+**Decide on the default point-estimate method: mode (less conservative) or median (more
+conservative).** I need to think about what is best for users and it is not immediately obvious.
+Context: the b2 UI fix (2026-07-08) set the default reported RDE point estimate to the bootstrap
+**mode** (the histogram peak — the lowest of the central summaries for these right-skewed
+distributions); **median** would be **more conservative** (higher, further into the right tail).
+Both stay user-selectable, and the "primary parameters" plug-in remains available with its
+tail-caveat warning. See Open → "PrEP RDE point-estimate default".
+
 ### DEFERRED — Migrate primary hosting to Codeberg (Forgejo Actions → quay.io; GitHub mirror)
 
 > **STATUS: DEFERRED (2026-07-08) — planned, NOT scheduled for implementation.** Full plan embedded
