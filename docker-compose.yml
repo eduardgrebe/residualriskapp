@@ -15,7 +15,11 @@ services:
       # platforms:
       #   - linux/amd64
       #   - linux/arm64
-    image: ghcr.io/vitalant-research-institute/residualrisk:latest
+    # Published image (CI publishes to ghcr.io/<repo-owner>/residualrisk). ':latest' tracks the
+    # newest STABLE release tag — it points at the 1.1.0 line only AFTER a stable v1.1.0 is cut
+    # (until then it resolves to the last stable, v0.9.8). For the 1.1.0 pre-releases, pin an
+    # explicit tag, e.g. ghcr.io/eduardgrebe/residualrisk:1.1.0a12.
+    image: ghcr.io/eduardgrebe/residualrisk:latest
     container_name: residualrisk_app
     ports:
       - "127.0.0.1:8501:8501"

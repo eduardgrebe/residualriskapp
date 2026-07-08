@@ -15,8 +15,8 @@ authors:
     orcid: "https://orcid.org/0000-0001-7046-7245"
     affiliation: "Vitalant Research Institute"
     email: egrebe@vitalant.org
-version: 0.9.4
-date-released: 2026-05-07
+version: 1.1.0
+date-released: 2026-07-08
 url: "https://codeberg.org/eduardgrebe/residualriskapp"
 repository-code: "https://codeberg.org/eduardgrebe/residualriskapp"
 license: AGPL-3.0-or-later
