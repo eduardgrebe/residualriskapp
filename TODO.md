@@ -186,6 +186,10 @@ Unless tagged `[doc]`/`[test]`, these are code defects. The deployed app default
 several Python-path bugs bite library/`reticulate` users (Python is the library default `use_go=False`) and
 Go-unavailable deployments (fallback) rather than the normal app.
 
+**Status (2026-07-08):** all **HIGH** and **MEDIUM** items are resolved and batched into the first beta,
+**`v1.1.0b1`** (app + library + Go). Remaining open items below are all **LOW** (code robustness / edge
+cases + a few docs/tests) plus a handful of infrastructure/test follow-ups — none release-blocking.
+
 **HIGH — silent wrong output or aborts a run:**
 
 - [x] **`core.py:640`** ✅ FIXED (indexed-fill; + recompute regression test) — Python bootstrap built `sim_df` parameter columns in submission order but the
@@ -266,7 +270,7 @@ Go-unavailable deployments (fallback) rather than the normal app.
 
 **LOW `[doc]` — fix before publishing docs/manuscript:**
 
-- [ ] `README.md:189`/`208`/`227` — 3 of 4 API examples unpack 4 vars but `risk_days_bs` returns a 5-tuple → `ValueError` on copy-paste. Fix: 5-target unpack.
+- [x] `README.md:189`/`208`/`227` ✅ FIXED (docs pass, 2026-07-08) — the three examples now use a 5-target unpack (`…, rdests, _ =`), matching the 5-tuple return.
 - [ ] `README.md:170` — Go CLI JSON example is incomplete (no k distribution etc.) → returns an error JSON. Fix: complete it or relabel as a schema fragment.
 - [x] `docs/theory.md:641` ✅ FIXED (2026-07-07 docs pass) — doubling-time sampling SD printed as `0.00306` (that is the *variance*); corrected to SD `0.0553` (matches the app default 1.33 h/24 and `theory_prep.md` §10.1).
 - [x] `docs/theory.md:643` ✅ FIXED (2026-07-07 docs pass) — §8 Ultrio Plus 50% LoD SD `0.1100` → `0.191`, matching the shipped preset (RSE ~7%).
@@ -278,12 +282,12 @@ Go-unavailable deployments (fallback) rather than the normal app.
 - [x] `docs/theory_prep.md:261` ✅ FIXED (2026-07-07 docs pass) — 6-day serology eclipse vs 7-day RDE eclipse reviewer note resolved into settled prose (distinct constructs; ≤1-day shift in `t_0`, immaterial).
 - [x] `docs/assays.md:30` ✅ FIXED (2026-07-07 docs pass) — RSE-derivation sentence narrowed: the cobas TaqScreen MPX / MPX v2.0 50% LoD **and its CI** come from our probit fit (inserts give only the 95% LoD), not the manufacturer.
 - [x] _(same pass)_ additional docs-only fixes not separately logged: `theory_prep.md` §9.1 clarified that the drug-effect `δ` is applied **once** (it appears both inside the §6 RDE integrand and as the external Layer-2 multiplier → would double-count as written); `theory_prep.md` §5.2 `δ(t)` spacing; version-agnostic `theory_prep.md` footer; `credits.md` "the the" typo. **Left in place — the C_sp copies-vs-virions convention (`theory_prep.md` §2 "Reviewer note"):** now **escalated to a HIGH-priority potential model/code bug** (a possible ~2× set-point error), not a doc fix — see Open → "HIGH — PrEP set-point units".
-- [ ] `AGENTS.md:77` — Public API list omits `total_residual_risk_rd`, `mode_hsm_go`, `risk_days_prep_bs_go` (all in `__all__`). Fix.
-- [ ] `AGENTS.md:85` — `mode_kde_go` defaults documented `cap=40_000, n_grid=5_000`; actual `n_grid=1_000_000, cap=None`. Fix (and the perf figures' configuration).
+- [x] `AGENTS.md:77` ✅ FIXED (docs pass, 2026-07-08) — Public API list now includes `total_residual_risk_rd`, `mode_hsm_go`, `risk_days_prep_bs_go`.
+- [x] `AGENTS.md:85` ✅ FIXED (docs pass, 2026-07-08) — `mode_kde_go` defaults corrected to `cap=None, n_grid=1_000_000` (both the API-surface bullet and the Implementation-status mention); stale `~0.9s` timing dropped.
 - [ ] `core.py:289` — `_kde_mode_log` docstring says `n_grid` default `100_000`; actual (and `mode_kde`) is `5_000`. Fix.
 - [ ] `_go.py:93` — `mode_kde_go` docstring claims `1_000_000` "matches the Go auto-default"; Go auto-default clamps to 100k–200k. Fix.
 - [ ] `random.go:43` — `GenerateTruncatedNormal` comment cites the wrong scipy idiom (`truncnorm.rvs(0,inf,…)` truncates at the mean, not 0). Fix the comment.
-- [ ] `TODO.md:357` — states the `a<=offset` guard is "capped in the UI", but only the sampled range is capped, not scalar `prep_a` (ties to `estimator.py:816`). Fix the doc or implement the cap.
+- [x] `AGENTS.md` (a≤offset note) ✅ FIXED (docs pass, 2026-07-08) — clarified: the UI caps the sampled *a*-range at offset, and a scalar `a > offset` is caught on Run via the `estimator.py:816` try/except guard (not silently "capped"). Doc wording updated to match branch 1's guard.
 - [ ] `[test]` `test_prep_bootstrap.py:161`/`243` — no PrEP `sim_df` param→IWP recompute invariant; `test_primary_parameters` asserts `rd_pe>0` twice (no range check). Fix: add recompute assertions.
 
 **VERIFIED SOUND (round-2 probes ran clean — recorded so we don't re-litigate):**

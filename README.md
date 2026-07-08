@@ -186,7 +186,7 @@ See `go/README.md` for detailed documentation of the JSON schema and parameters.
 import residualrisk as rr
 
 # Bootstrap risk-day equivalents (IWP) — using a posterior sample for k
-rd_pe, rd_cri, rd_range, rdests = rr.risk_days_bs(
+rd_pe, rd_cri, rd_range, rdests, _ = rr.risk_days_bs(
     k=0.013,
     doubling_time=20.5 / 24,
     doubling_time_norm_sd=1.33 / 24,
@@ -205,7 +205,7 @@ rd_pe, rd_cri, rd_range, rdests = rr.risk_days_bs(
 # Shortcut: use a canned NAT assay's published LoDs instead of the explicit
 # lod50 / lod50_sd / lod95_lod50_ratio triplet (mutually exclusive with them).
 rr.list_assays()                      # {'ultrio': 'Procleix Ultrio (Tigris)', ...}
-rd_pe, rd_cri, rd_range, rdests = rr.risk_days_bs(
+rd_pe, rd_cri, rd_range, rdests, _ = rr.risk_days_bs(
     k=0.013,
     doubling_time=20.5 / 24,
     doubling_time_norm_sd=1.33 / 24,
@@ -224,7 +224,7 @@ lod = rr.lods_for_assay("ultrio_elite")
 
 # Alternative: sample k from an Inverse Gamma distribution (α=2, β=0.002019)
 # k_pe can be the mode (β/(α+1)), median, or mean (β/(α-1)) of the distribution
-rd_pe, rd_cri, rd_range, rdests = rr.risk_days_bs(
+rd_pe, rd_cri, rd_range, rdests, _ = rr.risk_days_bs(
     k=0.002019 / 3,                  # mode = β/(α+1) = 0.002019/3
     doubling_time=20.5 / 24,
     doubling_time_norm_sd=1.33 / 24,
