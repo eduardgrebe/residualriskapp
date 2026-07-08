@@ -164,6 +164,19 @@ screenshots kept: chromium1/2, firefox1/2). Fixed in `app.py`:
       also sits on one line at the default width (font matched to the version caption, `.875em`).
       Deployed live at `1.1.0a11`.
 
+### LOW — "Generate random seed" button needed two clicks — ✅ FIXED (2026-07-08)
+
+EG-reported: the **first** click of *Generate random seed* appeared to do nothing (a second click
+was needed). Classic Streamlit widget-ordering lag — the seed `st.number_input` rendered **before**
+the `if button:` block that set the new seed, so the manual reassignment `st.session_state["seed"] =
+st.number_input(..., value=st.session_state["seed"])` re-drew the input with the old value on the
+click-rerun and the new seed only surfaced on the *next* rerun.
+
+**Fixed** in `estimator.py`: bound the input with `key="seed"` and set the new seed in the button's
+`on_click` callback (callbacks run before widgets render), removing the manual `value=`/reassignment
+anti-pattern. Verified with an AppTest repro (old pattern: displayed value unchanged after one
+click; fix: updates on one click) and a clean app boot. App-only, no version bump.
+
 ### Release review findings (2026-07-01) — fix before public release
 
 Source: multi-agent adversarial code + docs review (18 parallel reviewers over Python/Go/UI/docs/tests,
@@ -563,6 +576,14 @@ document is preferred. **Awaiting EG review.**
       copies-vs-virions convention for `set_point` was escalated out of this doc flag — see
       Open → "HIGH — PrEP set-point units" (a possible ~2× model/code bug, not a doc issue).**
 - [ ] **EG review pass (PrEP)** — verify equations, prose, citations, and worked numbers
+
+### In-app help text (AI-generated) — awaiting EG review
+
+- [ ] **EG review pass — widget help tooltips.** The 20 `help=` tooltips in `estimator.py` were
+      AI-written from the code and docs (2026-07-08), replacing the "Placeholder help text" stubs.
+      Review for scientific accuracy and phrasing **alongside the documentation review passes above**
+      — in particular the transmissibility k-distribution, LoD, doubling-time, minipool, and
+      incidence / residual-risk tooltips.
 
 ---
 

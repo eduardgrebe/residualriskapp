@@ -220,23 +220,32 @@ if is_mechanistic_ui:
 
 st.sidebar.write("Number of CPU cores: ", n_cpu)
 
-st.session_state["seed"] = st.sidebar.number_input(
+def _generate_random_seed() -> None:
+    # Set the new seed in the button's on_click callback — callbacks run BEFORE the
+    # widgets are re-rendered, so the number_input below shows the new seed on the
+    # same click. Assigning it in an `if button:` block *after* the input renders
+    # only took effect on the next rerun (the old "needs two clicks" behaviour).
+    st.session_state["seed"] = random.randint(1, 999999)
+
+
+# The number_input is bound to session_state["seed"] via key= (seeded above), so
+# the callback and manual entry share one source of truth.
+st.sidebar.number_input(
     "Specify a seed value:",
     min_value=1,
     max_value=999999,
-    value=st.session_state["seed"],
     step=1,
-    help="Placeholder help text",
+    help="Random seed for the Monte Carlo draws. Fix it to reproduce a run exactly, or click Generate random seed.",
+    key="seed",
 )
-if st.sidebar.button("Generate random seed"):
-    st.session_state["seed"] = random.randint(1, 999999)
+st.sidebar.button("Generate random seed", on_click=_generate_random_seed)
 
 if is_mechanistic_ui:
     implementation = st.sidebar.selectbox(
         "Simulation implementation",
         options=["Go", "Python"],
         index=0,  # Go is default
-        help="Placeholder help text",
+        help="Compute backend. Go is the fast multi-core default; Python is a slower single-core reference/fallback.",
     )
     use_go_acceleration = implementation == "Go"
     if use_go_acceleration:
@@ -286,7 +295,7 @@ with sim_param_container:
             "Select method for point estimate of RDEs",
             options=["primary parameters", "median", "mode", "mean"],
             index=0,
-            help="Placeholder help text",
+            help="How the reported RDE point estimate is computed: once at the input point estimates, or as the median/mode/mean of the bootstrap distribution.",
         )
     else:
         point_estimate = None
@@ -295,7 +304,7 @@ with sim_param_container:
         "Normalise histogram",
         options=[None, "probability density"],
         index=1,
-        help="Placeholder help text",
+        help="Y-axis of the RDE histogram: raw counts, or a probability density that integrates to 1.",
     )
 
     alpha = col1.number_input(
@@ -304,7 +313,7 @@ with sim_param_container:
         max_value=0.20,
         value=0.05,
         step=0.01,
-        help="Placeholder help text",
+        help="Significance level for the reported credible interval; it covers the central (1 - α) of the bootstrap RDE distribution (0.05 → 95%).",
     )
 
     sig_level = round((1 - alpha) * 100)
@@ -350,7 +359,7 @@ if is_mechanistic_ui:
                 "Lognormal mixture distribution",
             ],
             index=3,
-            help="Placeholder help text",
+            help="Distribution for the infectivity parameter k, sampled each bootstrap iteration. See the Documentation page for the options.",
         )
         match k_param_distribution_choice:
             case "Belov human posterior":
@@ -612,7 +621,7 @@ if is_mechanistic_ui:
             max_value=500,
             value=20,
             step=1,
-            help="Placeholder help text",
+            help="Point-estimate residual plasma volume of the transfused product (~20 mL red cells, ~200 mL plasma). Model one product per run.",
         )
         volume_range_default = (round(0.75 * volume_pe), round(1.5 * volume_pe))
         volume_range = col1.slider(
@@ -620,7 +629,7 @@ if is_mechanistic_ui:
             min_value=1,
             max_value=500,
             value=volume_range_default,
-            help="Placeholder help text",
+            help="Plausible range for the transfused plasma volume; sampled uniformly each bootstrap iteration.",
         )
 
         doubling_time_hours = col1.number_input(
@@ -629,7 +638,7 @@ if is_mechanistic_ui:
             max_value=48.0,
             value=20.5,
             step=0.25,
-            help="Placeholder help text",
+            help="Doubling time of viral concentration during early ramp-up (default 20.5 h; Fiebig et al. 2003).",
         )
         doubling_time = doubling_time_hours / 24
         doubling_time_hours_sd = col1.number_input(
@@ -638,14 +647,14 @@ if is_mechanistic_ui:
             max_value=10.0,
             value=1.33,
             step=0.01,
-            help="Placeholder help text",
+            help="Standard deviation (hours) of the doubling time; drawn from a truncated normal each bootstrap iteration.",
         )
         doubling_time_sd = doubling_time_hours_sd / 24
 
         id_nat = col1.checkbox(
             "Individual donation NAT screening",
             value=False,
-            help="Placeholder help text",
+            help="Screen each donation individually (pool size 1) instead of in a minipool. Disables the minipool inputs below.",
         )
 
         if not id_nat:
@@ -655,7 +664,7 @@ if is_mechanistic_ui:
                 max_value=96,
                 value=16,
                 step=1,
-                help="Placeholder help text",
+                help="Donations combined per minipool NAT test; larger pools dilute a positive donation, raising the effective limit of detection.",
             )
             retests = col2.number_input(
                 "Number of retests (pool resolution)",
@@ -663,7 +672,7 @@ if is_mechanistic_ui:
                 max_value=5,
                 value=1,
                 step=1,
-                help="Placeholder help text",
+                help="Number of individual-donation retests performed when resolving a reactive minipool.",
             )
         else:
             pool_size = 1
@@ -691,7 +700,7 @@ if is_mechanistic_ui:
                 max_value=500.0,
                 value=NAT_ASSAYS["cobas_mpx"]["lod50"],
                 step=0.01,
-                help="Placeholder help text",
+                help="Viral concentration detected 50% of the time (copies/mL, HIV-1 Group M).",
             )
             lod50_sd = col2.number_input(
                 "NAT assay 50% LoD SD (copies/mL)",
@@ -700,7 +709,7 @@ if is_mechanistic_ui:
                 value=NAT_ASSAYS["cobas_mpx"]["lod50_sd"],
                 step=0.001,
                 format="%.4f",
-                help="Placeholder help text",
+                help="Standard deviation of the 50% LoD (copies/mL); drawn from a truncated normal each bootstrap iteration.",
             )
             lod95 = col2.number_input(
                 "NAT assay 95% LoD (copies/mL)",
@@ -708,7 +717,7 @@ if is_mechanistic_ui:
                 max_value=500.0,
                 value=NAT_ASSAYS["cobas_mpx"]["lod95"],
                 step=0.01,
-                help="Placeholder help text",
+                help="Viral concentration detected 95% of the time (copies/mL); with the 50% LoD it sets the slope of the detection curve.",
             )
             conversion_note = (
                 "Limits of detection entered directly in copies/mL "
@@ -1063,7 +1072,7 @@ with incidence_param_container:
     calculate_rr = st.checkbox(
         "Calculate residual risk (incidence x RDEs)",
         value=False,
-        help="Placeholder help text",
+        help="Combine the RDEs with a donor-population HIV incidence to report residual transfusion-transmission risk (incidence × RDE).",
     )
     if calculate_rr:
         st.write("**Baseline (non-PrEP) incidence**")
@@ -1073,7 +1082,7 @@ with incidence_param_container:
             max_value=10000.000,
             value=2.500,
             step=0.5,
-            help="Placeholder help text",
+            help="Baseline (non-PrEP) HIV incidence in the donor population, per 100,000 person-years.",
         )
         inc_perpy = inc_per100k / 100000
         inc_perpd = inc_per100k / 100000 / 365.25
@@ -1083,7 +1092,7 @@ with incidence_param_container:
             max_value=10000.000,
             value=inc_per100k * 0.2,
             step=0.01,
-            help="Placeholder help text",
+            help="Standard deviation of the incidence estimate (per 100,000 PY); drawn each bootstrap iteration.",
         )
         inc_perpy_sd = inc_per100k_sd / 100000
         inc_perpd_sd = inc_per100k_sd / 100000 / 365.25
@@ -1457,7 +1466,7 @@ if st.session_state["sims_run"]:
             "parquet",
         ],
         index=1,
-        help="Placeholder help text",
+        help="File format for the downloadable simulation output: CSV (universal) or Parquet (compact, typed).",
     )
     # Build combined download: baseline + any PrEP scenarios
     _dl_frames = []
