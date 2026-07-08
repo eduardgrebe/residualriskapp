@@ -83,10 +83,10 @@ func TestSinVaried_Peak(t *testing.T) {
 // --- FindTcrit ---
 
 func TestFindTcrit(t *testing.T) {
-	// Analytic: eclipse + dt * log2(sp / C0)
-	// = 7 + 0.8542 * log2(336 / 0.00025) = 7 + 0.8542 * 20.3355... ≈ 24.39
-	tcrit := FindTcrit(7.0, 0.00025, 0.8542, 336)
-	expected := 24.3899 // From Python verification
+	// Analytic: eclipse + dt * log2((sp/copiesPerVirion) / C0)
+	// = 7 + 0.8542 * log2((336/2) / 0.00025) = 7 + 0.8542 * 19.3355... ≈ 23.54
+	tcrit := FindTcrit(7.0, 0.00025, 0.8542, 336, 2.0)
+	expected := 23.5357 // From Python verification (336 copies/mL -> 168 virions/mL)
 	if math.Abs(tcrit-expected) > 0.001 {
 		t.Errorf("FindTcrit(7, 0.00025, 0.8542, 336) = %v, want ~%v", tcrit, expected)
 	}
@@ -96,9 +96,9 @@ func TestFindTcrit(t *testing.T) {
 
 func TestVLPostBT_Eclipse(t *testing.T) {
 	// During eclipse (t < 7), VL should be 0
-	tcrit := FindTcrit(7.0, 0.00025, 0.8542, 336)
+	tcrit := FindTcrit(7.0, 0.00025, 0.8542, 336, 2.0)
 	for _, tVal := range []float64{0, 3, 5, 6.999} {
-		vl := VLPostBT(tVal, 7.0, 0.00025, 0.8542, 336, 0.7, 0.6, 1.0, tcrit)
+		vl := VLPostBT(tVal, 7.0, 0.00025, 0.8542, 336, 0.7, 0.6, 1.0, tcrit, 2.0)
 		if vl != 0 {
 			t.Errorf("VLPostBT(%v) during eclipse = %v, want 0", tVal, vl)
 		}
@@ -107,9 +107,9 @@ func TestVLPostBT_Eclipse(t *testing.T) {
 
 func TestVLPostBT_ExponentialPhase(t *testing.T) {
 	// Between eclipse and tcrit, VL = C0 * 2^((t-eclipse)/dt)
-	tcrit := FindTcrit(7.0, 0.00025, 0.8542, 336)
+	tcrit := FindTcrit(7.0, 0.00025, 0.8542, 336, 2.0)
 	tVal := 10.0
-	got := VLPostBT(tVal, 7.0, 0.00025, 0.8542, 336, 0.7, 0.6, 1.0, tcrit)
+	got := VLPostBT(tVal, 7.0, 0.00025, 0.8542, 336, 0.7, 0.6, 1.0, tcrit, 2.0)
 	expected := 0.00025 * math.Pow(2, (10-7)/0.8542)
 	if math.Abs(got-expected)/expected > 1e-10 {
 		t.Errorf("VLPostBT(10) exponential = %v, want %v", got, expected)
@@ -121,11 +121,11 @@ func TestVLPostBT_ExponentialPhase(t *testing.T) {
 }
 
 func TestVLPostBT_SetPointPhase(t *testing.T) {
-	// After tcrit, VL = set_point * SinVaried(t-tcrit, a, b, offset)
-	tcrit := FindTcrit(7.0, 0.00025, 0.8542, 336)
+	// After tcrit, VL = (set_point/copiesPerVirion) * SinVaried(t-tcrit, a, b, offset)
+	tcrit := FindTcrit(7.0, 0.00025, 0.8542, 336, 2.0)
 	tVal := 50.0
-	got := VLPostBT(tVal, 7.0, 0.00025, 0.8542, 336, 0.7, 0.6, 1.0, tcrit)
-	expected := 336 * SinVaried(50-tcrit, 0.7, 0.6, 1.0)
+	got := VLPostBT(tVal, 7.0, 0.00025, 0.8542, 336, 0.7, 0.6, 1.0, tcrit, 2.0)
+	expected := (336.0 / 2.0) * SinVaried(50-tcrit, 0.7, 0.6, 1.0)
 	if math.Abs(got-expected) > 1e-6 {
 		t.Errorf("VLPostBT(50) set-point = %v, want %v", got, expected)
 	}
@@ -253,13 +253,13 @@ func TestRiskDaysPrep_GoldenValue(t *testing.T) {
 }
 
 func TestRiskDaysPrep_GoldenValue_Production(t *testing.T) {
-	// Production serology defaults (wide active window ~[10, 169] days) — the
-	// params the production code actually uses. Cross-validated against Python
-	// Simpson integration (0.01-day grid): risk_days_prep ≈ 3.091868. Here Go GL
-	// (3.091880) and Python GL (3.09185) agree with Simpson to ~1e-5, and even
-	// scipy quad integrates correctly (wide window) — so all three concur.
+	// Production serology defaults (wide active window), set_point 336 copies/mL.
+	// After the set-point units fix (a clinical copies/mL value is converted to the
+	// model's virions/mL, ÷copiesPerVirion), Go GL and Python GL agree at 4.289877
+	// — was 3.091868 with the pre-fix 2×-high plateau. Python↔Go parity verified to
+	// ~1e-6 (see the fix-prep-setpoint-units branch validation).
 	rd := RiskDaysPrep(productionPrepParams)
-	expected := 3.091868
+	expected := 4.289877
 	relErr := math.Abs(rd-expected) / expected
 	if relErr > 0.001 {
 		t.Errorf("RiskDaysPrep(production) = %v, want ~%v (relErr=%v)", rd, expected, relErr)

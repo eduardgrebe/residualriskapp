@@ -129,6 +129,7 @@ RSE = `lod50_sd / lod50` (the coefficient of variation of the 50% LoD; invariant
 
 - **`residualrisk/prep.py`** — PrEP-breakthrough model
   - Breakthrough viral dynamics (eclipse → growth → oscillating plateau; analytic `tcrit`)
+  - **Units:** `set_point` / `set_point_dist_uniform` are a clinical breakthrough viral load in **RNA copies/mL**. The model's concentration `C` is in **virions/mL** (`k` is calibrated per RNA copy, Belov 2023), so `_find_tcrit` / `_vl_postbt` (and Go `FindTcrit` / `VLPostBT`) divide the set-point by `copies_per_virion` (χ=2). Fixed on branch `fix-prep-setpoint-units` (2026-07-08): a copies/mL set-point was previously used directly as `C` (virions/mL), running the plateau 2× high and under-stating the RDE by ≈20–45%.
   - NAT + serology (Weibull) detection; optional drug-effect transmissibility reduction
   - `risk_days_prep_bs` bootstrap (compact-support Gauss-Legendre integrator), Go-accelerated
 

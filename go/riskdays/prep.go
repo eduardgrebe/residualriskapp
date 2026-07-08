@@ -29,27 +29,31 @@ func SinVaried(t, a, b, offset float64) float64 {
 }
 
 // FindTcrit computes the time at which exponential viral growth first reaches
-// the set-point. This is the analytic solution to:
+// the set-point. setPoint is a clinical viral load in RNA copies/mL, whereas the
+// model's concentration C is in virions/mL (RNA copies = copiesPerVirion*virions,
+// = 2 for HIV), so the plateau concentration is setPoint/copiesPerVirion. This is
+// the analytic solution to:
 //
-//	C0 * 2^((t - eclipse) / doubling_time) = set_point
+//	C0 * 2^((t - eclipse) / doubling_time) = setPoint / copiesPerVirion
 //
-// Solving: tcrit = eclipse + doubling_time * log2(set_point / C0)
+// Solving: tcrit = eclipse + doubling_time * log2((setPoint/copiesPerVirion) / C0)
 //
-// The Python implementation uses a grid search (np.arange(0, 265, 0.1)) which
-// gives ~0.01-day resolution. The analytic formula is exact and faster.
-func FindTcrit(eclipse, C0, doublingTime, setPoint float64) float64 {
-	return eclipse + doublingTime*math.Log2(setPoint/C0)
+// Mirrors Python _find_tcrit() exactly.
+func FindTcrit(eclipse, C0, doublingTime, setPoint, copiesPerVirion float64) float64 {
+	return eclipse + doublingTime*math.Log2((setPoint/copiesPerVirion)/C0)
 }
 
-// VLPostBT computes the PrEP breakthrough viral load at time t.
-// Three phases:
+// VLPostBT computes the PrEP breakthrough viral load (concentration C in
+// virions/mL) at time t. setPoint is a clinical viral load in RNA copies/mL, so
+// the plateau is setPoint/copiesPerVirion virions/mL (RNA copies = 2*virions for
+// HIV); the growth phase and C0 are already in virions/mL. Three phases:
 //  1. t < eclipse: VL = 0 (eclipse phase)
 //  2. eclipse <= t <= tcrit: VL = C0 * 2^((t-eclipse)/doubling_time) (exponential growth)
-//  3. t > tcrit: VL = set_point * SinVaried(t-tcrit, a, b, offset) (oscillating plateau)
+//  3. t > tcrit: VL = (setPoint/copiesPerVirion) * SinVaried(t-tcrit, a, b, offset) (plateau)
 //
 // tcrit must be precomputed via FindTcrit().
 // Corresponds to Python _vl_postbt().
-func VLPostBT(t, eclipse, C0, doublingTime, setPoint, a, b, offset, tcrit float64) float64 {
+func VLPostBT(t, eclipse, C0, doublingTime, setPoint, a, b, offset, tcrit, copiesPerVirion float64) float64 {
 	if t < eclipse {
 		return 0.0
 	}
@@ -59,7 +63,7 @@ func VLPostBT(t, eclipse, C0, doublingTime, setPoint, a, b, offset, tcrit float6
 	// Modelled viral load can dip below zero when the sinusoidal set-point
 	// oscillation amplitude exceeds its offset (a > offset); clamp to a
 	// physical floor of zero.
-	return math.Max(0.0, setPoint*SinVaried(t-tcrit, a, b, offset))
+	return math.Max(0.0, (setPoint/copiesPerVirion)*SinVaried(t-tcrit, a, b, offset))
 }
 
 // DrugEffectFactor returns the antiretroviral transmissibility-reduction factor
@@ -88,9 +92,9 @@ func DrugEffectFactor(t, drugEffect float64) float64 {
 // given PrEP breakthrough viral dynamics.
 // Corresponds to Python _prob_infectious_prep().
 func ProbInfectiousPrep(t float64, params PrepInnerParams) float64 {
-	tcrit := FindTcrit(params.Eclipse, params.C0, params.DoublingTime, params.SetPoint)
+	tcrit := FindTcrit(params.Eclipse, params.C0, params.DoublingTime, params.SetPoint, float64(params.CopiesPerVirion))
 	C := VLPostBT(t, params.Eclipse, params.C0, params.DoublingTime,
-		params.SetPoint, params.A, params.B, params.Offset, tcrit)
+		params.SetPoint, params.A, params.B, params.Offset, tcrit, float64(params.CopiesPerVirion))
 	nCopies := C * float64(params.CopiesPerVirion) * params.VolumeTransfused
 	// Drug effect is a linear scalar on the realized infection probability.
 	return DrugEffectFactor(t, params.DrugEffect) * ProbInfectiousCopies(nCopies, params.K)
@@ -120,9 +124,9 @@ func ProbNondetectionSerology(t, min, max, alpha, beta float64) float64 {
 // Reuses ProbPosInit and ProbNegRetest from probability.go.
 // Corresponds to Python _prob_nondetection_prep().
 func ProbNondetectionPrep(t float64, params PrepInnerParams) float64 {
-	tcrit := FindTcrit(params.Eclipse, params.C0, params.DoublingTime, params.SetPoint)
+	tcrit := FindTcrit(params.Eclipse, params.C0, params.DoublingTime, params.SetPoint, float64(params.CopiesPerVirion))
 	Cv := VLPostBT(t, params.Eclipse, params.C0, params.DoublingTime,
-		params.SetPoint, params.A, params.B, params.Offset, tcrit)
+		params.SetPoint, params.A, params.B, params.Offset, tcrit, float64(params.CopiesPerVirion))
 	Cc := float64(params.CopiesPerVirion) * Cv
 
 	if Cc == 0 {
@@ -148,11 +152,11 @@ func ProbNondetectionPrep(t float64, params PrepInnerParams) float64 {
 // Corresponds to Python _prob_infectious_nondetection_prep().
 func ProbInfectiousNondetectionPrep(t float64, params PrepInnerParams) float64 {
 	// Precompute tcrit once for all three components
-	tcrit := FindTcrit(params.Eclipse, params.C0, params.DoublingTime, params.SetPoint)
+	tcrit := FindTcrit(params.Eclipse, params.C0, params.DoublingTime, params.SetPoint, float64(params.CopiesPerVirion))
 
 	// Viral load at time t
 	C := VLPostBT(t, params.Eclipse, params.C0, params.DoublingTime,
-		params.SetPoint, params.A, params.B, params.Offset, tcrit)
+		params.SetPoint, params.A, params.B, params.Offset, tcrit, float64(params.CopiesPerVirion))
 
 	// Infectivity (drug effect is a linear scalar on the infection probability;
 	// see DrugEffectFactor — constant in t today, placeholder for wash-out)

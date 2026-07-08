@@ -2,13 +2,29 @@
 
 ## Open
 
-### HIGH — PrEP set-point units: copies/mL entered as virions/mL (CONFIRMED ~2× overstatement, oral) (2026-07-07)
+### HIGH — PrEP set-point units: copies/mL entered as virions/mL — ✅ FIXED on `fix-prep-setpoint-units` (2026-07-08)
+
+**✅ FIXED (2026-07-08, branch `fix-prep-setpoint-units`; EG-approved, re-validated).** The model
+now interprets `set_point` as **RNA copies/mL** (the clinical/UI unit) and divides by χ to get the
+virions/mL concentration, in `_find_tcrit`/`_vl_postbt` + Go `FindTcrit`/`VLPostBT` (set-point
+*values* unchanged — they were always copies/mL). Re-validated: Seed oral median = 336 copies/mL
+entered raw; Belov `k` per RNA copy (ln2/918 = 0.000755, exact); the fix raises the primary-params
+RDE ≈20–45% (oral +23–36%, injectable +43–44%), the safety-relevant direction. **Python↔Go agree
+at the corrected production golden 4.289877 (was 3.091868); full Go suite green; Python
+integration tests green** (goldens updated: `_TRUTH_PROD` 3.09187→4.28988, Go 3.091868→4.289877).
+Docs updated: `theory_prep.md` §2 (units + fix note), §3.1/§3.2 equations (`/χ`), §10.1 (c/mL),
+§10.2/§10.3 flagged superseded (pending regeneration with the 1.2.0 set-point re-scan); `AGENTS.md`
+PrEP units note. **Follow-ups (not blockers):** regenerate the 4 PrEP figures (matplotlib not in
+the sandbox venv) and recompute the §10.2 bootstrap / §10.3 residual-risk tables — folded into the
+Milestone 1.2.0 set-point literature re-scan + analysis-repo revalidation. No version bump on the
+branch (EG to set at merge/release — `v1.1.0a9` is deployed, so likely `a10` for app + library +
+Go). _Historical analysis below (kept for the record)._
 
 **Flagged by EG (2026-07-07) — not a documentation issue; a model/code bug in the PrEP set-point
 units.** Surfaced during the docs correctness pass (the `theory_prep.md` §2 "Reviewer note").
 **Both halves of the units question are now verified (2026-07-07, see below): the oral set-point
 is a clinical copies/mL median entered as if it were virions/mL, so the model runs it 2× too
-high.** EG to decide the fix (and to confirm the doubling was not intentional).
+high.**
 
 **Established from the code.** The model's viral-concentration state `C` (hence `C0` and the
 PrEP `set_point`) is in **virions/mL**: the transfused dose is `n = χ·C·V` (copies) and NAT
@@ -326,6 +342,14 @@ leaving them to the user's upstream scripting.
       `α_s` / shape `β_s` — solving for `(α_s, β_s)` from the targets (the inverse of
       the fit documented in `docs/theory_prep.md` §4.2). Follow / take inspiration from
       the patterns in the context-specific MDRI estimation Shiny app built for UNAIDS.
+- [ ] **Re-scan the literature and case reports for the best PrEP breakthrough set-points +
+      ranges** (oral and injectable defaults). The current values (oral 336 c/mL from Seed
+      et al. 2021; injectable 25 c/mL, weak provenance) were found >1 year ago — confirm they
+      are still the best available, and update the defaults + ranges + `docs/theory_prep.md`
+      §7/§10.1 accordingly. (Values are in **RNA copies/mL** — the model divides by χ; see the
+      set-point units fix.) This is also the natural point to regenerate the PrEP figures and
+      the §10.2/§10.3 results tables (flagged as superseded by the units fix), and to redo the
+      end-to-end residual-risk revalidation in the analysis repo.
 
 ---
 

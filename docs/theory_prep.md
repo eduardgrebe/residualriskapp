@@ -114,10 +114,19 @@ $X_{95}$, $z$, $S_\text{pool}$, $m_\text{retest}$, and $\Phi$. The additional sy
 | $\mathrm{RDE}_g$ | `risk_days_prep`, RDE | PrEP-$g$ infectious window period (risk-day equivalents) |
 
 Concentrations are in the same units as the base model ($C$ in virions/mL, with $n=\chi C
-V_\text{trans}$ giving RNA copies). The set-point default (§10) is taken from clinically
-reported breakthrough viral loads in copies/mL; the model treats it as a value of $C$.
-*[Reviewer note: confirm the intended copies-vs-virions convention for $C_\text{sp}$; the
-factor $\chi$ is applied consistently downstream as in the base model.]*
+V_\text{trans}$ giving RNA copies). The set-point $C_\text{sp}$ is a **clinically reported
+breakthrough viral load in RNA copies/mL** (§10); because the base-model dose-response $k$ is
+calibrated **per RNA copy** (Belov et al., 2023) the model's state $C$ must be in virions/mL, so
+$C_\text{sp}$ is converted to that scale by dividing by $\chi$ — the plateau concentration
+entering the viral dynamics is $C_\text{sp}/\chi$ virions/mL (see §3.1).
+
+> **Units correction (2026-07-08, branch `fix-prep-setpoint-units`).** This division by $\chi$ is
+> a bug fix. Previously the copies/mL set-point was used **directly** as $C$ (virions/mL), so the
+> modelled plateau ran at $\chi\,C_\text{sp}$ = **2× the clinical viral load**. The tool (and the
+> ISBT 2025 analysis it reproduced) therefore *under-estimated* the PrEP RDE and residual risk;
+> the correction raises the primary-parameters RDE by **≈20–45%** (oral ≈+23–36%, injectable
+> ≈+43–44%). The set-point *values* are unchanged (they were always copies/mL); the model now
+> interprets them correctly.
 
 ---
 
@@ -135,18 +144,18 @@ C(t) =
 \begin{cases}
 0, & t < \tau_\text{ecl} \quad\text{(eclipse)} \\[4pt]
 C_0\, 2^{(t-\tau_\text{ecl})/\lambda}, & \tau_\text{ecl} \le t \le t_c \quad\text{(growth)} \\[4pt]
-C_\text{sp}\,\big(o + a\sin\!\big(b\,(t-t_c)\big)\big), & t > t_c \quad\text{(oscillating plateau)}
+(C_\text{sp}/\chi)\,\big(o + a\sin\!\big(b\,(t-t_c)\big)\big), & t > t_c \quad\text{(oscillating plateau)}
 \end{cases}
 $$
 
 clamped to a physical floor of zero, $C(t)\leftarrow\max(0, C(t))$. The growth phase is the
 base model's exponential ramp (Fiebig et al., 2003), delayed by the eclipse period
 $\tau_\text{ecl}$. Growth gives way to the plateau at the **critical time** $t_c$, defined
-as the moment growth first reaches the set-point. Solving $C_0\,2^{(t_c -
-\tau_\text{ecl})/\lambda} = C_\text{sp}$ in closed form (`_find_tcrit`):
+as the moment growth first reaches the plateau concentration $C_\text{sp}/\chi$. Solving
+$C_0\,2^{(t_c - \tau_\text{ecl})/\lambda} = C_\text{sp}/\chi$ in closed form (`_find_tcrit`):
 
 $$
-t_c \;=\; \tau_\text{ecl} \;+\; \lambda\,\log_2\!\big(C_\text{sp}/C_0\big).
+t_c \;=\; \tau_\text{ecl} \;+\; \lambda\,\log_2\!\big((C_\text{sp}/\chi)/C_0\big).
 $$
 
 This closed form replaced an earlier grid search (and is reproduced exactly in Go as
@@ -160,12 +169,13 @@ On the plateau the viral concentration is the set-point modulated by a sinusoid
 (`_sin_varied`),
 
 $$
-C(t) = C_\text{sp}\,\big(o + a\sin(b\,(t-t_c))\big),
+C(t) = (C_\text{sp}/\chi)\,\big(o + a\sin(b\,(t-t_c))\big),
 $$
 
-so it oscillates between $(o-a)\,C_\text{sp}$ and $(o+a)\,C_\text{sp}$ with period
-$2\pi/b$. With the production values $o=1,\ a=0.7$ the plateau oscillates between $0.3\,
-C_\text{sp}$ and $1.7\,C_\text{sp}$. The amplitude must satisfy $a \le o$, since $a>o$ would
+so, expressed in copies/mL, the plateau viral load oscillates between $(o-a)\,C_\text{sp}$ and
+$(o+a)\,C_\text{sp}$ with period $2\pi/b$ (the modelled concentration $C$ is $1/\chi$ of these,
+in virions/mL). With the production values $o=1,\ a=0.7$ it spans $0.3\,C_\text{sp}$ to
+$1.7\,C_\text{sp}$. The amplitude must satisfy $a \le o$, since $a>o$ would
 drive the modelled concentration negative on the downswings (it is then clamped to zero);
 this constraint is enforced in both backends and in the UI.
 
@@ -539,20 +549,28 @@ unless noted:
 | $X_{95}/X_{50}$ | $21.2/4.7 = 4.51$ | fixed | |
 | $S_\text{pool}$, $m_\text{retest}$ | 16, 1 | fixed | minipool NAT |
 | $\chi$, $z$ | 2, 1.6449 | fixed | |
-| $C_\text{sp}$ (oral / inj) | 336 / 25 | $\mathcal{U}(19.1,2265)$ / $\mathcal{U}(5,2500)$ | Seed et al. (2021); §7 |
+| $C_\text{sp}$ (oral / inj) | 336 / 25 c/mL | $\mathcal{U}(19.1,2265)$ / $\mathcal{U}(5,2500)$ c/mL | Seed et al. (2021); §7 |
 | Serology (oral / inj) | see §4.2 | fixed | Seed et al. (2021) |
 | $V_\text{trans}$ (RBC / plasma) | 20 / 200 mL | $\mathcal{U}(15,50)$ / $\mathcal{U}(180,300)$ | |
 | $\delta$ | 0.75 (published) / 1.0 (tool default) | $\mathcal{U}(0.5,1.0)$ | §5.2 |
 
-The oral set-point default, 336, is the median of the eight per-case breakthrough viral
-loads reported for oral TDF/FTC seroconverters (Seed et al., 2021); its range spans the
-lowest single-copy-assay value to the median of the poorer-adherence cases. The injectable
-set-point (25; range 5–2500) reflects more strongly suppressed viraemia but has weaker
-direct provenance in the source data (§11).
+The set-points are **RNA copies/mL** (the model divides by $\chi$ to obtain the virions/mL
+concentration $C$ — §2). The oral set-point 336 is the median of the eight per-case breakthrough
+viral loads (copies/mL) reported for oral TDF/FTC seroconverters (Seed et al., 2021); its range
+spans the lowest single-copy-assay value to the median of the poorer-adherence cases. The
+injectable set-point (25; range 5–2500) reflects more strongly suppressed viraemia but has
+weaker direct provenance in the source data (§11) — its best value is under review (the 1.2.0
+set-point literature re-scan).
 
 ### 10.2 Risk-day-equivalents
 
 Bootstrap RDE distributions (days; $n_\text{bs}=10{,}000$; animal-$k$; published analysis):
+
+> **Superseded by the set-point units fix (§2).** This table and the figures were computed with
+> the **pre-fix** plateau (2× too high), so they *under*-state the RDE. The correction raises the
+> RDE by ≈20–45% (the production primary-parameters RDE rose 3.09 → 4.29 days); the bootstrap
+> table and the figures are pending regeneration alongside the 1.2.0 set-point re-scan and the
+> analysis-repo revalidation.
 
 | PrEP form | Product | Range | 95% credible interval | Mean | Median |
 |---|---|---|---|---|---|
@@ -568,6 +586,11 @@ longer than the base (non-PrEP) NAT window — because PrEP extends both detecti
 
 Applying Layer 2 (§9), the published incremental residual-risk estimates were (1 in $x$
 million transfusions; median with 95% credible interval):
+
+> **Pre-fix figures.** These reproduce the ISBT 2025 numbers, which used the 2×-high set-point
+> (§2). With the units correction the incremental risk rises (the RDE is ≈20–45% higher); the
+> corrected residual-risk figures require re-running the Layer-2 aggregation (outside the tool)
+> and are pending revalidation in the analysis repo.
 
 | Scenario | RBC | Increase over baseline | Plasma | Increase over baseline |
 |---|---|---|---|---|

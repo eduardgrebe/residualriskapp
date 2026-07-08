@@ -67,12 +67,17 @@ def _sin_varied(t, a, b, offset):
     return offset + a * np.sin(b * t)
 
 
-def _find_tcrit(eclipse, C0, doubling_time, set_point):
+def _find_tcrit(eclipse, C0, doubling_time, set_point, copies_per_virion=2):
     """Time at which exponential growth first reaches the set-point.
 
-    Closed-form solution of ``C0 * 2**((t - eclipse) / doubling_time) = set_point``:
+    ``set_point`` is a **clinical viral load in RNA copies/mL** (as reported in
+    the literature), whereas the model's concentration ``C`` is in **virions/mL**
+    (RNA copies = ``copies_per_virion`` * virions, ``= 2`` for HIV). The plateau
+    concentration is therefore ``set_point / copies_per_virion`` virions/mL, and
+    growth reaches it at the closed-form solution of
+    ``C0 * 2**((t - eclipse) / doubling_time) = set_point / copies_per_virion``:
 
-        tcrit = eclipse + doubling_time * log2(set_point / C0)
+        tcrit = eclipse + doubling_time * log2((set_point / copies_per_virion) / C0)
 
     Mirrors the Go backend's ``FindTcrit`` (``go/riskdays/prep.go``) exactly, so
     the two implementations agree to machine precision. Replaces the former
@@ -80,22 +85,26 @@ def _find_tcrit(eclipse, C0, doubling_time, set_point):
     grid), O(1), and immune to the empty-``argmin`` crash that occurred when
     ``tcrit`` exceeded the search grid.
     """
-    return eclipse + doubling_time * math.log2(set_point / C0)
+    return eclipse + doubling_time * math.log2((set_point / copies_per_virion) / C0)
 
 
-def _vl_postbt(t, eclipse, C0, doubling_time, set_point, a, b, offset, tcrit):
+def _vl_postbt(t, eclipse, C0, doubling_time, set_point, a, b, offset, tcrit, copies_per_virion=2):
+    # Returns the modelled concentration C in **virions/mL**. ``set_point`` is a
+    # clinical viral load in **RNA copies/mL**, so the plateau is
+    # ``set_point / copies_per_virion`` virions/mL (RNA copies = 2 * virions for
+    # HIV); the growth phase and C0 are already in virions/mL.
     if t < eclipse:
         vl = 0.0
     elif t <= tcrit:
         # Exponential growth phase. The exponent is bounded here (at t=tcrit it
-        # equals log2(set_point/C0)), so no overflow.
+        # equals log2((set_point/copies_per_virion)/C0)), so no overflow.
         vl = C0 * 2 ** ((t - eclipse) / doubling_time)
     else:
-        # Oscillating plateau. The exponential is deliberately NOT evaluated in
-        # this branch: for large t with a small (now-sampleable) doubling_time it
-        # would overflow, and the value would only be discarded — cf. the
-        # growth-exponent cap in core._concentration.
-        vl = set_point * _sin_varied(t=t - tcrit, a=a, b=b, offset=offset)
+        # Oscillating plateau (virions/mL). The exponential is deliberately NOT
+        # evaluated in this branch: for large t with a small (now-sampleable)
+        # doubling_time it would overflow, and the value would only be discarded
+        # — cf. the growth-exponent cap in core._concentration.
+        vl = (set_point / copies_per_virion) * _sin_varied(t=t - tcrit, a=a, b=b, offset=offset)
     # Modelled viral load can dip below zero when the sinusoidal set-point
     # oscillation amplitude exceeds its offset (a > offset); clamp to a
     # physical floor of zero.
@@ -142,7 +151,7 @@ def _prob_infectious_prep(
     copies_per_virion=2.0,
     drug_effect=1.0,
 ):
-    tcrit = _find_tcrit(eclipse, C0, doubling_time, set_point)
+    tcrit = _find_tcrit(eclipse, C0, doubling_time, set_point, copies_per_virion)
     C = _vl_postbt(
         t=t,
         eclipse=eclipse,
@@ -153,6 +162,7 @@ def _prob_infectious_prep(
         b=b,
         offset=offset,
         tcrit=tcrit,
+        copies_per_virion=copies_per_virion,
     )
     n_copies = C * copies_per_virion * volume_transfused
     prob = _prob_infectious_copies(n_copies, k)
@@ -190,7 +200,7 @@ def _prob_nondetection_prep(
     z=1.6449,
     seroconversion_delay_median=45,
 ):
-    tcrit = _find_tcrit(eclipse, C0, doubling_time, set_point)
+    tcrit = _find_tcrit(eclipse, C0, doubling_time, set_point, copies_per_virion)
     Cv = _vl_postbt(
         t=t,
         eclipse=eclipse,
@@ -201,6 +211,7 @@ def _prob_nondetection_prep(
         b=b,
         offset=offset,
         tcrit=tcrit,
+        copies_per_virion=copies_per_virion,
     )
     Cc = copies_per_virion * Cv
     if Cc == 0.0:

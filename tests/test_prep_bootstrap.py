@@ -516,8 +516,12 @@ _SER_NARROW = dict(ser_min=10, ser_max=500, ser_alpha=9.1, ser_beta=5.2)
 _SER_PROD = dict(ser_min=28.7, ser_max=250, ser_alpha=50.49434, ser_beta=1.15062)
 
 # Fine-grid Simpson reference values (0.01-day grid over [-100, 500]).
-_TRUTH_NARROW = 1.00864
-_TRUTH_PROD = 3.09187
+# set_point=336 is a clinical viral load in copies/mL; the model converts it to
+# virions/mL (÷copies_per_virion) — so the plateau is 168 virions/mL. (Before that
+# units fix the plateau ran 2× high: _TRUTH_PROD was 3.09187.) The narrow window is
+# pre-plateau, so it barely moves; the wide/production window rises ~39%.
+_TRUTH_NARROW = 1.00866
+_TRUTH_PROD = 4.28988
 
 
 class TestPrepIntegrationMethod(unittest.TestCase):
