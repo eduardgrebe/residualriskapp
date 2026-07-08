@@ -294,9 +294,20 @@ with sim_param_container:
         point_estimate = col1.selectbox(
             "Select method for point estimate of RDEs",
             options=["primary parameters", "median", "mode", "mean"],
-            index=0,
-            help="How the reported RDE point estimate is computed: once at the input point estimates, or as the median/mode/mean of the bootstrap distribution.",
+            index=2,
+            help="How the reported RDE point estimate is computed: the mode (default), "
+            "median or mean of the bootstrap distribution, or 'primary parameters' — a "
+            "single evaluation at the input point values. The bootstrap summaries always "
+            "lie within the credible interval; 'primary parameters' need not.",
         )
+        if point_estimate == "primary parameters":
+            col1.warning(
+                "'Primary parameters' evaluates the RDE once at the input point values. "
+                "Because the RDE distribution is right-skewed, this estimate can fall in "
+                "the far right tail — occasionally above the upper credible limit. The "
+                "mode or median summarise the distribution more representatively.",
+                icon="⚠️",
+            )
     else:
         point_estimate = None
 

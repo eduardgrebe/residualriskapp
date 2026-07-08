@@ -2,6 +2,26 @@
 
 ## Open
 
+### PrEP RDE point-estimate default → mode (+ "primary parameters" tail warning) (2026-07-08)
+
+**✅ FIXED (branch `fix-pe-default-mode`)** — the reported RDE point estimate defaulted to
+"primary parameters" (a single integration at the input point values). For the injectable-PrEP
+defaults the scalar set point (30 c/mL) is **below the pooled NAT LoD** (~`pool_size × lod50` ≈ 44),
+so the plug-in RDE runs to seroconversion and lands in the **far right tail** of the bootstrap
+distribution — above the upper 95% CrI (reported "PE 22.38 vs CrI 0.48–21.70"). Fix: the UI
+point-estimate selectbox now defaults to **mode** (bootstrap-distribution mode, always inside the
+CrI) for both baseline and PrEP; picking "primary parameters" now shows a tail-caveat warning.
+UI-only — the library/Go `point_estimate` default stays "primary parameters" for API reproducibility.
+Regression tests: `test_estimator_ui.py::TestPointEstimateDefault`.
+
+**⚠️ DEFERRED — modelling decision (EG):** the deeper issue is that set point is *sampled*
+`Uniform(10, 2500)` (median ~1255) while the scalar "median" set points are **30** (iPrEP) / **340**
+(oPrEP) — the scalars sit at the ~1st / ~15th percentile of their own ranges. If injectable
+breakthroughs are meant to be low-VL / NAT-evading (median ~30), `Uniform` under-represents them and
+**under-estimates injectable risk**; the fix would be a right-skewed set-point law matching the
+intended median. That changes the risk numbers, so it is **not** done here — flagged for EG. (Full
+diagnosis + reproduction: 2026-07-08 session.)
+
 ### HIGH — PrEP set-point units: copies/mL entered as virions/mL — ✅ FIXED on `fix-prep-setpoint-units` (2026-07-08)
 
 **✅ FIXED (2026-07-08, branch `fix-prep-setpoint-units`; EG-approved, re-validated).** The model

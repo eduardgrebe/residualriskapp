@@ -108,3 +108,32 @@ class TestInvalidPrepInputsCaught:
         assert not at.exception, at.exception  # no full-page traceback
         errors = [e.value for e in at.sidebar.error]
         assert any("Invalid parameters" in m for m in errors), errors
+
+
+class TestPointEstimateDefault:
+    """The reported RDE point estimate defaults to the bootstrap mode (always inside
+    the CrI), not 'primary parameters' — whose plug-in value can land in the far
+    right tail of a skewed RDE distribution (even above the upper CrI). Picking
+    'primary parameters' explicitly surfaces a tail-caveat warning.
+    """
+
+    def _pe_selectbox(self, at):
+        for s in at.selectbox:
+            if "point estimate of RDEs" in (s.label or ""):
+                return s
+        raise AssertionError("point-estimate selectbox not found")
+
+    def test_default_method_is_mode(self):
+        at = AppTest.from_file(_ESTIMATOR, default_timeout=120).run()
+        assert not at.exception, at.exception
+        assert self._pe_selectbox(at).value == "mode"
+
+    def test_primary_parameters_shows_tail_warning(self):
+        at = AppTest.from_file(_ESTIMATOR, default_timeout=120).run()
+        assert not at.exception, at.exception
+        self._pe_selectbox(at).set_value("primary parameters")
+        at.run()
+        assert not at.exception, at.exception
+        assert any("far right tail" in (w.value or "") for w in at.warning), [
+            w.value for w in at.warning
+        ]
