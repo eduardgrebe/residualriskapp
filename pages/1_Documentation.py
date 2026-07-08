@@ -72,20 +72,23 @@ def render_doc(text: str) -> None:
         render_markdown_with_figures(footer)
 
 
+def _draft_notice() -> None:
+    """Draft-status banner shown at the top of every documentation tab."""
+    st.info("Draft documentation — to be reviewed and edited.", icon="🚧")
+
+
 tab_base, tab_assays, tab_prep = st.tabs(
     ["Baseline model & methods", "NAT assay parameters", "PrEP model"]
 )
 
 with tab_base:
+    _draft_notice()
     render_doc((DOCS / "theory.md").read_text())
 
 with tab_assays:
+    _draft_notice()
     render_doc((DOCS / "assays.md").read_text())
 
 with tab_prep:
-    st.info(
-        "Draft documentation for the PrEP-breakthrough model — to be reviewed "
-        "and edited.",
-        icon="🚧",
-    )
+    _draft_notice()
     render_doc((DOCS / "theory_prep.md").read_text())
