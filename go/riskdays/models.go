@@ -201,6 +201,9 @@ func (input *RiskDaysInput) Validate() error {
 	if input.DoublingTime <= 0 {
 		return fmt.Errorf("doubling_time must be positive")
 	}
+	if input.KPosteriorSample != nil && len(input.KPosteriorSample) == 0 {
+		return fmt.Errorf("k_posterior_sample must not be empty")
+	}
 	if input.KPosteriorSample == nil &&
 		(input.KGammaShape == nil || input.KGammaScale == nil) &&
 		(input.KInvGammaAlpha == nil || input.KInvGammaBeta == nil) &&

@@ -599,7 +599,7 @@ def risk_days_prep_bs(
 
     rdests = []
     _rd = partial(_risk_days_prep, integration_method=integration_method)
-    with ProcessPoolExecutor(max_workers=threads) as executor:
+    with ProcessPoolExecutor(max_workers=max(1, threads)) as executor:
         futures = [executor.submit(_rd, *args) for args in args_list]
         completed_count = 0
         for future in as_completed(futures):

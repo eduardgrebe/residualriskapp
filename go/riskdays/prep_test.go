@@ -372,6 +372,17 @@ func TestSetDefaults_PreservesExplicitZeroAmplitude(t *testing.T) {
 	}
 }
 
+func TestValidate_RejectsEmptyKPosteriorSample(t *testing.T) {
+	// A present-but-empty posterior sample passed the old `== nil` check, then
+	// panicked in Intn(0) during sampling. Validate() must reject it (Python does).
+	in := prepInput(100, 1)
+	in.KPosteriorSample = []float64{}
+	in.SetDefaults()
+	if err := in.Validate(); err == nil {
+		t.Fatal("expected Validate() to reject an empty (non-nil) k_posterior_sample")
+	}
+}
+
 func TestRiskDaysBSPrep_Sanity(t *testing.T) {
 	input := prepInput(100, 42)
 	out, err := RiskDaysBS(input, nil)

@@ -197,6 +197,14 @@ def test_nonpositive_incidence_or_iwp_raises():
         total_residual_risk_rd([(-1.0, np.ones(100), 0.001, 0.0001)])
 
 
+def test_empty_iwp_bs_raises():
+    """residual_risk_rd with an empty iwp_bs (or all-nonpositive products) has no
+    samples to summarise — raise cleanly rather than surfacing an opaque IndexError
+    from np.quantile([])."""
+    with pytest.raises(ValueError):
+        rr.residual_risk_rd(1.0, [], 0.001, 0.0001)
+
+
 # --------------------------------------------------------------------------- #
 # Integration: the shared-parameter alignment the CrI depends on
 # --------------------------------------------------------------------------- #

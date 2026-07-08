@@ -509,6 +509,15 @@ class TestRiskDaysBsPython:
         assert len(result) == 5
 
     @pytest.mark.multiprocessing
+    def test_threads_zero_runs_python(self):
+        """threads=0 (single-core host, or explicit) must not crash the Python
+        bootstrap: max_workers is floored at 1 (was ProcessPoolExecutor(
+        max_workers=0) -> ValueError)."""
+        result = rr.risk_days_bs(**{**BS_KWARGS, "threads": 0}, use_go=False)
+        assert len(result) == 5
+        assert result[0] > 0
+
+    @pytest.mark.multiprocessing
     def test_sanity_checks_python(self):
         result = rr.risk_days_bs(**BS_KWARGS, use_go=False)
         _assert_bs_result_sane(result, BS_KWARGS["n_bs"])

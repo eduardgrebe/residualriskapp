@@ -615,7 +615,7 @@ def _risk_days_bs_python(
     # columns (built from args_list, in submission order) stay row-aligned with each
     # iteration's iwp. as_completed only drives the (order-independent) progress counter.
     rdests = [None] * n_bs
-    with ProcessPoolExecutor(max_workers=threads) as executor:
+    with ProcessPoolExecutor(max_workers=max(1, threads)) as executor:
         future_to_index = {
             executor.submit(_rd, *args): i for i, args in enumerate(args_list)
         }
@@ -1017,6 +1017,11 @@ def residual_risk_rd(
             rr.append(1 / product)
         else:
             rr.append(product * per)
+    if not rr:
+        raise ValueError(
+            "No positive residual-risk samples to summarise "
+            "(iwp_bs is empty or all sampled products were non-positive)."
+        )
     rr_cri = np.quantile(rr, (alpha / 2, 1 - alpha / 2))
     rr_sd = np.std(rr)
     return (rr_pe, rr_cri, rr_sd)

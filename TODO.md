@@ -280,11 +280,11 @@ cases + a few docs/tests) plus a handful of infrastructure/test follow-ups — n
 
 **LOW — code robustness / edge cases:**
 
-- [ ] **`core.py:549`** (+`prep.py`) — `threads=0` (single-core host, or explicit) → `ProcessPoolExecutor(max_workers=0)` `ValueError`. Fix: `max(1, threads)`.
+- [x] **`core.py`/`prep.py`** ✅ FIXED (`fix-engine-edge-guards`) — `ProcessPoolExecutor(max_workers=max(1, threads))` at both bootstrap sites, so `threads=0` (single-core host or explicit) no longer raises. Test: `test_residualrisk.py::TestRiskDaysBsPython::test_threads_zero_runs_python` (multiprocessing-marked).
 - [ ] **`core.py:361`** — k input modes are a silent priority cascade, not mutually exclusive (contradicts AGENTS.md); `_sample_k` prefers invgamma `beta` over `mode` where public `sample_invgamma()` raises. Fix: raise on multiple modes, or correct the doc + align.
-- [ ] **`models.go:218`** — an empty (non-nil) `k_posterior_sample` passes `Validate()` then panics in `Intn(0)`, crashing the binary; Python raises cleanly. Fix: require `len>0`.
+- [x] **`models.go`** ✅ FIXED (`fix-engine-edge-guards`) — `Validate()` now rejects a present-but-empty `k_posterior_sample` (`len==0`) before it can panic in `Intn(0)`. Test: `prep_test.go::TestValidate_RejectsEmptyKPosteriorSample`.
 - [ ] **`prep.py:83`** — analytic `tcrit` gives growth→plateau continuity only at `offset==1`; other UI-reachable offsets create a VL discontinuity at `tcrit` (both backends; modelling gap). Fix: constrain offset to 1, or retarget `tcrit`.
-- [ ] **`core.py:974`** (`residual_risk_rd`) — all-zeros/empty `iwp_bs` → opaque `IndexError` from `np.quantile([])`; unreachable in practice (real IWP never ≤0) but a hard crash. Fix: guard empty result. `[round-2]`
+- [x] **`core.py`** (`residual_risk_rd`) ✅ FIXED (`fix-engine-edge-guards`) — guards an empty `rr` (empty `iwp_bs`, or all-nonpositive products) with a clear `ValueError` before `np.quantile`. Test: `test_total_residual_risk.py::test_empty_iwp_bs_raises`.
 - [ ] **`helpers.go:95`** — `ModeRounded` tie-break is nondeterministic vs the documented scipy "smallest tied"; currently unused by the engine. Fix: deterministic smallest, or drop the claim.
 - [ ] **`kde.go:54`** — Go KDE `cap` pre-sampling draws *with* replacement vs Python *without*; the API never reaches it (`cap=0`). Fix: sample without replacement, or document.
 
