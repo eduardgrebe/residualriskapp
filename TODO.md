@@ -215,15 +215,15 @@ Go-unavailable deployments (fallback) rather than the normal app.
       `mean<=0` (e.g. `lod50=0` or `doubling_time=0`), **hanging the Go backend forever** and freezing the
       app; `Validate()` never checks `lod50>0`/`doubling_time>0`. Fix: fill `mean` when `sd<=0`; add
       positivity validation; cap the loop.
-- [ ] **`estimator.py:816`** — scalar amplitude `prep_a` (default 0.7) is never capped to `prep_offset`, so
-      lowering Offset below 0.7 and clicking Run raises an uncaught `ValueError` → full-page traceback
-      (default, fixed-amplitude path). Fix: cap the number_input at `prep_offset` or pre-validate with
-      `st.error`. _(Same UI-uncaught-`ValueError` class: the serology `ser_alpha`/`ser_beta` number_inputs
-      still allow `min_value=0.0`, which Fix 3's library validation now rejects on Run — fold a general
-      "catch library `ValueError` → `st.error`" guard around the Run handler into this fix.)_
-- [ ] **`estimator.py:855`** — with "Vary sinusoidal oscillation parameters" on and Offset=0.0, the
-      amplitude-range slider is built with `min==max==0.0` → `StreamlitAPIException` crashes the page on
-      render. Fix: skip the slider when `offset==0`, or raise the Offset min above 0.
+- [x] **`estimator.py:816`** ✅ FIXED (`fix-prep-oscillation-ui`) — wrapped the mechanistic Run branch in
+      `try/except ValueError → st.sidebar.error` (mirrors the lookback branch), so `a>offset` **and** the
+      serology `α`/`β=0` case surface a clean message instead of a full-page traceback; regression test in
+      `tests/test_estimator_ui.py`. _Original:_ scalar amplitude `prep_a` (default 0.7) is never capped to
+      `prep_offset`, so lowering Offset below 0.7 and clicking Run raised an uncaught `ValueError`.
+- [x] **`estimator.py:855`** ✅ FIXED (`fix-prep-oscillation-ui`) — floored Offset at `min_value=0.05`
+      (0 is degenerate and made the amplitude-range slider `min==max`); regression tests in
+      `tests/test_estimator_ui.py`. _Original:_ with "Vary sinusoidal oscillation parameters" on and
+      Offset=0.0, the amplitude-range slider was built with `min==max==0.0` → `StreamlitAPIException`.
 - [ ] **`estimator.py:1245`** — `used_go` records the *requested* backend, not the actual one, so on a
       silent Go→Python fallback the additive total-risk CrI (misaligned Python arrays) is mislabeled the
       "exact shared-parameter interval". Fix: report the backend actually used; make `prep.py`'s fallback

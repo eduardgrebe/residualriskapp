@@ -851,12 +851,14 @@ if include_prep_oral or include_prep_inj:
         )
         prep_offset = col2.number_input(
             "Offset",
-            min_value=0.0,
+            min_value=0.05,
             max_value=2.0,
             value=1.0,
             step=0.05,
             format="%.2f",
-            help="Vertical offset of sinusoidal oscillation (multiplied by set point).",
+            help="Vertical offset of the sinusoidal oscillation (multiplied by the "
+            "set point). Must be > 0 — at 0 the plateau oscillates around zero and "
+            "the amplitude-range slider would be degenerate.",
         )
 
         prep_vary_sin = col2.checkbox(
@@ -1156,147 +1158,77 @@ button_label = "Run simulations" if is_mechanistic_ui else "Calculate RDEs"
 if st.sidebar.button(button_label):
     if rde_method == "Mechanistic model":
         progressbar = st.sidebar.progress(0, text="Running simulations...")
-        if k_param_dist == "invgamma":
-            if k_invgamma_pe_choice == "mode":
-                k_pe = k_invgamma_beta / (k_invgamma_alpha + 1)
-            elif k_invgamma_pe_choice == "median":
-                k_pe = stats.invgamma.ppf(
-                    0.5, a=k_invgamma_alpha, scale=k_invgamma_beta
-                )
-            elif k_invgamma_pe_choice == "mean":
-                k_pe = k_invgamma_beta / (k_invgamma_alpha - 1)
-            else:
-                k_pe = k_invgamma_beta / (k_invgamma_alpha + 1)  # fallback to mode
-        elif k_param_dist == "lnmixture":
-            import math as _math
-
-            if k_lnmix_pe_choice == "mean":
-                k_pe = k_lnmix_w * _math.exp(k_lnmix_mu1 + k_lnmix_sigma1**2 / 2) + (
-                    1 - k_lnmix_w
-                ) * _math.exp(k_lnmix_mu2 + k_lnmix_sigma2**2 / 2)
-            else:
-                # Numerical mode or median from a large sample
-                # Use cached default-param values if parameters are at defaults to avoid delay
-                _lnmix_defaults = (0.90, -7.2403, 0.3241, -3.7423, 0.5258)
-                _lnmix_current = (
-                    k_lnmix_w,
-                    k_lnmix_mu1,
-                    k_lnmix_sigma1,
-                    k_lnmix_mu2,
-                    k_lnmix_sigma2,
-                )
-                if _lnmix_current == _lnmix_defaults:
-                    _lnmix_sample = st.session_state.get("k_lnmix_default_sample")
-                    if _lnmix_sample is None:
-                        _lnmix_sample = rr.sample_lnmix(
-                            100_000, *_lnmix_defaults, seed=42
-                        )
-                        st.session_state["k_lnmix_default_sample"] = _lnmix_sample
+        try:
+            if k_param_dist == "invgamma":
+                if k_invgamma_pe_choice == "mode":
+                    k_pe = k_invgamma_beta / (k_invgamma_alpha + 1)
+                elif k_invgamma_pe_choice == "median":
+                    k_pe = stats.invgamma.ppf(
+                        0.5, a=k_invgamma_alpha, scale=k_invgamma_beta
+                    )
+                elif k_invgamma_pe_choice == "mean":
+                    k_pe = k_invgamma_beta / (k_invgamma_alpha - 1)
                 else:
-                    _lnmix_sample = rr.sample_lnmix(
-                        100_000,
+                    k_pe = k_invgamma_beta / (k_invgamma_alpha + 1)  # fallback to mode
+            elif k_param_dist == "lnmixture":
+                import math as _math
+
+                if k_lnmix_pe_choice == "mean":
+                    k_pe = k_lnmix_w * _math.exp(k_lnmix_mu1 + k_lnmix_sigma1**2 / 2) + (
+                        1 - k_lnmix_w
+                    ) * _math.exp(k_lnmix_mu2 + k_lnmix_sigma2**2 / 2)
+                else:
+                    # Numerical mode or median from a large sample
+                    # Use cached default-param values if parameters are at defaults to avoid delay
+                    _lnmix_defaults = (0.90, -7.2403, 0.3241, -3.7423, 0.5258)
+                    _lnmix_current = (
                         k_lnmix_w,
                         k_lnmix_mu1,
                         k_lnmix_sigma1,
                         k_lnmix_mu2,
                         k_lnmix_sigma2,
-                        seed=42,
                     )
-                if k_lnmix_pe_choice == "median":
-                    k_pe = float(np.median(_lnmix_sample))
-                else:  # mode
-                    k_pe = rr.mode_kde(_lnmix_sample, cap=1_000_000, n_grid=1_000_000)
-        elif k_param_pe == "mode":
-            _mode_key = {
-                "human": "k_human_mode",
-                "animal": "k_animal_mode",
-                "human_weighted": "k_expdecay_mode",
-            }.get(k_param_dist)
-            k_pe = st.session_state[_mode_key] if _mode_key else None
-        elif k_param_pe == "mean":
-            k_pe = statistics.mean(k_param)
-        elif k_param_pe == "median":
-            k_pe = statistics.median(k_param)
-        else:
-            k_pe = None  # should not happen
-        (
-            st.session_state["iwp_pe"],
-            st.session_state["iwp_cri"],
-            st.session_state["iwp_range"],
-            st.session_state["bs"],
-            st.session_state["sim_df"],
-        ) = rr.risk_days_bs(
-            k_pe,
-            doubling_time,
-            doubling_time_sd,
-            lod50,
-            lod50_sd,
-            lod95_lod50_ratio,
-            volume_pe,
-            volume_range,
-            pool_size,
-            retests,
-            k_posterior_sample=k_param,
-            k_invgamma_alpha=k_invgamma_alpha,
-            k_invgamma_beta=k_invgamma_beta,
-            k_gamma_scale=None,
-            k_gamma_shape=None,
-            k_lnmix_w=k_lnmix_w,
-            k_lnmix_mu1=k_lnmix_mu1,
-            k_lnmix_sigma1=k_lnmix_sigma1,
-            k_lnmix_mu2=k_lnmix_mu2,
-            k_lnmix_sigma2=k_lnmix_sigma2,
-            alpha=alpha,
-            n_bs=n_sims,
-            point_estimate=point_estimate,
-            seed=st.session_state["seed"],
-            threads=n_threads,
-            progress=progressbar,
-            return_sim_df=True,
-            use_go=use_go_acceleration,
-        )
-        st.session_state["sims_run"] = True
-        st.session_state["rde_method_run"] = "Mechanistic model"
-        # Record the backend used: the total-risk CrI is a valid joint interval
-        # only when the component IWP samples share their per-iteration k /
-        # viral-dynamics / LOD / volume draws, which the Go backend guarantees
-        # (the Python path draws in a different order and is not aligned).
-        st.session_state["used_go"] = use_go_acceleration
-        st.session_state["samp"] = pl.DataFrame({"iwp": st.session_state["bs"]})
-        # Fallback: if sim_df is None (e.g., from Go implementation), use samp
-        if st.session_state["sim_df"] is None:
-            st.session_state["sim_df"] = st.session_state["samp"]
-        progressbar.progress(1.0, text="Simulations complete!")
-        # Brief pause to show completion, then clear progress bar
-        time.sleep(0.3)
-        progressbar.empty()
-
-        # --- PrEP bootstrap runs (Go or Python, per the selected implementation) ---
-        _prep_k_kwargs = dict(
-            k_posterior_sample=k_param,
-            k_invgamma_alpha=k_invgamma_alpha,
-            k_invgamma_beta=k_invgamma_beta,
-            k_gamma_scale=None,
-            k_gamma_shape=None,
-            k_lnmix_w=k_lnmix_w,
-            k_lnmix_mu1=k_lnmix_mu1,
-            k_lnmix_sigma1=k_lnmix_sigma1,
-            k_lnmix_mu2=k_lnmix_mu2,
-            k_lnmix_sigma2=k_lnmix_sigma2,
-        )
-
-        if include_prep_oral:
-            prep_oral_bar = st.sidebar.progress(
-                0,
-                text=f"Running oral PrEP simulations ({'Go' if use_go_acceleration else 'Python'})...",
-            )
+                    if _lnmix_current == _lnmix_defaults:
+                        _lnmix_sample = st.session_state.get("k_lnmix_default_sample")
+                        if _lnmix_sample is None:
+                            _lnmix_sample = rr.sample_lnmix(
+                                100_000, *_lnmix_defaults, seed=42
+                            )
+                            st.session_state["k_lnmix_default_sample"] = _lnmix_sample
+                    else:
+                        _lnmix_sample = rr.sample_lnmix(
+                            100_000,
+                            k_lnmix_w,
+                            k_lnmix_mu1,
+                            k_lnmix_sigma1,
+                            k_lnmix_mu2,
+                            k_lnmix_sigma2,
+                            seed=42,
+                        )
+                    if k_lnmix_pe_choice == "median":
+                        k_pe = float(np.median(_lnmix_sample))
+                    else:  # mode
+                        k_pe = rr.mode_kde(_lnmix_sample, cap=1_000_000, n_grid=1_000_000)
+            elif k_param_pe == "mode":
+                _mode_key = {
+                    "human": "k_human_mode",
+                    "animal": "k_animal_mode",
+                    "human_weighted": "k_expdecay_mode",
+                }.get(k_param_dist)
+                k_pe = st.session_state[_mode_key] if _mode_key else None
+            elif k_param_pe == "mean":
+                k_pe = statistics.mean(k_param)
+            elif k_param_pe == "median":
+                k_pe = statistics.median(k_param)
+            else:
+                k_pe = None  # should not happen
             (
-                st.session_state["iwp_pe_prep_oral"],
-                st.session_state["iwp_cri_prep_oral"],
-                st.session_state["iwp_range_prep_oral"],
-                st.session_state["bs_prep_oral"],
-                st.session_state["sim_df_prep_oral"],
-            ) = rrprep.risk_days_prep_bs(
+                st.session_state["iwp_pe"],
+                st.session_state["iwp_cri"],
+                st.session_state["iwp_range"],
+                st.session_state["bs"],
+                st.session_state["sim_df"],
+            ) = rr.risk_days_bs(
                 k_pe,
                 doubling_time,
                 doubling_time_sd,
@@ -1307,104 +1239,178 @@ if st.sidebar.button(button_label):
                 volume_range,
                 pool_size,
                 retests,
-                set_point=vl_setpoint_oral,
-                set_point_dist_uniform=vl_setpoint_range_oral,
-                eclipse=eclipse,
-                eclipse_dist_uniform=eclipse_range,
-                a=prep_a,
-                b=prep_b,
-                offset=prep_offset,
-                a_dist_uniform=prep_a_dist_uniform,
-                b_dist_uniform=prep_b_dist_uniform,
-                drug_effect=drug_effect_oral,
-                drug_effect_dist_uniform=prep_drug_effect_dist_oral,
-                ser_min=seroconversion_min_oral,
-                ser_max=seroconversion_max_oral,
-                ser_alpha=seroconversion_weibull_alpha_oral,
-                ser_beta=seroconversion_weibull_beta_oral,
-                **_prep_k_kwargs,
+                k_posterior_sample=k_param,
+                k_invgamma_alpha=k_invgamma_alpha,
+                k_invgamma_beta=k_invgamma_beta,
+                k_gamma_scale=None,
+                k_gamma_shape=None,
+                k_lnmix_w=k_lnmix_w,
+                k_lnmix_mu1=k_lnmix_mu1,
+                k_lnmix_sigma1=k_lnmix_sigma1,
+                k_lnmix_mu2=k_lnmix_mu2,
+                k_lnmix_sigma2=k_lnmix_sigma2,
                 alpha=alpha,
                 n_bs=n_sims,
                 point_estimate=point_estimate,
                 seed=st.session_state["seed"],
                 threads=n_threads,
-                progress=prep_oral_bar,
+                progress=progressbar,
                 return_sim_df=True,
                 use_go=use_go_acceleration,
             )
-            st.session_state["prep_oral_run"] = True
-            st.session_state["samp_prep_oral"] = pl.DataFrame({
-                "iwp": st.session_state["bs_prep_oral"]
-            })
-            if st.session_state["sim_df_prep_oral"] is None:
-                st.session_state["sim_df_prep_oral"] = st.session_state[
-                    "samp_prep_oral"
-                ]
-            prep_oral_bar.progress(1.0, text="Oral PrEP simulations complete!")
+            st.session_state["sims_run"] = True
+            st.session_state["rde_method_run"] = "Mechanistic model"
+            # Record the backend used: the total-risk CrI is a valid joint interval
+            # only when the component IWP samples share their per-iteration k /
+            # viral-dynamics / LOD / volume draws, which the Go backend guarantees
+            # (the Python path draws in a different order and is not aligned).
+            st.session_state["used_go"] = use_go_acceleration
+            st.session_state["samp"] = pl.DataFrame({"iwp": st.session_state["bs"]})
+            # Fallback: if sim_df is None (e.g., from Go implementation), use samp
+            if st.session_state["sim_df"] is None:
+                st.session_state["sim_df"] = st.session_state["samp"]
+            progressbar.progress(1.0, text="Simulations complete!")
+            # Brief pause to show completion, then clear progress bar
             time.sleep(0.3)
-            prep_oral_bar.empty()
-        else:
-            st.session_state["prep_oral_run"] = False
+            progressbar.empty()
 
-        if include_prep_inj:
-            prep_inj_bar = st.sidebar.progress(
-                0,
-                text=f"Running injectable PrEP simulations ({'Go' if use_go_acceleration else 'Python'})...",
+            # --- PrEP bootstrap runs (Go or Python, per the selected implementation) ---
+            _prep_k_kwargs = dict(
+                k_posterior_sample=k_param,
+                k_invgamma_alpha=k_invgamma_alpha,
+                k_invgamma_beta=k_invgamma_beta,
+                k_gamma_scale=None,
+                k_gamma_shape=None,
+                k_lnmix_w=k_lnmix_w,
+                k_lnmix_mu1=k_lnmix_mu1,
+                k_lnmix_sigma1=k_lnmix_sigma1,
+                k_lnmix_mu2=k_lnmix_mu2,
+                k_lnmix_sigma2=k_lnmix_sigma2,
             )
-            (
-                st.session_state["iwp_pe_prep_inj"],
-                st.session_state["iwp_cri_prep_inj"],
-                st.session_state["iwp_range_prep_inj"],
-                st.session_state["bs_prep_inj"],
-                st.session_state["sim_df_prep_inj"],
-            ) = rrprep.risk_days_prep_bs(
-                k_pe,
-                doubling_time,
-                doubling_time_sd,
-                lod50,
-                lod50_sd,
-                lod95_lod50_ratio,
-                volume_pe,
-                volume_range,
-                pool_size,
-                retests,
-                set_point=vl_setpoint_inj,
-                set_point_dist_uniform=vl_setpoint_range_inj,
-                eclipse=eclipse,
-                eclipse_dist_uniform=eclipse_range,
-                a=prep_a,
-                b=prep_b,
-                offset=prep_offset,
-                a_dist_uniform=prep_a_dist_uniform,
-                b_dist_uniform=prep_b_dist_uniform,
-                drug_effect=drug_effect_inj,
-                drug_effect_dist_uniform=prep_drug_effect_dist_inj,
-                ser_min=seroconversion_min_inj,
-                ser_max=seroconversion_max_inj,
-                ser_alpha=seroconversion_weibull_alpha_inj,
-                ser_beta=seroconversion_weibull_beta_inj,
-                **_prep_k_kwargs,
-                alpha=alpha,
-                n_bs=n_sims,
-                point_estimate=point_estimate,
-                seed=st.session_state["seed"],
-                threads=n_threads,
-                progress=prep_inj_bar,
-                return_sim_df=True,
-                use_go=use_go_acceleration,
-            )
-            st.session_state["prep_inj_run"] = True
-            st.session_state["samp_prep_inj"] = pl.DataFrame({
-                "iwp": st.session_state["bs_prep_inj"]
-            })
-            if st.session_state["sim_df_prep_inj"] is None:
-                st.session_state["sim_df_prep_inj"] = st.session_state["samp_prep_inj"]
-            prep_inj_bar.progress(1.0, text="Injectable PrEP simulations complete!")
-            time.sleep(0.3)
-            prep_inj_bar.empty()
-        else:
-            st.session_state["prep_inj_run"] = False
 
+            if include_prep_oral:
+                prep_oral_bar = st.sidebar.progress(
+                    0,
+                    text=f"Running oral PrEP simulations ({'Go' if use_go_acceleration else 'Python'})...",
+                )
+                (
+                    st.session_state["iwp_pe_prep_oral"],
+                    st.session_state["iwp_cri_prep_oral"],
+                    st.session_state["iwp_range_prep_oral"],
+                    st.session_state["bs_prep_oral"],
+                    st.session_state["sim_df_prep_oral"],
+                ) = rrprep.risk_days_prep_bs(
+                    k_pe,
+                    doubling_time,
+                    doubling_time_sd,
+                    lod50,
+                    lod50_sd,
+                    lod95_lod50_ratio,
+                    volume_pe,
+                    volume_range,
+                    pool_size,
+                    retests,
+                    set_point=vl_setpoint_oral,
+                    set_point_dist_uniform=vl_setpoint_range_oral,
+                    eclipse=eclipse,
+                    eclipse_dist_uniform=eclipse_range,
+                    a=prep_a,
+                    b=prep_b,
+                    offset=prep_offset,
+                    a_dist_uniform=prep_a_dist_uniform,
+                    b_dist_uniform=prep_b_dist_uniform,
+                    drug_effect=drug_effect_oral,
+                    drug_effect_dist_uniform=prep_drug_effect_dist_oral,
+                    ser_min=seroconversion_min_oral,
+                    ser_max=seroconversion_max_oral,
+                    ser_alpha=seroconversion_weibull_alpha_oral,
+                    ser_beta=seroconversion_weibull_beta_oral,
+                    **_prep_k_kwargs,
+                    alpha=alpha,
+                    n_bs=n_sims,
+                    point_estimate=point_estimate,
+                    seed=st.session_state["seed"],
+                    threads=n_threads,
+                    progress=prep_oral_bar,
+                    return_sim_df=True,
+                    use_go=use_go_acceleration,
+                )
+                st.session_state["prep_oral_run"] = True
+                st.session_state["samp_prep_oral"] = pl.DataFrame({
+                    "iwp": st.session_state["bs_prep_oral"]
+                })
+                if st.session_state["sim_df_prep_oral"] is None:
+                    st.session_state["sim_df_prep_oral"] = st.session_state[
+                        "samp_prep_oral"
+                    ]
+                prep_oral_bar.progress(1.0, text="Oral PrEP simulations complete!")
+                time.sleep(0.3)
+                prep_oral_bar.empty()
+            else:
+                st.session_state["prep_oral_run"] = False
+
+            if include_prep_inj:
+                prep_inj_bar = st.sidebar.progress(
+                    0,
+                    text=f"Running injectable PrEP simulations ({'Go' if use_go_acceleration else 'Python'})...",
+                )
+                (
+                    st.session_state["iwp_pe_prep_inj"],
+                    st.session_state["iwp_cri_prep_inj"],
+                    st.session_state["iwp_range_prep_inj"],
+                    st.session_state["bs_prep_inj"],
+                    st.session_state["sim_df_prep_inj"],
+                ) = rrprep.risk_days_prep_bs(
+                    k_pe,
+                    doubling_time,
+                    doubling_time_sd,
+                    lod50,
+                    lod50_sd,
+                    lod95_lod50_ratio,
+                    volume_pe,
+                    volume_range,
+                    pool_size,
+                    retests,
+                    set_point=vl_setpoint_inj,
+                    set_point_dist_uniform=vl_setpoint_range_inj,
+                    eclipse=eclipse,
+                    eclipse_dist_uniform=eclipse_range,
+                    a=prep_a,
+                    b=prep_b,
+                    offset=prep_offset,
+                    a_dist_uniform=prep_a_dist_uniform,
+                    b_dist_uniform=prep_b_dist_uniform,
+                    drug_effect=drug_effect_inj,
+                    drug_effect_dist_uniform=prep_drug_effect_dist_inj,
+                    ser_min=seroconversion_min_inj,
+                    ser_max=seroconversion_max_inj,
+                    ser_alpha=seroconversion_weibull_alpha_inj,
+                    ser_beta=seroconversion_weibull_beta_inj,
+                    **_prep_k_kwargs,
+                    alpha=alpha,
+                    n_bs=n_sims,
+                    point_estimate=point_estimate,
+                    seed=st.session_state["seed"],
+                    threads=n_threads,
+                    progress=prep_inj_bar,
+                    return_sim_df=True,
+                    use_go=use_go_acceleration,
+                )
+                st.session_state["prep_inj_run"] = True
+                st.session_state["samp_prep_inj"] = pl.DataFrame({
+                    "iwp": st.session_state["bs_prep_inj"]
+                })
+                if st.session_state["sim_df_prep_inj"] is None:
+                    st.session_state["sim_df_prep_inj"] = st.session_state["samp_prep_inj"]
+                prep_inj_bar.progress(1.0, text="Injectable PrEP simulations complete!")
+                time.sleep(0.3)
+                prep_inj_bar.empty()
+            else:
+                st.session_state["prep_inj_run"] = False
+
+        except ValueError as e:
+            progressbar.empty()
+            st.sidebar.error(f"Invalid parameters: {e}")
     elif rde_method == "Lookback data":
         import re
 
