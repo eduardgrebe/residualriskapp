@@ -1260,11 +1260,17 @@ if st.sidebar.button(button_label):
             )
             st.session_state["sims_run"] = True
             st.session_state["rde_method_run"] = "Mechanistic model"
-            # Record the backend used: the total-risk CrI is a valid joint interval
-            # only when the component IWP samples share their per-iteration k /
-            # viral-dynamics / LOD / volume draws, which the Go backend guarantees
-            # (the Python path draws in a different order and is not aligned).
-            st.session_state["used_go"] = use_go_acceleration
+            # Record the backend *actually* used, not merely requested: a requested
+            # Go run silently falls back to Python when the binary is unavailable, and
+            # the total-risk CrI is a valid joint interval only when components share
+            # their per-iteration k / viral-dynamics / LOD / volume draws — which only
+            # the Go backend does (Python draws in a different order, not aligned).
+            # Gate on binary availability so the CrI caption isn't mislabelled "exact"
+            # after a fallback. (Each sim_df also carries a ground-truth `backend`
+            # column from the library; a rare present-but-crashes fallback is logged.)
+            st.session_state["used_go"] = (
+                use_go_acceleration and rr.find_go_binary() is not None
+            )
             st.session_state["samp"] = pl.DataFrame({"iwp": st.session_state["bs"]})
             # Fallback: if sim_df is None (e.g., from Go implementation), use samp
             if st.session_state["sim_df"] is None:

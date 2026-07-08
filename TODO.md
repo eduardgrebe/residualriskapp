@@ -224,10 +224,16 @@ Go-unavailable deployments (fallback) rather than the normal app.
       (0 is degenerate and made the amplitude-range slider `min==max`); regression tests in
       `tests/test_estimator_ui.py`. _Original:_ with "Vary sinusoidal oscillation parameters" on and
       Offset=0.0, the amplitude-range slider was built with `min==max==0.0` → `StreamlitAPIException`.
-- [ ] **`estimator.py:1245`** — `used_go` records the *requested* backend, not the actual one, so on a
-      silent Go→Python fallback the additive total-risk CrI (misaligned Python arrays) is mislabeled the
-      "exact shared-parameter interval". Fix: report the backend actually used; make `prep.py`'s fallback
-      log (not swallow).
+- [x] **`estimator.py:1245`** ✅ FIXED (`fix-backend-label`) — `used_go` now gates on
+      `use_go_acceleration and rr.find_go_binary() is not None`, so the additive total-risk CrI caption isn't
+      mislabelled the "exact shared-parameter interval" after a silent Go→Python fallback (binary absent).
+      The fallback now `logger.warning`s instead of `print`ing in both `prep.py` and `core.py` (+ `core.py`
+      gains `except ValueError: raise`, matching `prep.py`, so a Go-side validation error surfaces rather
+      than silently re-running via Python). **Also (per EG):** the library tags each returned `sim_df` with a
+      ground-truth `backend` column ('go'/'python') via `core._append_backend`, so stored/exported sim
+      outputs record their engine even in the rare present-but-crashes fallback. Tests: `_append_backend`
+      unit + Go-path `backend` column (baseline & PrEP) + `caplog` fallback-logging, in `test_residualrisk.py`
+      / `test_prep_go_parity.py`.
 - [x] **`models.go:180`/`:189`** ✅ FIXED (`fix-engine-input-validation`, **B2**) — removed the PrEP scalar
       `==0` defaulting from `SetDefaults`, so an explicit `0` reaches the (already-present) `Validate()`
       checks: `drug_effect=0` now errors (was silently `1.0`, the opposite), and a valid `a=0`/`b=0` (flat

@@ -17,6 +17,7 @@
 
 """PrEP breakthrough infection residual risk model."""
 
+import logging
 import math
 import statistics
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -27,6 +28,7 @@ import polars as pl
 from scipy.integrate import quad
 
 from .core import (
+    _append_backend,
     _integrate_gauss_legendre,
     _kde_mode_log,
     _prob_infectious_copies,
@@ -36,6 +38,8 @@ from .core import (
     _sample_positive_normal,
     get_cpu_core_count,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _sin_varied(t, a, b, offset):
@@ -478,7 +482,7 @@ def risk_days_prep_bs(
         try:
             from ._go import risk_days_prep_bs_go
 
-            return risk_days_prep_bs_go(
+            _result = risk_days_prep_bs_go(
                 k=k,
                 doubling_time=doubling_time,
                 doubling_time_norm_sd=doubling_time_norm_sd,
@@ -527,14 +531,17 @@ def risk_days_prep_bs(
                 progress=progress,
                 return_sim_df=return_sim_df,
             )
+            return _append_backend(_result, "go")
         except ValueError:
             # A validation/logic error is a real problem — surface it rather than
             # silently returning a different (Python) result.
             raise
         except Exception as e:
-            print(
-                f"Warning: Go PrEP implementation failed ({e}), "
-                "falling back to Python"
+            logger.warning(
+                "Go PrEP backend failed (%s); falling back to Python. The additive "
+                "total-risk credible interval is then only approximate — Python does "
+                "not align shared draws across components.",
+                e,
             )
             # Fall through to the Python implementation.
 
@@ -662,6 +669,6 @@ def risk_days_prep_bs(
         rd_pe = None
 
     if return_sim_df:
-        return (rd_pe, rd_cri, rd_range, rdests, sim_df)
+        return _append_backend((rd_pe, rd_cri, rd_range, rdests, sim_df), "python")
     else:
         return (rd_pe, rd_cri, rd_range, rdests, None)

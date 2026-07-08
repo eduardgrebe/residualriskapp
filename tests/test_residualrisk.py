@@ -28,12 +28,14 @@ Run from the app/ directory:
     pytest tests/
 """
 
+import logging
 import math
 
 import numpy as np
 import pytest
 
 from residualrisk import core as rr
+from residualrisk import find_go_binary
 
 # Worker count for the @pytest.mark.multiprocessing bootstrap tests. They run
 # only outside sandboxed environments, so use all but one core to keep the
@@ -106,6 +108,52 @@ class TestRiskDaysBSInputValidation:
     def test_degenerate_inputs_raise_valueerror(self, field, value):
         with pytest.raises(ValueError):
             rr.risk_days_bs(**{**BS_KWARGS, field: value})
+
+
+class TestBackendField:
+    """Each returned sim_df carries a ``backend`` column ('go'/'python') recording
+    the engine that produced it, so a stored simulation output is self-documenting
+    even after a silent Go→Python fallback."""
+
+    def test_append_backend_tags_sim_df_and_noops_on_none(self):
+        import polars as pl
+
+        df = pl.DataFrame({"iwp": [1.0, 2.0, 3.0]})
+        *_, tagged = rr._append_backend(
+            (0.1, (0.0, 0.2), (0.0, 0.3), [1, 2, 3], df), "python"
+        )
+        assert tagged["backend"].to_list() == ["python"] * 3
+        # sim_df=None (return_sim_df=False) is a no-op, not an error.
+        *_, none_sim = rr._append_backend((0.1, None, None, None, None), "go")
+        assert none_sim is None
+
+    def test_go_backend_recorded_in_sim_df(self):
+        if find_go_binary() is None:
+            pytest.skip("needs the Go binary")
+        *_, sim_df = rr.risk_days_bs(**{**BS_KWARGS, "return_sim_df": True}, use_go=True)
+        assert "backend" in sim_df.columns
+        assert sim_df["backend"].unique().to_list() == ["go"]
+
+
+class TestGoFallbackLogging:
+    """A Go→Python fallback is logged (was a bare ``print``) so it's visible in a
+    deployment rather than silently swallowed."""
+
+    def test_go_failure_logs_and_falls_back(self, caplog, monkeypatch):
+        # Force the Go path to fail and stub the Python path so no bootstrap runs —
+        # keeps this sandbox-safe (no ProcessPoolExecutor).
+        def _boom(*args, **kwargs):
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr("residualrisk._go.risk_days_bs_go", _boom)
+        monkeypatch.setattr(
+            rr,
+            "_risk_days_bs_python",
+            lambda *a, **k: (0.1, (0.0, 0.0), (0.0, 0.0), [1.0], None),
+        )
+        with caplog.at_level(logging.WARNING):
+            rr.risk_days_bs(**{**BS_KWARGS, "return_sim_df": False}, use_go=True)
+        assert "falling back to Python" in caplog.text
 
 
 # ---------------------------------------------------------------------------

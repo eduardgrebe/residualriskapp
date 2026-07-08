@@ -143,6 +143,12 @@ class TestPrepGoParity(unittest.TestCase):
         self.assertEqual(sim_df["a"].n_unique(), 1)
         self.assertEqual(sim_df["a"][0], 0.0)
 
+    def test_go_prep_sim_df_records_backend(self):
+        """The PrEP dispatcher tags the returned sim_df with backend='go'."""
+        _, _, _, _, sim_df = risk_days_prep_bs(**{**COMMON_KWARGS, "n_bs": 100}, use_go=True)
+        self.assertIn("backend", sim_df.columns)
+        self.assertEqual(sim_df["backend"].unique().to_list(), ["go"])
+
     def test_go_prep_varied_ab(self):
         """With ranges, Go samples a and b uniformly per iteration; sim_df
         carries the real per-iteration values, within range and a <= offset."""

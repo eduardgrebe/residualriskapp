@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import logging
 import math
 import statistics
 from functools import lru_cache
@@ -24,6 +25,8 @@ import polars as pl
 import scipy.stats as stats
 
 from .assays import lods_for_assay
+
+logger = logging.getLogger(__name__)
 
 # Cap the viral-growth exponent to avoid float OverflowError when t is large
 # relative to a small doubling_time. 2**700 (~5e210) is well within the float64
@@ -685,6 +688,18 @@ def _risk_days_bs_python(
         return (rd_pe, rd_cri, rd_range, rdests, None)
 
 
+def _append_backend(result, backend):
+    """Append a constant ``backend`` column ('go' or 'python') to the sim_df — the
+    last element of a ``(pe, cri, range, rdests, sim_df)`` result tuple — so a
+    stored per-iteration simulation output records which engine produced it, even
+    after a silent Go→Python fallback. A no-op when sim_df is None
+    (``return_sim_df=False``)."""
+    *head, sim_df = result
+    if sim_df is not None:
+        sim_df = sim_df.with_columns(pl.lit(backend).alias("backend"))
+    return (*head, sim_df)
+
+
 def risk_days_bs(
     k,
     doubling_time,
@@ -801,7 +816,7 @@ def risk_days_bs(
         try:
             from ._go import risk_days_bs_go
 
-            return risk_days_bs_go(
+            _result = risk_days_bs_go(
                 k,
                 doubling_time,
                 doubling_time_norm_sd,
@@ -835,12 +850,17 @@ def risk_days_bs(
                 progress,
                 return_sim_df,
             )
+            return _append_backend(_result, "go")
+        except ValueError:
+            # A Go-side validation error is a real problem — surface it rather than
+            # silently re-running (and re-raising) via the Python path.
+            raise
         except Exception as e:
-            print(f"Warning: Go implementation failed ({e}), falling back to Python")
+            logger.warning("Go backend failed (%s); falling back to Python.", e)
             # Fall through to Python implementation
 
     # Use Python implementation
-    return _risk_days_bs_python(
+    _result = _risk_days_bs_python(
         k,
         doubling_time,
         doubling_time_norm_sd,
@@ -875,6 +895,7 @@ def risk_days_bs(
         return_sim_df,
         integration_method,
     )
+    return _append_backend(_result, "python")
 
 
 def iwp_from_lookback_data(
