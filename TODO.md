@@ -130,8 +130,33 @@ emotion with no CSS hook, so JS is the only way to track it:
       to confirm** this suits VRI's analytics.
 - [x] **Verified in Firefox (EG, 2026-07-08):** switches reliably on the Settings-menu toggle —
       Light → colour, Dark → white, System → follows OS. No reload needed.
-- [ ] **Remaining before commit:** run the full test suite (app-only change, expected green); confirm
-      `utm_source` suits VRI's analytics; then commit + `git tag -s v1.1.0a9`.
+- [x] **Committed + deployed as v1.1.0a9** (2026-07-08). (`utm_source` attribution still to be
+      confirmed against VRI's analytics.)
+
+### LOW — sidebar logo visual bugs (close the loop on the theme-aware logo) (2026-07-08)
+
+Discovered by EG after the JS-`st.iframe` logo (above) went live at app.residualrisk.org. Two
+cosmetic bugs, both artefacts of rendering the logo inside an iframe — low priority, but to be
+fixed **next** to close out that work. Both seen on the **dark** theme (screenshots kept: chromium1/2,
+firefox1/2 — chromium = both bugs, firefox = only the overflow one):
+
+- [ ] **Logo overflows its fixed-height iframe and overlaps the "A project of …" text when the
+      sidebar is widened** (Chromium *and* Firefox). `st.sidebar.iframe(_logo_html, height=120)`
+      pins the iframe at 120 px, but the `<img width:100%>` grows taller as the sidebar widens
+      (height = width ÷ aspect ≈ 2.6), so past the default width the logo exceeds 120 px: the iframe
+      shows a scrollbar, the logo's bottom ("Research Institute") is clipped, and it collides with
+      the text below. The `fit()` JS (`window.frameElement.style.height`) has no effect — Streamlit
+      pins the iframe height. **Fix candidates:** `st.iframe(..., height="content")` (native
+      auto-size — verify it re-measures on a live sidebar resize), or constrain the image
+      (`max-width:100%; max-height:100%; width/height:auto`, centred) so it always fits within the
+      fixed height (letterboxes on a very wide sidebar but never overflows).
+- [ ] **White/opaque box behind the logo on the dark theme — Chromium only** (Firefox renders it
+      transparent). The iframe body is `background:transparent`, but Chromium still paints an opaque
+      white iframe canvas — likely because the iframe document's `color-scheme` defaults to light (a
+      white canvas), or the iframe *element* itself needs a transparent background (Streamlit controls
+      it). Only visible on dark (a white box on the dark sidebar; on light it blends in). **Fix
+      candidates:** set `color-scheme: light dark` on the iframe `<html>`; and/or inject app CSS to
+      force the component iframe element's background transparent.
 
 ### Release review findings (2026-07-01) — fix before public release
 
