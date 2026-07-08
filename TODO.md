@@ -133,9 +133,9 @@ emotion with no CSS hook, so JS is the only way to track it:
 - [x] **Committed + deployed as v1.1.0a9** (2026-07-08). (`utm_source` attribution still to be
       confirmed against VRI's analytics.)
 
-### LOW — sidebar logo visual bugs — ✅ FIXED on `fix-logo-visual` (2026-07-08), pending EG browser check
+### LOW — sidebar logo visual bugs — ✅ FIXED on `fix-logo-visual` (2026-07-08), re-verify final footer
 
-Two cosmetic bugs from rendering the logo in an `st.iframe` (EG-reported at app.residualrisk.org;
+Cosmetic bugs from rendering the logo in an `st.iframe` (EG-reported at app.residualrisk.org;
 screenshots kept: chromium1/2, firefox1/2). Fixed in `app.py`:
 
 - [x] **Logo overflowed its fixed-height iframe and overlapped the "A project of …" text when the
@@ -150,10 +150,18 @@ screenshots kept: chromium1/2, firefox1/2). Fixed in `app.py`:
       **Fixed:** the iframe JS now paints its body with the parent **sidebar's** background
       (`matchSidebarBg()` reads `[data-testid="stSidebar"]`, updated on every theme change), so the
       frame blends into the sidebar in any browser/theme — the white canvas is covered.
-- [ ] **EG: verify in a real browser** (agent's headless browsers are blocked in-sandbox): on both
-      light and dark, the logo no longer overflows/overlaps when the sidebar is dragged wide (Chromium
-      + Firefox), and there's no white box on dark (Chromium). App boots clean;
-      `st.iframe(height="content")` accepts the HTML (AppTest).
+- [x] **Inordinate gap between the logo and the attribution at narrow sidebar widths** (EG-reported).
+      Root cause: `st.iframe(height="content")` floors the frame height at ~150 px, so a short logo
+      (narrow sidebar) left the frame taller than the logo, orphaning the *separately rendered*
+      attribution/version below it (fine at wide, where the logo alone exceeds the floor). **Fixed:**
+      moved the "A project of…" attribution + the app/library version line **into the logo iframe**,
+      with tight CSS spacing and the JS inheriting the sidebar's font/colour so they read as native
+      text — content now always exceeds the floor and the logo→text spacing is fixed at any width.
+- [x] **EG-verified overflow/overlap + white box in Firefox, WebKit (Safari), and Chromium
+      (2026-07-08).** The bundled-footer change (attribution + version now in the frame, replacing the
+      separate `st.markdown`/`st.caption`) is agent-verified only (compiles, boots, AppTest) — **EG to
+      re-check** the footer at narrow *and* wide widths, both themes: tight logo→text spacing, and the
+      attribution / version / link / divider matching native styling.
 
 ### Release review findings (2026-07-01) — fix before public release
 
