@@ -846,6 +846,206 @@ document is preferred. **Awaiting EG review.**
 
 ## Deferred
 
+### DEFERRED — Migrate primary hosting to Codeberg (Forgejo Actions → quay.io; GitHub mirror)
+
+> **STATUS: DEFERRED (2026-07-08) — planned, NOT scheduled for implementation.** Full plan embedded
+> here so it's version-controlled (the planning file lives outside git). Do not execute any phase
+> below until EG green-lights it.
+
+#### Context
+
+The project should live canonically on **Codeberg** (a non-profit) as the public OSS home, with
+**GitHub kept only as a private mirror**. Today it's the reverse: GitHub is where CI runs
+(`.github/workflows/docker-publish.yml`, tag-triggered) and where images publish (`ghcr.io`);
+`origin` fetches GitHub and dual-pushes to both. The goal is to move CI and image publishing to
+Codeberg and make GitHub follow.
+
+**Feasibility (researched, 2026):** Codeberg now offers **self-service Forgejo Actions** *and* an
+**OCI container registry** — both real, both new. But two hard constraints shape the design:
+Codeberg's **hosted runners have no Docker daemon and 2–10 min timeouts** (so `docker build`
+needs a **self-hosted runner**), and Codeberg's **registry is storage-limited** ("no space for
+huge images"), a poor fit for this Python-scientific-stack + Go image. The **source identity is
+already Codeberg** (CITATION, README, issue tracker, Go module path all say `codeberg.org`), so
+the migration surface is just CI + registry + git wiring + turning GitHub passive.
+
+**Decisions (confirmed with EG):** registry = **quay.io**; build = **self-hosted Docker runner**,
+**amd64+arm64**; GitHub sync = **Codeberg push-mirror**.
+
+**Target topology:** Codeberg (public) is canonical → Forgejo Actions on a self-hosted Docker
+runner builds multi-arch on `v*` tags → pushes to `quay.io/eduardgrebe/residualrisk` → Codeberg
+push-mirrors all refs/tags to a private GitHub repo (Actions + Dependabot disabled there).
+
+> **Note:** all git ops, Codeberg/GitHub/Quay UI steps, and infra provisioning are **EG's** to
+> run (SSH keys, signed tags, account access). The agent prepares repo file changes and read-only
+> checks.
+
+#### Phase A — Codeberg + infra + accounts (EG; mostly UI + a VM)
+
+1. **Make the Codeberg repo public** (Settings → make public). Note the "linked packages are
+   public" implication — fine for OSS.
+2. **Enable Forgejo Actions** (Settings → Actions → "Enable integrated CI/CD pipelines").
+3. **Provision a self-hosted runner with Docker.** Options, best first:
+   - A **small always-on VM** (dedicated; not the prod server, to avoid contention/security) with
+     Docker + `forgejo-runner`, registered to the repo (Settings → Actions → Runners → token).
+   - Or **EG's Mac via OrbStack** (native arm64 + amd64 via QEMU) — fine for *infrequent* tag
+     builds, but only builds when the machine is up.
+   Register with a clear **label** (e.g. `docker`) that the workflow's `runs-on` matches. Ensure
+   the host can run **privileged** containers (for QEMU/binfmt) or pre-register binfmt
+   (`qemu-user-static`). Multi-arch here is cheap: the Go stage **cross-compiles** (native speed);
+   the Python stage installs **manylinux wheels** (no compilation), so the emulated arch is mostly
+   I/O.
+4. **Quay:** create a **public** repo `quay.io/eduardgrebe/residualrisk`, plus a **robot account**
+   with write. Store its creds as Codeberg **repo secrets** `QUAY_USERNAME` / `QUAY_TOKEN`
+   (Settings → Actions → Secrets; names must not start with `GITHUB_`/`FORGEJO_`/`GITEA_`).
+5. **GitHub PAT** for the mirror: classic PAT with `repo` **and `workflow`** scope (the mirror's
+   history touches `.github/workflows/`, so `workflow` is required to force-push it).
+
+#### Phase B — Repo changes (agent edits; EG commits to Codeberg)
+
+1. **New `.forgejo/workflows/build.yml`** — adapted from `.github/workflows/docker-publish.yml`.
+   Key adaptations (skeleton below): self-hosted `runs-on` label; **fully-qualified `uses:`** URLs
+   (Forgejo resolves bare refs from a mirror, not github.com); **add `docker/setup-qemu-action`**
+   (GitHub pre-registers binfmt, a self-hosted runner won't); login to **quay.io** with the
+   secrets; `metadata-action images: quay.io/...`; **`cache-from/to: type=local`** (replaces the
+   unsupported `type=gha`); keep the `verify-version` job verbatim (`GITHUB_REF_NAME` and
+   `::error::` are Forgejo-compatible); drop the GHCR-specific `permissions: packages: write`.
+2. **Delete `.github/workflows/docker-publish.yml`** (its logic moved to `.forgejo/`). Because
+   `.forgejo/workflows/` exists, Forgejo uses it and ignores `.github/`; GitHub, having no
+   workflow, runs nothing.
+3. **`.github/dependabot.yml`** — delete (Dependabot is GitHub-only and would open PRs on the
+   passive mirror). See Implications for the Renovate-on-Codeberg replacement.
+4. **`.dockerignore`** — add `.forgejo/` (it already excludes `.github/`).
+5. **Repoint the image consumers to quay** (the live ones): `docker-compose.yml` `image:` →
+   `quay.io/eduardgrebe/residualrisk:latest`; `scripts/run_published.sh:16` default
+   `IMAGE=…` → `quay.io/eduardgrebe/residualrisk` (+ its `docker login ghcr.io` help line).
+   Update `ghcr.io` examples in `docker/README.md`, `docker/QUICKREF.md`,
+   `docker/BUILD-QUICK-START.md` (placeholder examples — lower priority).
+6. **`AGENTS.md`** — the release runbook (`:369-387`): push to **Codeberg** (mirrors to GitHub);
+   rename the workflow reference `docker-publish.yml` → `.forgejo/workflows/build.yml`; registry
+   `ghcr.io` → `quay.io`; and the `git push origin vX.Y.Z` note (`:381`) reflects the rewired
+   remote (Phase C).
+
+#### Phase C — Mirror + git-remote rewiring + GitHub passivation (EG)
+
+1. **Codeberg push-mirror → GitHub:** Settings → Mirror Settings → Add Push Mirror; GitHub repo
+   URL + username + the PAT; enable **"Sync when new commits are pushed"**; **no branch filter**
+   (so tags mirror too). It force-pushes all refs.
+2. **GitHub side:** Settings → Actions → **Disable Actions**; Settings → Code security → **disable
+   Dependabot** (belt-and-suspenders alongside deleting the files). Optionally mark the GitHub repo
+   **private** (per EG's "private mirror" intent) and/or archived.
+3. **Rewire local remotes** so Codeberg is `origin`:
+   ```bash
+   git remote set-url origin ssh://git@codeberg.org/eduardgrebe/residualriskapp.git
+   git remote set-url --push origin ssh://git@codeberg.org/eduardgrebe/residualriskapp.git
+   git remote set-url --add --push origin ...   # (do NOT re-add GitHub — the mirror handles it)
+   git remote add github git@github.com:eduardgrebe/residualriskapp.git   # optional, read-only checks
+   git remote -v   # origin → Codeberg only; github → GitHub (verify)
+   ```
+4. **Ops repo:** update the external `deploy.sh` (in `../residualriskapp_ops/`) to pull from
+   `quay.io/...` instead of `ghcr.io/...`.
+
+#### The `.forgejo/workflows/build.yml` (structure — versions to confirm on code.forgejo.org)
+
+```yaml
+name: build-and-push
+on:
+  push:
+    tags: ['v*']
+jobs:
+  verify-version:
+    runs-on: docker                                   # label your self-hosted runner advertises
+    steps:
+      - uses: https://code.forgejo.org/actions/checkout@v4
+      - name: Verify APP_VERSION matches the tag
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          app_version="$(grep -E '^APP_VERSION[[:space:]]*=' app.py | head -1 | sed -E 's/.*"([^"]+)".*/\1/')"
+          [ -n "$app_version" ] && [ "$app_version" = "$tag_version" ] \
+            || { echo "::error::APP_VERSION '$app_version' != tag '$tag_version'"; exit 1; }
+  build-and-push:
+    needs: verify-version
+    runs-on: docker
+    steps:
+      - uses: https://code.forgejo.org/actions/checkout@v4
+      - uses: https://code.forgejo.org/docker/setup-qemu-action@v3     # NEW — arm64 binfmt
+      - uses: https://code.forgejo.org/docker/setup-buildx-action@v3
+      - uses: https://code.forgejo.org/docker/login-action@v3
+        with: { registry: quay.io, username: ${{ secrets.QUAY_USERNAME }}, password: ${{ secrets.QUAY_TOKEN }} }
+      - id: meta
+        uses: https://code.forgejo.org/docker/metadata-action@v5
+        with:
+          images: quay.io/eduardgrebe/residualrisk
+          flavor: latest=auto
+          tags: |
+            type=pep440,pattern={{version}}
+            type=pep440,pattern={{major}}.{{minor}}
+      - uses: https://code.forgejo.org/docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=local,src=/opt/forgejo-cache
+          cache-to: type=local,dest=/opt/forgejo-cache,mode=max
+```
+The `latest=auto` + pep440 behavior (stable→`latest`+`X.Y`, pre-releases→full-version only) is
+**preserved**, so the release semantics from the mainlining work carry over unchanged.
+
+#### Implications / tradeoffs (assess before committing)
+
+- **Lose Dependabot.** It's GitHub-native and would fire on the passive mirror. Replacement:
+  **Renovate** (Codeberg-compatible, run via Forgejo Actions or the hosted Renovate for Codeberg),
+  or manual `uv`/action updates. Net: a small ongoing-maintenance change.
+- **Self-hosted runner = infra you own.** A VM to keep online, patched, and secured; if it's down,
+  tag pushes don't build until it's back. (Mitigate with the Mac-runner fallback for rare builds.)
+- **Two more accounts/tokens:** a Quay robot token (in Codeberg secrets) and a GitHub PAT (for the
+  mirror) — both need eventual rotation.
+- **arm64 is emulated** on a single runner, but cheap here (wheels + Go cross-compile; no native
+  compilation). If a build is ever slow, drop to amd64-only or add a native arm64 runner.
+- **Codeberg's own registry is intentionally not used** (storage limits) — the images live on
+  quay, so you're "primary on Codeberg, images on Quay," not 100% single-platform.
+- **Forgejo action mirror lag:** `code.forgejo.org` may not have the exact action versions GitHub
+  does; pin to what's available and test.
+- **GitHub PR/issue drift:** with GitHub passive, contributors must be pointed to Codeberg (README
+  already links Codeberg; disable GitHub Issues or add a redirect note).
+
+#### Gotchas (prioritized)
+
+| # | Risk | Mitigation |
+|---|------|-----------|
+| 1 | `runs-on` label mismatch → job never picked up | Register the runner with label `docker`; match `runs-on` |
+| 2 | Bare `uses:` resolves to the wrong/absent action | Fully-qualified `https://code.forgejo.org/...` URLs; confirm versions |
+| 3 | arm64 build fails (no binfmt on the runner) | `docker/setup-qemu-action` step + privileged runner, or pre-register binfmt |
+| 4 | `type=gha` cache no-ops/errors on Forgejo | Use `type=local` (persistent dir on the runner) |
+| 5 | Double CI (GitHub also builds) | Delete `.github/workflows/`, put workflow in `.forgejo/`, disable GitHub Actions |
+| 6 | Mirror push rejected (PAT scope) | GitHub PAT needs `repo` **and** `workflow` scope |
+| 7 | Quay auth: auto token can't push | Quay **robot** token in `QUAY_USERNAME`/`QUAY_TOKEN` secrets |
+| 8 | `verify-version` env differs on Forgejo | `GITHUB_REF_NAME` is Forgejo-compat — confirm in the first run |
+
+#### Verification (end-to-end, staged)
+
+1. **Dry the runner:** register it, push a throwaway `v0.0.0-test`-style tag to Codeberg → confirm
+   Forgejo Actions picks the job (`runs-on` matches), all `uses:` resolve, QEMU registers, the
+   build runs, and it **pushes to quay** (check `quay.io/eduardgrebe/residualrisk` tags). Delete
+   the test tag/image after.
+2. **Mirror:** confirm the push mirrored the branch/tag to GitHub and that **no GitHub Action ran**.
+3. **verify-version gate:** a tag whose `APP_VERSION` mismatches should fail the job.
+4. **Real release:** cut the next real `v1.1.0aN` on Codeberg → image on quay → `docker pull
+   quay.io/eduardgrebe/residualrisk:1.1.0aN` works; server deploys from quay via the ops `deploy.sh`.
+5. **`latest`:** unchanged semantics — moves only on a stable `v1.1.0` (no suffix).
+
+#### Critical files
+
+- `.forgejo/workflows/build.yml` — **new** (the migrated pipeline).
+- `.github/workflows/docker-publish.yml` — **delete**.
+- `.github/dependabot.yml` — **delete** (→ Renovate on Codeberg, or manual).
+- `.dockerignore` — add `.forgejo/`.
+- `docker-compose.yml`, `scripts/run_published.sh` — repoint `ghcr.io` → `quay.io`.
+- `AGENTS.md` — release runbook (Codeberg push, workflow filename, quay, remote).
+- `Dockerfile` — **unchanged** (already registry-agnostic; `.github/` excluded via `.dockerignore`).
+- (external) `../residualriskapp_ops/deploy.sh` — repoint to quay.
+
 ### Design considerations for future distributions
 
 If additional distributions are needed beyond InvGamma and LN-mixture, consider
