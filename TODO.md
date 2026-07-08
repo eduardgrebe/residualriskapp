@@ -133,30 +133,27 @@ emotion with no CSS hook, so JS is the only way to track it:
 - [x] **Committed + deployed as v1.1.0a9** (2026-07-08). (`utm_source` attribution still to be
       confirmed against VRI's analytics.)
 
-### LOW — sidebar logo visual bugs (close the loop on the theme-aware logo) (2026-07-08)
+### LOW — sidebar logo visual bugs — ✅ FIXED on `fix-logo-visual` (2026-07-08), pending EG browser check
 
-Discovered by EG after the JS-`st.iframe` logo (above) went live at app.residualrisk.org. Two
-cosmetic bugs, both artefacts of rendering the logo inside an iframe — low priority, but to be
-fixed **next** to close out that work. Both seen on the **dark** theme (screenshots kept: chromium1/2,
-firefox1/2 — chromium = both bugs, firefox = only the overflow one):
+Two cosmetic bugs from rendering the logo in an `st.iframe` (EG-reported at app.residualrisk.org;
+screenshots kept: chromium1/2, firefox1/2). Fixed in `app.py`:
 
-- [ ] **Logo overflows its fixed-height iframe and overlaps the "A project of …" text when the
-      sidebar is widened** (Chromium *and* Firefox). `st.sidebar.iframe(_logo_html, height=120)`
-      pins the iframe at 120 px, but the `<img width:100%>` grows taller as the sidebar widens
-      (height = width ÷ aspect ≈ 2.6), so past the default width the logo exceeds 120 px: the iframe
-      shows a scrollbar, the logo's bottom ("Research Institute") is clipped, and it collides with
-      the text below. The `fit()` JS (`window.frameElement.style.height`) has no effect — Streamlit
-      pins the iframe height. **Fix candidates:** `st.iframe(..., height="content")` (native
-      auto-size — verify it re-measures on a live sidebar resize), or constrain the image
-      (`max-width:100%; max-height:100%; width/height:auto`, centred) so it always fits within the
-      fixed height (letterboxes on a very wide sidebar but never overflows).
-- [ ] **White/opaque box behind the logo on the dark theme — Chromium only** (Firefox renders it
-      transparent). The iframe body is `background:transparent`, but Chromium still paints an opaque
-      white iframe canvas — likely because the iframe document's `color-scheme` defaults to light (a
-      white canvas), or the iframe *element* itself needs a transparent background (Streamlit controls
-      it). Only visible on dark (a white box on the dark sidebar; on light it blends in). **Fix
-      candidates:** set `color-scheme: light dark` on the iframe `<html>`; and/or inject app CSS to
-      force the component iframe element's background transparent.
+- [x] **Logo overflowed its fixed-height iframe and overlapped the "A project of …" text when the
+      sidebar was widened** (both browsers). Was `st.sidebar.iframe(_logo_html, height=120)` — the
+      `<img width:100%>` grew taller than 120 px on a wide sidebar and overflowed (scrollbar, clipped
+      "Research Institute", collision with the text below). **Fixed:** `st.iframe(..., height="content")`
+      so the frame auto-sizes to the logo at any width (Streamlit re-measures via a ResizeObserver —
+      confirmed present in the bundle); removed the ineffective `fit()` JS
+      (`window.frameElement.style.height`, which Streamlit overrode).
+- [x] **White/opaque box behind the logo on the dark theme — Chromium only** (Firefox was already
+      transparent; Chromium paints an opaque white iframe canvas behind the transparent body).
+      **Fixed:** the iframe JS now paints its body with the parent **sidebar's** background
+      (`matchSidebarBg()` reads `[data-testid="stSidebar"]`, updated on every theme change), so the
+      frame blends into the sidebar in any browser/theme — the white canvas is covered.
+- [ ] **EG: verify in a real browser** (agent's headless browsers are blocked in-sandbox): on both
+      light and dark, the logo no longer overflows/overlaps when the sidebar is dragged wide (Chromium
+      + Firefox), and there's no white box on dark (Chromium). App boots clean;
+      `st.iframe(height="content")` accepts the HTML (AppTest).
 
 ### Release review findings (2026-07-01) — fix before public release
 
