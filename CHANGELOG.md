@@ -16,7 +16,7 @@ project moved straight to `1.1.0`. So `1.1.0` does **not** imply a public `1.0.0
 ## [Unreleased] — 1.1.0 (pre-release)
 
 The PrEP-breakthrough model, mainlined onto `main` (2026-07). Working toward the first stable
-`1.1.0`; currently at pre-release `1.1.0a12`. Highlights:
+`1.1.0`; currently at beta pre-release `1.1.0b1`. Highlights:
 
 - Oral- and injectable-PrEP breakthrough-infection RDE components, with per-component and
   additive total residual risk.
@@ -24,5 +24,8 @@ The PrEP-breakthrough model, mainlined onto `main` (2026-07). Working toward the
 - Inverse-Gamma and lognormal-mixture input distributions for the infectivity parameter *k*.
 - Go-accelerated PrEP bootstrap, with Python↔Go parity tests.
 - Theme-aware sidebar branding, and assorted UI, documentation, and numerical-robustness fixes.
+- **Beta 1 (`1.1.0b1`)** — pre-release-review hardening: guarded PrEP oscillation inputs; engine
+  input validation across Python and Go (LoDs, doubling time, PrEP scalars); and accurate backend
+  reporting (fallback logged, total-risk CrI label gated, `backend` column on simulation outputs).
 
 _The detailed record lives in the git tag history (`v1.1.0a1` …) and `TODO.md`._
