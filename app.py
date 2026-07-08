@@ -72,7 +72,7 @@ _LOGO_COMPONENT_HTML = """<!doctype html><html><head><meta charset="utf-8"><styl
     font-family:sans-serif;-webkit-font-smoothing:antialiased}
   a.logo{display:block;width:100%;cursor:pointer;text-decoration:none}
   img{width:100%;display:block;border:0}
-  .attr{margin-top:.8rem;font-size:1em;line-height:1.45}
+  .attr{margin-top:.8rem;font-size:.875em;line-height:1.45}
   .attr a{color:var(--lnk);text-decoration:none}
   .attr a:hover{text-decoration:underline}
   hr{width:100%;border:0;border-top:1px solid currentColor;opacity:.2;margin:.8rem 0}

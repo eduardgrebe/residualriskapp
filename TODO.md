@@ -133,7 +133,7 @@ emotion with no CSS hook, so JS is the only way to track it:
 - [x] **Committed + deployed as v1.1.0a9** (2026-07-08). (`utm_source` attribution still to be
       confirmed against VRI's analytics.)
 
-### LOW — sidebar logo visual bugs — ✅ FIXED on `fix-logo-visual` (2026-07-08), re-verify final footer
+### LOW — sidebar logo visual bugs — ✅ FIXED + EG-verified on `fix-logo-visual` (2026-07-08)
 
 Cosmetic bugs from rendering the logo in an `st.iframe` (EG-reported at app.residualrisk.org;
 screenshots kept: chromium1/2, firefox1/2). Fixed in `app.py`:
@@ -157,11 +157,12 @@ screenshots kept: chromium1/2, firefox1/2). Fixed in `app.py`:
       moved the "A project of…" attribution + the app/library version line **into the logo iframe**,
       with tight CSS spacing and the JS inheriting the sidebar's font/colour so they read as native
       text — content now always exceeds the floor and the logo→text spacing is fixed at any width.
-- [x] **EG-verified overflow/overlap + white box in Firefox, WebKit (Safari), and Chromium
-      (2026-07-08).** The bundled-footer change (attribution + version now in the frame, replacing the
-      separate `st.markdown`/`st.caption`) is agent-verified only (compiles, boots, AppTest) — **EG to
-      re-check** the footer at narrow *and* wide widths, both themes: tight logo→text spacing, and the
-      attribution / version / link / divider matching native styling.
+- [x] **EG-verified in Firefox, WebKit (Safari), and Chromium (2026-07-08):** all four items — no
+      overflow/overlap when the sidebar is widened, no white box on dark, tight logo→text spacing at
+      the default (narrow) width, and the bundled attribution / version / link / divider matching
+      native styling (the thinner divider before the version line was kept deliberately). Attribution
+      also sits on one line at the default width (font matched to the version caption, `.875em`).
+      Deployed live at `1.1.0a11`.
 
 ### Release review findings (2026-07-01) — fix before public release
 
