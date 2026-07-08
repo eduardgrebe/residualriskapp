@@ -14,11 +14,12 @@ at the corrected production golden 4.289877 (was 3.091868); full Go suite green;
 integration tests green** (goldens updated: `_TRUTH_PROD` 3.09187→4.28988, Go 3.091868→4.289877).
 Docs updated: `theory_prep.md` §2 (units + fix note), §3.1/§3.2 equations (`/χ`), §10.1 (c/mL),
 §10.2/§10.3 flagged superseded (pending regeneration with the 1.2.0 set-point re-scan); `AGENTS.md`
-PrEP units note. **Follow-ups (not blockers):** regenerate the 4 PrEP figures (matplotlib not in
-the sandbox venv) and recompute the §10.2 bootstrap / §10.3 residual-risk tables — folded into the
-Milestone 1.2.0 set-point literature re-scan + analysis-repo revalidation. No version bump on the
-branch (EG to set at merge/release — `v1.1.0a9` is deployed, so likely `a10` for app + library +
-Go). _Historical analysis below (kept for the record)._
+PrEP units note. **Figures regenerated** with the corrected model (`make_prep_figures.py`; added
+`matplotlib` to the dev group; fig 2/4 captions updated — oral plateau now 336 c/mL, RDE 6.74/9.57
+d). **Versions bumped to 1.1.0a10** (app + library + Go, re-synced; Go binary rebuilt). **Remaining
+follow-up (not a blocker):** recompute the §10.2 bootstrap / §10.3 residual-risk *tables* — folded
+into the Milestone 1.2.0 set-point literature re-scan + analysis-repo revalidation. _Historical
+analysis below (kept for the record)._
 
 **Flagged by EG (2026-07-07) — not a documentation issue; a model/code bug in the PrEP set-point
 units.** Surfaced during the docs correctness pass (the `theory_prep.md` §2 "Reviewer note").

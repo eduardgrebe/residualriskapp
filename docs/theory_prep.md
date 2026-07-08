@@ -195,8 +195,8 @@ threshold (§4.1), which is central to the difference between the two modalities
 
 ![Post-breakthrough viral-load trajectories](figures/prep_fig1_viral_dynamics.png)
 
-*Figure 2. Modelled post-breakthrough viral concentration $C(t)$ for oral PrEP
-($C_\text{sp}=336$) and injectable PrEP ($C_\text{sp}=25$): an eclipse phase, exponential
+*Figure 2. Modelled post-breakthrough viral load in **copies/mL** ($\chi\,C(t)$) for oral PrEP
+($C_\text{sp}=336$ c/mL) and injectable PrEP ($C_\text{sp}=25$ c/mL): an eclipse phase, exponential
 outgrowth to the set-point at $t_c$, then an oscillating plateau ($a=0.7$, $b=0.6$, $o=1$).
 The minipool NAT detection threshold ($S_\text{pool}\,X_{50}$, in copies) is shown for
 reference; the injectable plateau sits close to it, so detection is unreliable there.*
@@ -381,7 +381,7 @@ plasma, left) and a plasma unit (200 mL, right). The integrand (shaded) is the p
 infectivity (rising once outgrowth begins), NAT non-detection (falling as the load grows),
 and serological non-detection (the delayed Weibull survival); its area is the
 risk-day-equivalents. The larger plasma volume raises the transfused dose and lengthens the
-window (RDE ≈ 4.96 vs 7.80 days at these nominal parameters). The window is bounded below by
+window (RDE ≈ 6.74 vs 9.57 days at these nominal parameters). The window is bounded below by
 the eclipse and above by the serology cutoff. The small later bumps are troughs of the
 oscillating plateau where NAT detection momentarily weakens.*
 
@@ -566,11 +566,11 @@ set-point literature re-scan).
 
 Bootstrap RDE distributions (days; $n_\text{bs}=10{,}000$; animal-$k$; published analysis):
 
-> **Superseded by the set-point units fix (§2).** This table and the figures were computed with
-> the **pre-fix** plateau (2× too high), so they *under*-state the RDE. The correction raises the
-> RDE by ≈20–45% (the production primary-parameters RDE rose 3.09 → 4.29 days); the bootstrap
-> table and the figures are pending regeneration alongside the 1.2.0 set-point re-scan and the
-> analysis-repo revalidation.
+> **Superseded by the set-point units fix (§2).** This bootstrap table was computed with the
+> **pre-fix** plateau (2× too high), so it *under*-states the RDE by ≈20–45% (the production
+> primary-parameters RDE rose 3.09 → 4.29 days). The **figures have been regenerated** with the
+> corrected model (Figs 2–4); the bootstrap RDE table here and the §10.3 residual-risk figures are
+> pending recomputation alongside the 1.2.0 set-point re-scan and the analysis-repo revalidation.
 
 | PrEP form | Product | Range | 95% credible interval | Mean | Median |
 |---|---|---|---|---|---|
