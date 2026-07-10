@@ -28,6 +28,21 @@ packages = ["residualrisk"]
 [tool.hatch.build.targets.wheel.hooks.custom]
 path = "hatch_build.py"
 
+# Lean sdist: only what's needed to rebuild the wheel from source (the fat wheel is
+# py3-none-any, so the sdist is rarely fetched). Drops the app data that the wheel
+# never ships anyway — static/ (~8 MB posteriors + logos), docs/, app.py/estimator.py/
+# pages/ — and tests. `residualrisk/` gives the library + version; `go/` the source
+# the build hook cross-compiles.
+[tool.hatch.build.targets.sdist]
+include = [
+    "residualrisk",
+    "go",
+    "pyproject.toml",
+    "hatch_build.py",
+    "README.md",
+    "LICENSE",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
