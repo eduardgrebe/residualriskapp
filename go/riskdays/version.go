@@ -19,4 +19,4 @@ package riskdays
 
 // Version is the version of the riskdays Go package.
 // Bump this when the Go implementation changes.
-const Version = "1.1.0b3"
+const Version = "1.1.0b4.dev0"
