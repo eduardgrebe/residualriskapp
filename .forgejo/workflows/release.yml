@@ -3,16 +3,20 @@
 # repo's built-in PyPI registry (for `pip install`) and as a Codeberg Release.
 #
 # Runs on Codeberg's HOSTED runners — no self-hosted instance needed: unlike the
-# Docker-image build, this needs only Go + Python (Docker-free) and finishes in a
-# couple of minutes. (The Docker image is a separate, deferred pipeline.)
+# Docker-image build, this needs only Go + Python (no Docker daemon). The hosted
+# runners are `codeberg-tiny|small|medium` (1/2/4 CPU, 2/4/8 GB, 2/5/10-min caps);
+# this uses `codeberg-medium` for headroom on the six-target cross-compile + Go
+# toolchain download. (The Docker image is a separate, deferred pipeline.)
 #
 # Setup required on the Codeberg repo (Settings → Actions):
+#   * The repo must be PUBLIC — Codeberg's hosted runners only serve public,
+#     free/libre-licensed projects (AGPL qualifies). A private repo's job stays
+#     queued as "no matching online runner". (Alternative: self-host a runner and
+#     set runs-on to its label.)
 #   * Enable "integrated CI/CD pipelines" (Forgejo Actions).
 #   * Secret PACKAGE_TOKEN: a Forgejo access token with `write:package` scope
 #     (used to upload to the PyPI registry). The automatic token handles the
 #     release itself.
-#   * Confirm `runs-on:` matches a label your runner advertises (Codeberg hosted
-#     runners use `docker`).
 
 name: release
 on:
@@ -21,7 +25,7 @@ on:
 
 jobs:
   build-and-publish:
-    runs-on: docker
+    runs-on: codeberg-medium
     steps:
       - uses: https://code.forgejo.org/actions/checkout@v4
 

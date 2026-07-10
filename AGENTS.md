@@ -428,8 +428,13 @@ The `residualrisk` wheel **bundles the pre-compiled Go accelerator for every pla
   instance needed, unlike the Docker image): on a `v*` tag it verifies `tag == __version__`, runs
   `uv build`, publishes to the **Codeberg PyPI registry**
   (`https://codeberg.org/api/packages/eduardgrebe/pypi`), and creates a Codeberg Release with the
-  artifacts. Requires Forgejo Actions enabled + a repo secret **`PACKAGE_TOKEN`** (Forgejo token,
-  `write:package` scope); confirm the `runs-on` label matches the runner (`docker` on Codeberg).
+  artifacts. Requires the repo be **public** (Codeberg's hosted runners only serve public,
+  free/libre-licensed projects — AGPL qualifies; a private repo's job stays queued as "no matching
+  online runner"), Forgejo Actions enabled, and a repo secret **`PACKAGE_TOKEN`** (Forgejo token,
+  `write:package` scope). `runs-on` is **`codeberg-medium`** — the hosted tiers are
+  `codeberg-tiny|small|medium` (1/2/4 CPU, 2/5/10-min caps); `medium` gives headroom for the
+  six-target cross-compile + Go toolchain download. (Self-hosting a runner is the alternative if the
+  repo must stay private — set `runs-on` to its label.)
 - **Installing** (see `README.md` for pip / uv / `pyproject.toml`): use `--extra-index-url`, **not**
   `--index-url`, so dependencies still resolve from PyPI — e.g. `pip install --extra-index-url
   https://codeberg.org/api/packages/eduardgrebe/pypi/simple/ residualrisk`.
