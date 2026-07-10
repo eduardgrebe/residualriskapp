@@ -19,6 +19,7 @@
 # streamlit run app/app.py
 import io
 import random
+import re
 import statistics
 import time
 from pathlib import Path
@@ -170,12 +171,35 @@ def plot_histogram(
     return fig
 
 
+def _prerelease_notice(version: str) -> str | None:
+    """Pre-release warning for the app banner, keyed off the PEP 440 version
+    string; ``None`` for a stable (``X.Y.Z``) release. ``.dev`` is checked first
+    so a dev build of a beta (e.g. ``1.1.0b3.dev1``) reads "unstable test build",
+    not "beta"."""
+    if ".dev" in version:
+        kind = "an unstable test build"
+    elif re.search(r"a\d", version):
+        kind = "an alpha release"
+    elif re.search(r"b\d", version):
+        kind = "a beta release"
+    elif re.search(r"rc\d", version):
+        kind = "a release candidate"
+    else:
+        return None
+    return f"This is {kind} ({version}). Use at your own risk."
+
+
 header_container = st.container()
 
 header_container.write("""
 # Residual HIV Transfusion Transmission Risk Estimator
 Tool for estimating the residual risk of HIV transfusion transmission with NAT screening.
 """)
+
+# Pre-release banner (unstable / alpha / beta / rc) — shown for non-stable builds only.
+_prerelease_msg = _prerelease_notice(rr.__version__)
+if _prerelease_msg:
+    header_container.warning(_prerelease_msg)
 
 if "k_human" not in st.session_state:
     (

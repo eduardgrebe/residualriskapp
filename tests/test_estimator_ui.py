@@ -137,3 +137,39 @@ class TestPointEstimateDefault:
         assert any("far right tail" in (w.value or "") for w in at.warning), [
             w.value for w in at.warning
         ]
+
+
+class TestPrereleaseBanner:
+    """The header banner (``estimator.py`` ``_prerelease_notice``) warns on
+    non-stable builds: ``.dev`` is checked first (so it wins over a coexisting
+    ``bN``), then ``aN``/``bN``/``rcN`` → alpha/beta/release candidate; a clean
+    ``X.Y.Z`` release shows no banner."""
+
+    @pytest.mark.parametrize(
+        "version, needle",
+        [
+            ("1.1.0b3.dev1", "unstable test build"),
+            ("1.1.0a7", "alpha release"),
+            ("1.1.0b3", "beta release"),
+            ("1.1.0rc1", "release candidate"),
+        ],
+    )
+    def test_prerelease_version_shows_banner(self, monkeypatch, version, needle):
+        import residualrisk
+
+        monkeypatch.setattr(residualrisk, "__version__", version)
+        at = AppTest.from_file(_ESTIMATOR, default_timeout=120).run()
+        assert not at.exception, at.exception
+        assert any(needle in (w.value or "") for w in at.warning), [
+            w.value for w in at.warning
+        ]
+
+    def test_stable_version_shows_no_banner(self, monkeypatch):
+        import residualrisk
+
+        monkeypatch.setattr(residualrisk, "__version__", "1.1.0")
+        at = AppTest.from_file(_ESTIMATOR, default_timeout=120).run()
+        assert not at.exception, at.exception
+        assert not any(
+            "Use at your own risk" in (w.value or "") for w in at.warning
+        ), [w.value for w in at.warning]
