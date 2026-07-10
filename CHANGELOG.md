@@ -16,7 +16,7 @@ project moved straight to `1.1.0`. So `1.1.0` does **not** imply a public `1.0.0
 ## [Unreleased] — 1.1.0 (pre-release)
 
 The PrEP-breakthrough model, mainlined onto `main` (2026-07). Working toward the first stable
-`1.1.0`; currently at beta pre-release `1.1.0b2`. Highlights:
+`1.1.0`; currently at beta pre-release `1.1.0b3`. Highlights:
 
 - Oral- and injectable-PrEP breakthrough-infection RDE components, with per-component and
   additive total residual risk.
@@ -31,5 +31,12 @@ The PrEP-breakthrough model, mainlined onto `main` (2026-07). Working toward the
   (always within the credible interval) instead of the plug-in "primary parameters" value, which for
   right-skewed distributions could fall in the far right tail — even above the upper CrI; choosing
   "primary parameters" now shows a tail caveat. UI-only.
+- **Beta 3 (`1.1.0b3`)** — **distribution & packaging.** The `residualrisk` wheel now bundles the
+  pre-compiled Go accelerator for every platform (Linux/macOS/Windows × amd64/arm64), so
+  `pip install residualrisk` runs Go-accelerated with **no Go toolchain** and no separate build, and
+  the library is published to the project's **Codeberg PyPI registry** on each release. The app now
+  shows a **pre-release warning banner** under the title on non-stable builds. Under the hood:
+  tag-triggered release CI (Codeberg package + GitHub Docker image, with pre-release tags flagged as
+  such on the Releases page) and a cross-OS bundled-binary smoke test.
 
 _The detailed record lives in the git tag history (`v1.1.0a1` …) and `TODO.md`._
