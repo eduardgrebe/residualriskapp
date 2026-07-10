@@ -28,7 +28,7 @@ import unittest
 import numpy as np
 import pytest
 
-from residualrisk._go import find_go_binary, risk_days_prep_bs_go
+from residualrisk._go import find_go_binary, mode_kde_go, risk_days_prep_bs_go
 from residualrisk.prep import risk_days_prep_bs
 
 
@@ -292,6 +292,63 @@ class TestPrepPythonGoAgreementDrugEffect(TestPrepPythonGoAgreement):
         }
         cls.py = risk_days_prep_bs(**kwargs, use_go=False)
         cls.go = risk_days_prep_bs(**kwargs, use_go=True)
+
+
+def test_kde_mode_grid_defaults():
+    """Grid split: the Go path (mode_kde_go) defaults to n_grid=100_000 (FFT, fast,
+    accurate); pure-Python (_kde_mode_log / mode_kde) defaults to 5_000, kept small
+    because it is O(n_data * n_grid)."""
+    import inspect
+
+    from residualrisk.core import _kde_mode_log, mode_kde
+
+    assert inspect.signature(mode_kde_go).parameters["n_grid"].default == 100_000
+    assert inspect.signature(_kde_mode_log).parameters["n_grid"].default == 5_000
+    assert inspect.signature(mode_kde).parameters["n_grid"].default == 5_000
+
+
+@pytest.mark.skipif(find_go_binary() is None, reason="Go binary not available")
+def test_go_mode_pe_within_cri():
+    """point_estimate='mode' (Go path, FFT at n_grid=100_000) yields a PE inside the
+    CrI — it is the bootstrap-distribution mode, so it cannot fall in the tail."""
+    rd_pe, rd_cri, *_ = risk_days_prep_bs(
+        **{**COMMON_KWARGS, "n_bs": 2000, "point_estimate": "mode"}, use_go=True
+    )
+    assert rd_cri[0] <= rd_pe <= rd_cri[1]
+
+
+@pytest.mark.skipif(find_go_binary() is None, reason="Go binary not available")
+def test_python_fallback_mode_matches_go_within_0p1pct():
+    """The pure-Python mode fallback (grid 5_000, cap=None) must track the Go primary
+    path (grid 100_000) to <0.1% — assures the Go-unavailable mode fallback stays
+    accurate, including on a bimodal 1M stress sample (wide range, two peaks, one
+    clearly dominant so the global mode is well-defined)."""
+    from pathlib import Path
+
+    import polars as pl
+
+    from residualrisk.core import _kde_mode_log
+
+    static = Path(__file__).resolve().parent.parent / "static"
+    samples = {
+        "k_human": pl.read_parquet(static / "k_param_human.parquet").to_numpy().ravel(),
+        "k_animal": pl.read_parquet(static / "k_param_animal.parquet").to_numpy().ravel(),
+    }
+    # Bimodal 1M stress sample: 80% narrow dominant peak (~0.91) + 20% broad
+    # secondary (~5.75); the global mode is the dominant peak (well-defined).
+    rng = np.random.default_rng(0)
+    n = 1_000_000
+    mask = rng.random(n) < 0.8
+    bimodal = np.empty(n)
+    bimodal[mask] = rng.lognormal(0.0, 0.30, int(mask.sum()))
+    bimodal[~mask] = rng.lognormal(2.0, 0.50, int((~mask).sum()))
+    samples["bimodal_1M"] = bimodal
+
+    for name, data in samples.items():
+        m_go = mode_kde_go(data, n_grid=100_000, cap=None)
+        m_py = _kde_mode_log(data, n_grid=5_000, cap=None)
+        rel = abs(m_py - m_go) / m_go
+        assert rel < 0.001, f"{name}: py={m_py:.6g} go={m_go:.6g} rel={rel:.4%}"
 
 
 if __name__ == "__main__":

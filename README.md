@@ -168,15 +168,22 @@ The Go implementation accepts JSON input:
 
 # From stdin
 echo '{
-  "k": 0.5,
-  "doubling_time": 0.85,
-  "lod50": 2.73,
-  "pool_size": 16,
+  "k": 0.000673,
+  "doubling_time": 0.8542,
+  "doubling_time_norm_sd": 0.2813,
+  "lod50": 2.73, "lod50_sd": 0.53, "lod95_lod50_ratio": 3.5,
+  "volume_transfused": 200, "volume_transfused_min": 100, "volume_transfused_max": 340,
+  "pool_size": 16, "retests": 1,
+  "k_invgamma_alpha": 2.0, "k_invgamma_beta": 0.002019,
   "n_bs": 10000
 }' | ./go/bin/riskdays_go
 ```
 
 See `go/README.md` for detailed documentation of the JSON schema and parameters.
+
+> **Note:** the Go CLI takes explicit LoDs (`lod50` / `lod50_sd` / `lod95_lod50_ratio`).
+> The canned-NAT-assay shortcut is Python-side only — use `risk_days_bs(assay="…")`
+> (which resolves the preset to LoDs before calling Go); there is no `"assay"` JSON field.
 
 ### Python API
 

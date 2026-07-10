@@ -127,9 +127,9 @@ def load_data():
     # Falls back to hardcoded values if Go binary is unavailable.
     _go_bin = rr.find_go_binary()
     if _go_bin is not None:
-        k_human_mode = rr.mode_kde_go(k_human, cap=None, n_grid=1_000_000)
-        k_animal_mode = rr.mode_kde_go(k_animal, cap=None, n_grid=1_000_000)
-        k_expdecay_mode = rr.mode_kde_go(k_expdecay, cap=None, n_grid=1_000_000)
+        k_human_mode = rr.mode_kde_go(k_human, cap=None, n_grid=100_000)
+        k_animal_mode = rr.mode_kde_go(k_animal, cap=None, n_grid=100_000)
+        k_expdecay_mode = rr.mode_kde_go(k_expdecay, cap=None, n_grid=100_000)
     else:
         # Hardcoded fallback (computed with Python KDE on full posteriors).
         # TODO: remove once Go binary is always available in deployment.
@@ -251,8 +251,10 @@ if is_mechanistic_ui:
     if use_go_acceleration:
         if rr.find_go_binary() is None:
             st.sidebar.warning(
-                "Go binary not found. Simulations will fall back to the Python "
-                "implementation, which is significantly slower."
+                "Go binary not found. Simulations fall back to the Python "
+                "implementation, which is significantly slower — and mode point "
+                "estimates use a coarser KDE grid (5 000 vs the Go path's 100 000), "
+                "which differs slightly (~0.1%)."
             )
 
 sim_param_container = st.expander(
@@ -1219,7 +1221,15 @@ if st.sidebar.button(button_label):
                     if k_lnmix_pe_choice == "median":
                         k_pe = float(np.median(_lnmix_sample))
                     else:  # mode
-                        k_pe = rr.mode_kde(_lnmix_sample, cap=1_000_000, n_grid=1_000_000)
+                        # Go path uses the Go binary (FFT, 100_000); the Python
+                        # backend uses a pure-Python coarse grid (5_000). We do NOT
+                        # route to Go when the user explicitly chose Python.
+                        if use_go_acceleration:
+                            k_pe = rr.mode_kde_go(_lnmix_sample, cap=None, n_grid=100_000)
+                            if k_pe is None:  # Go unavailable → pure-Python fallback
+                                k_pe = rr.mode_kde(_lnmix_sample, cap=None, n_grid=5_000)
+                        else:
+                            k_pe = rr.mode_kde(_lnmix_sample, cap=None, n_grid=5_000)
             elif k_param_pe == "mode":
                 _mode_key = {
                     "human": "k_human_mode",

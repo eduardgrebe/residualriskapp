@@ -185,7 +185,7 @@ func riskDaysBSBaseline(input RiskDaysInput, ks, doublingTimes, lod50s, volumesT
 	case "mean":
 		rdPE = Mean(rdests)
 	case "mode":
-		rdPE = KDEModeLog(rdests, 1_000_000, 0, input.Threads)
+		rdPE = KDEModeLog(rdests, 100_000, 0, input.Threads)
 	default:
 		return nil, fmt.Errorf("unknown point estimate method: %s", input.PointEstimate)
 	}
@@ -384,7 +384,7 @@ func riskDaysBSPrep(input RiskDaysInput, rng *RandomGenerator, ks, doublingTimes
 	case "mean":
 		rdPE = Mean(rdests)
 	case "mode":
-		rdPE = KDEModeLog(rdests, 1_000_000, 0, input.Threads)
+		rdPE = KDEModeLog(rdests, 100_000, 0, input.Threads)
 	default:
 		return nil, fmt.Errorf("unknown point estimate method: %s", input.PointEstimate)
 	}

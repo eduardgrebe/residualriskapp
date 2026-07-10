@@ -661,10 +661,13 @@ def risk_days_prep_bs(
     elif point_estimate == "mean":
         rd_pe = statistics.mean(rdests)
     elif point_estimate == "mode":
-        # KDE-log mode — matches Go's KDEModeLog and the baseline Python path
-        # (_risk_days_bs_python). Accurate but slow. mode_precision is unused
-        # here (kept for API / Go-bridge compatibility), as in the baseline.
-        rd_pe = _kde_mode_log(rdests, n_grid=1_000_000, cap=None)
+        # KDE-log mode. Python path only — when use_go=True the Go binary computes
+        # the mode (riskdays.go, FFT at n_grid=100_000) and returns before here.
+        # Pure-Python _kde_mode_log is O(n_data * n_grid), so the speed-up comes from
+        # the grid (5_000, not 100_000); cap=None keeps the full sample so the mode
+        # still tracks the Go result to <0.1% (capping adds sampling noise on large
+        # n_bs). App warns on fallback. mode_precision is unused (API/bridge compat).
+        rd_pe = _kde_mode_log(rdests, n_grid=5_000, cap=None)
     else:
         rd_pe = None
 

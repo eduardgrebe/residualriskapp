@@ -299,8 +299,11 @@ def _kde_mode_log(data, n_grid=5_000, cap=50_000):
     data : array-like
         Positive-valued posterior samples.
     n_grid : int
-        Number of log-spaced grid points for density evaluation
-        (default 100 000).
+        Number of log-spaced grid points for density evaluation (default
+        **5 000**). This pure-Python estimator is O(n_data × n_grid), so the grid is
+        kept small for speed; the Go-backed path (``mode_kde_go``) uses 100 000 (FFT,
+        fast), which the app treats as the accurate reference — the two modes differ
+        by only ~0.1%.
     cap : int or None
         Maximum number of samples to use.  If *data* exceeds *cap*,
         a random subset of size *cap* is drawn before fitting.
@@ -678,7 +681,13 @@ def _risk_days_bs_python(
     elif point_estimate == "mean":
         rd_pe = statistics.mean(rdests)
     elif point_estimate == "mode":
-        rd_pe = _kde_mode_log(rdests, n_grid=1_000_000, cap=None) # Accurate but impractically slow
+        # Python path only — when use_go=True the Go binary computes the mode (FFT,
+        # n_grid=100_000) and returns before here. Pure-Python _kde_mode_log is
+        # O(n_data * n_grid), so the speed-up comes from the grid (5_000, not
+        # 100_000); cap=None keeps the full sample so the mode still tracks the Go
+        # result to <0.1% (capping adds sampling noise on large n_bs). App warns on
+        # fallback.
+        rd_pe = _kde_mode_log(rdests, n_grid=5_000, cap=None)
     else:
         rd_pe = None
 

@@ -75,7 +75,7 @@ def find_go_binary():
 
 def mode_kde_go(
     data: "np.ndarray",
-    n_grid: int = 1_000_000,
+    n_grid: int = 100_000,
     cap: int | None = None,
     threads: int = 0,
 ) -> float:
@@ -89,8 +89,11 @@ def mode_kde_go(
     data:
         1-D array of positive values (e.g. a k-parameter posterior sample).
     n_grid:
-        Number of log-spaced grid points for the KDE.  Default 1 000 000
-        (matches the Go binary auto-default; fast via FFT).
+        Number of log-spaced grid points for the KDE, passed to the Go binary.
+        Default 100 000 — the app's grid. The Go KDE is FFT-based, so this is fast,
+        and the mode matches a 1 000 000-grid result to ~4 sig figs. The pure-Python
+        fallback (``_kde_mode_log`` / ``mode_kde``) defaults to a coarser 5 000 for
+        speed, since it is O(n_data × n_grid); the mode differs by only ~0.1%.
     cap:
         Maximum number of samples to use.  Data is pre-subsampled in Python
         (seed=42) before serialisation to keep the JSON payload small.

@@ -39,8 +39,11 @@ func NewRandomGenerator(seed int64) *RandomGenerator {
 	}
 }
 
-// GenerateTruncatedNormal generates samples from a truncated normal distribution
-// Equivalent to scipy.stats.truncnorm.rvs(a=0, b=inf, loc=mean, scale=sd, size=n)
+// GenerateTruncatedNormal generates samples from a normal distribution truncated at 0
+// (positive values only). Equivalent to
+// scipy.stats.truncnorm.rvs(a=-mean/sd, b=inf, loc=mean, scale=sd, size=n) — scipy's
+// a/b bounds are standardised (SDs from loc), so a lower bound of 0 maps to
+// a=(0-mean)/sd, NOT a=0 (which would truncate at the mean).
 // This implementation uses rejection sampling
 func (rg *RandomGenerator) GenerateTruncatedNormal(mean, sd float64, n int) []float64 {
 	samples := make([]float64, n)
