@@ -173,7 +173,7 @@ def plot_histogram(
 header_container = st.container()
 
 header_container.write("""
-# Residual HIV-TT Risk Estimator
+# Residual HIV Transfusion Transmission Risk Estimator
 Tool for estimating the residual risk of HIV transfusion transmission with NAT screening.
 """)
 
@@ -219,6 +219,7 @@ if is_mechanistic_ui:
     )
 
 st.sidebar.write("Number of CPU cores: ", n_cpu)
+
 
 def _generate_random_seed() -> None:
     # Set the new seed in the button's on_click callback — callbacks run BEFORE the
@@ -1187,9 +1188,9 @@ if st.sidebar.button(button_label):
                 import math as _math
 
                 if k_lnmix_pe_choice == "mean":
-                    k_pe = k_lnmix_w * _math.exp(k_lnmix_mu1 + k_lnmix_sigma1**2 / 2) + (
-                        1 - k_lnmix_w
-                    ) * _math.exp(k_lnmix_mu2 + k_lnmix_sigma2**2 / 2)
+                    k_pe = k_lnmix_w * _math.exp(
+                        k_lnmix_mu1 + k_lnmix_sigma1**2 / 2
+                    ) + (1 - k_lnmix_w) * _math.exp(k_lnmix_mu2 + k_lnmix_sigma2**2 / 2)
                 else:
                     # Numerical mode or median from a large sample
                     # Use cached default-param values if parameters are at defaults to avoid delay
@@ -1225,9 +1226,13 @@ if st.sidebar.button(button_label):
                         # backend uses a pure-Python coarse grid (5_000). We do NOT
                         # route to Go when the user explicitly chose Python.
                         if use_go_acceleration:
-                            k_pe = rr.mode_kde_go(_lnmix_sample, cap=None, n_grid=100_000)
+                            k_pe = rr.mode_kde_go(
+                                _lnmix_sample, cap=None, n_grid=100_000
+                            )
                             if k_pe is None:  # Go unavailable → pure-Python fallback
-                                k_pe = rr.mode_kde(_lnmix_sample, cap=None, n_grid=5_000)
+                                k_pe = rr.mode_kde(
+                                    _lnmix_sample, cap=None, n_grid=5_000
+                                )
                         else:
                             k_pe = rr.mode_kde(_lnmix_sample, cap=None, n_grid=5_000)
             elif k_param_pe == "mode":
@@ -1428,7 +1433,9 @@ if st.sidebar.button(button_label):
                     "iwp": st.session_state["bs_prep_inj"]
                 })
                 if st.session_state["sim_df_prep_inj"] is None:
-                    st.session_state["sim_df_prep_inj"] = st.session_state["samp_prep_inj"]
+                    st.session_state["sim_df_prep_inj"] = st.session_state[
+                        "samp_prep_inj"
+                    ]
                 prep_inj_bar.progress(1.0, text="Injectable PrEP simulations complete!")
                 time.sleep(0.3)
                 prep_inj_bar.empty()
