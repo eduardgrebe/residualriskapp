@@ -5,9 +5,12 @@
 # then each OS extracts its native binary and runs --version + a small computation.
 
 name: bundled-binary-smoke-test
+# Tags only (+ manual dispatch): the cross-OS binary check only matters at release
+# time, and GitHub's macOS runners are concurrency-limited — running it on every
+# main push just backs the queue up (macos-latest + macos-13 + windows per run) for
+# no benefit. Use "Run workflow" (workflow_dispatch) for an ad-hoc check.
 on:
   push:
-    branches: [main]
     tags: ["v*"]
   workflow_dispatch:
 
