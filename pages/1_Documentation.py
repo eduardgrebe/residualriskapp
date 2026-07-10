@@ -39,7 +39,7 @@ def render_markdown_with_figures(md: str) -> None:
             st.markdown(part)
 
 
-def render_doc(text: str) -> None:
+def render_doc(text: str, expand_all: bool = False) -> None:
     """Render a documentation file as a scannable accordion: a visible preamble
     (title + intro, before the first ``## `` section), one collapsible expander
     per section, and any short trailing footer note below it.
@@ -62,10 +62,18 @@ def render_doc(text: str) -> None:
     for idx, m in enumerate(matches):
         title = m.group(1).strip()
         body_start = m.end()
-        body_end = matches[idx + 1].start() if idx + 1 < len(matches) else len(body_text)
+        body_end = (
+            matches[idx + 1].start() if idx + 1 < len(matches) else len(body_text)
+        )
         body = body_text[body_start:body_end]
-        with st.expander(title, expanded=(idx == 0)):  # first section open by default
-            render_markdown_with_figures(body)
+        if expand_all:
+            with st.expander(title, expanded=True):  # All sections open
+                render_markdown_with_figures(body)
+        else:
+            with st.expander(
+                title, expanded=(idx == 0)
+            ):  # first section open by default
+                render_markdown_with_figures(body)
 
     if footer.strip():
         st.markdown("---")
@@ -77,9 +85,12 @@ def _draft_notice() -> None:
     st.info("Draft documentation — to be reviewed and edited.", icon="🚧")
 
 
-tab_base, tab_assays, tab_prep = st.tabs(
-    ["Baseline model & methods", "NAT assay parameters", "PrEP model"]
-)
+tab_base, tab_assays, tab_prep, tab_roadmap = st.tabs([
+    "Baseline model & methods",
+    "NAT assay parameters",
+    "PrEP model",
+    "Development roadmap",
+])
 
 with tab_base:
     _draft_notice()
@@ -92,3 +103,6 @@ with tab_assays:
 with tab_prep:
     _draft_notice()
     render_doc((DOCS / "theory_prep.md").read_text())
+
+with tab_roadmap:
+    render_doc((DOCS / "roadmap.md").read_text(), expand_all=True)
