@@ -330,6 +330,20 @@ cases + a few docs/tests) plus a handful of infrastructure/test follow-ups — n
 - [ ] Document/track that under one fixed seed the Python **shared draws differ by k-mode** (entropy ordering) and that `total_residual_risk_rd`'s joint-CrI validity requires the *same k-distribution* across components.
 - [ ] Remove dead Go `RiskDaysInput.LimitMin/LimitMax` fields (or wire them to Python's `limits`) — single source of truth for the integration domain.
 
+### CI: build the Docker image on PRs / `main`, not only on `v*` tags (2026-07-10)
+
+`docker-publish.yml` builds the image **only** on `v*` tags, so a broken Dockerfile is caught at
+release time rather than on the commit that broke it. The fat-wheel work did exactly this: adding the
+`hatch_build.py` hook to `pyproject.toml` made `uv sync --frozen` require the file, but the Dockerfile
+never copied it — the tag build failed with `Build script does not exist: hatch_build.py` (fixed on
+`fix-docker-hatch-build`, 2026-07-10; verified with a local OrbStack build). A build-only job would
+surface this class of regression pre-release.
+
+- [ ] Add a `docker build` check (native single-arch, `push: false`) on pull requests and `main`
+      pushes — enough to catch Dockerfile / `uv sync` breaks without publishing an image. (When
+      Codeberg becomes primary — Deferred → "Migrate primary hosting to Codeberg" — mirror it into
+      `.forgejo/`.)
+
 ### Independent PrEP `drug_effect` for oral vs injectable (total-risk CrI refinement)
 
 The additive total-risk credible interval (`rr.total_residual_risk_rd`, wired
