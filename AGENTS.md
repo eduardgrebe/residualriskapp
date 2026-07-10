@@ -423,12 +423,18 @@ The `residualrisk` wheel **bundles the pre-compiled Go accelerator for every pla
   QEMU/matrix). If `go` is absent the hook **skips** bundling → a pure-Python wheel. The result is a
   single **`py3-none-any` "fat" wheel** (~6 MB); `find_go_binary()` selects and version-checks the
   right binary at runtime (see its search order above). Per-platform wheels are possible (build one
-  target + set `build_data["tag"]`), but the fat wheel is what we ship.
+  target + set `build_data["tag"]`), but the fat wheel is what we ship. The **sdist** is trimmed to
+  build essentials via `[tool.hatch.build.targets.sdist]` (`residualrisk/` + `go/` + `pyproject.toml`
+  + `hatch_build.py` + README/LICENSE), dropping the ~8 MB of app data the wheel never ships anyway
+  (`static/` posteriors, `docs/`, `app.py`/`estimator.py`) — ~10 MB → ~90 KB, and a wheel still
+  cross-compiles from it.
 - **Publishing** (`.forgejo/workflows/release.yml`, on Codeberg's **hosted** runner — no self-hosted
   instance needed, unlike the Docker image): on a `v*` tag it verifies `tag == __version__`, runs
   `uv build`, publishes to the **Codeberg PyPI registry**
   (`https://codeberg.org/api/packages/eduardgrebe/pypi`), and creates a Codeberg Release with the
-  artifacts. Requires the repo be **public** (Codeberg's hosted runners only serve public,
+  artifacts (pre-release tags — `aN`/`bN`/`rcN`/`.devN` — are auto-flagged **pre-release** by a
+  "Classify the tag" step feeding `forgejo-release`'s `prerelease` input; a clean `vX.Y.Z` is stable).
+  Requires the repo be **public** (Codeberg's hosted runners only serve public,
   free/libre-licensed projects — AGPL qualifies; a private repo's job stays queued as "no matching
   online runner"), Forgejo Actions enabled, and a repo secret **`PACKAGE_TOKEN`** (Forgejo token,
   `write:package` scope). `runs-on` is **`codeberg-small`** — the hosted tiers are
@@ -441,7 +447,9 @@ The `residualrisk` wheel **bundles the pre-compiled Go accelerator for every pla
   `--index-url`, so dependencies still resolve from PyPI — e.g. `pip install --extra-index-url
   https://codeberg.org/api/packages/eduardgrebe/pypi/simple/ residualrisk`.
 - **Cross-OS smoke test** (`.github/workflows/smoke-test.yml`, kept on GitHub even as the mirror,
-  because Codeberg's hosted runners are Linux-only): builds the wheel on Linux, then *runs* the
+  because Codeberg's hosted runners are Linux-only). Triggers on `v*` tags + manual dispatch only
+  (not per-commit — GitHub's macOS runners are concurrency-limited, so main-push runs just backed the
+  queue up). Builds the wheel on Linux, then *runs* the
   cross-compiled macOS/Windows binaries on real macOS/Windows runners via
   `scripts/smoke_bundled_binary.py` (`--version` + a small computation). **Gap:** `windows-arm64`
   has no hosted runner, so it ships untested (Windows/ARM runs the amd64 build via emulation; the

@@ -82,6 +82,11 @@ x86-64 + arm64). So `pip install` gives you the fast Go engine with **no Go tool
 separate build** — and if a platform's binary is ever unusable, the library transparently falls
 back to the pure-Python engine.
 
+> **Currently pre-release:** only pre-release builds are on the registry so far, so a bare
+> `residualrisk` won't resolve until a stable `1.1.0` is published. Allow pre-releases — pip: add
+> `--pre`; uv: add `--prerelease=allow` (works with `uv pip install` and `uv sync`) — or pin an
+> exact version (e.g. `residualrisk==1.1.0b3`).
+
 **pip** — the registry hosts only `residualrisk`, so add it *alongside* PyPI (dependencies such as
 numpy/scipy still come from PyPI). Use `--extra-index-url`, **not** `--index-url` (the latter
 replaces PyPI entirely and breaks dependency resolution):
