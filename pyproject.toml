@@ -35,12 +35,12 @@ path = "hatch_build.py"
 # the build hook cross-compiles.
 [tool.hatch.build.targets.sdist]
 include = [
-    "residualrisk",
-    "go",
-    "pyproject.toml",
-    "hatch_build.py",
-    "README.md",
-    "LICENSE",
+    "/residualrisk",
+    "/go",
+    "/pyproject.toml",
+    "/hatch_build.py",
+    "/README.md",
+    "/LICENSE",
 ]
 
 [dependency-groups]
