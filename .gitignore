@@ -56,3 +56,4 @@ riskdays_go
 
 # Claude project settings
 .claude/
+residualrisk/_bin/

@@ -144,7 +144,7 @@ RSE = `lod50_sd / lod50` (the coefficient of variation of the 50% LoD; invariant
   - JSON-based communication with Go binary
   - Automatic fallback to Python if Go binary unavailable
   - Progress monitoring
-  - `find_go_binary()` search order: `$RESIDUALRISK_GO_BINARY` env var → `<repo>/go/bin/riskdays_go` → `/usr/local/bin/riskdays_go` → `$PATH`
+  - `find_go_binary()` search order: `$RESIDUALRISK_GO_BINARY` env var → `<repo>/go/bin/riskdays_go` → the wheel-bundled `residualrisk/_bin/riskdays_go-<goos>-<goarch>` (validated against `__version__`; built by `hatch_build.py`) → `~/.local/bin/riskdays_go` (sudo-free) → `$PATH`
   - `mode_kde_go()` — KDE mode via `riskdays_go --kde-mode`; pre-caps data in Python to minimise JSON payload
 
 ## Technical Architecture

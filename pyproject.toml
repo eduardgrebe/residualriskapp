@@ -23,6 +23,11 @@ path = "residualrisk/__init__.py"
 [tool.hatch.build.targets.wheel]
 packages = ["residualrisk"]
 
+# Cross-compile the Go accelerator for every target and bundle the binaries into
+# the wheel (see hatch_build.py). Needs the Go toolchain at build time only.
+[tool.hatch.build.targets.wheel.hooks.custom]
+path = "hatch_build.py"
+
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",

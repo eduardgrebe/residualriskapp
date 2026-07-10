@@ -28,8 +28,8 @@ make deps
 # Build the binary
 make build
 
-# Install to /usr/local/bin
-sudo make install
+# Install to ~/.local/bin (no sudo)
+make install
 
 # Build for all platforms
 make build-all
@@ -121,7 +121,7 @@ result = risk_days_bs(k, doubling_time, ..., use_go=True)
 result = risk_days_bs(k, doubling_time, ..., use_go=False)
 ```
 
-The binary is located by `residualrisk.find_go_binary()`, which searches (in order): the `RESIDUALRISK_GO_BINARY` env var, `<repo>/go/bin/riskdays_go`, `/usr/local/bin/riskdays_go`, then `$PATH`.
+The binary is located by `residualrisk.find_go_binary()`, which searches (in order): the `RESIDUALRISK_GO_BINARY` env var, `<repo>/go/bin/riskdays_go`, the platform binary bundled in the wheel (`residualrisk/_bin/riskdays_go-<goos>-<goarch>`, version-checked), `~/.local/bin/riskdays_go`, then `$PATH`.
 
 ## Parameters
 

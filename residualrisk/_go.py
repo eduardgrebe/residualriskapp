@@ -30,6 +30,68 @@ import numpy as np
 import polars as pl
 
 
+# Cache of bundled-binary validity checks (abs path -> bool), so the --version
+# handshake runs at most once per process.
+_bundled_validity: dict = {}
+
+
+def _current_go_platform():
+    """(GOOS, GOARCH) for the running interpreter, or (None, None) if we don't ship a
+    binary for it. platform.machine() varies by OS and case (x86_64 / AMD64 / arm64 /
+    ARM64 / aarch64), so normalise via lower()."""
+    import platform
+
+    goos = {"linux": "linux", "darwin": "darwin", "windows": "windows"}.get(
+        platform.system().lower()
+    )
+    goarch = {
+        "x86_64": "amd64", "amd64": "amd64",
+        "arm64": "arm64", "aarch64": "arm64",
+    }.get(platform.machine().lower())
+    return goos, goarch
+
+
+def _bundled_go_binary():
+    """Path to the platform's binary bundled in the wheel (residualrisk/_bin/), or
+    None. It is used only if it actually runs and its version matches the library —
+    a stale/mismatched/incompatible bundle falls through to the pure-Python path
+    rather than silently producing wrong results (result cached per path)."""
+    import os
+
+    goos, goarch = _current_go_platform()
+    if not (goos and goarch):
+        return None
+    suffix = ".exe" if goos == "windows" else ""
+    path = Path(__file__).parent / "_bin" / f"riskdays_go-{goos}-{goarch}{suffix}"
+    if not path.exists():
+        return None
+    key = str(path)
+    if key not in _bundled_validity:
+        if not os.access(path, os.X_OK):
+            try:
+                path.chmod(0o755)
+            except OSError:
+                pass
+        _bundled_validity[key] = _binary_version_matches(key)
+    return key if _bundled_validity[key] else None
+
+
+def _binary_version_matches(path):
+    """True iff ``path --version`` runs and equals the library ``__version__``."""
+    try:
+        import residualrisk
+
+        result = subprocess.run(
+            [path, "--version"], capture_output=True, text=True, timeout=10
+        )
+        return (
+            result.returncode == 0
+            and result.stdout.strip() == residualrisk.__version__
+        )
+    except Exception:
+        return False
+
+
 def find_go_binary():
     """
     Find the riskdays_go Go binary.
@@ -37,8 +99,9 @@ def find_go_binary():
     Searches in order:
     1. $RESIDUALRISK_GO_BINARY env var (explicit override)
     2. go/bin/riskdays_go (repo root, relative to this package)
-    3. /usr/local/bin/riskdays_go
-    4. riskdays_go in PATH
+    3. residualrisk/_bin/riskdays_go-<goos>-<goarch> (bundled in the wheel)
+    4. ~/.local/bin/riskdays_go (sudo-free user-install location)
+    5. riskdays_go in PATH
 
     Returns:
         Path to binary or None if not found
@@ -55,10 +118,16 @@ def find_go_binary():
     if relative_binary.exists():
         return str(relative_binary)
 
-    # Try system installation
-    system_binary = Path("/usr/local/bin/riskdays_go")
-    if system_binary.exists():
-        return str(system_binary)
+    # Bundled binary shipped inside the wheel (residualrisk/_bin/), selected by
+    # platform and validated against the library version. See hatch_build.py.
+    bundled = _bundled_go_binary()
+    if bundled:
+        return bundled
+
+    # User-local install — the recommended manual-install location (no sudo).
+    user_binary = Path.home() / ".local" / "bin" / "riskdays_go"
+    if user_binary.exists():
+        return str(user_binary)
 
     # Try PATH
     try:
