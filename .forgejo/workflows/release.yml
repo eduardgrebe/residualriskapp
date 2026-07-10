@@ -1,0 +1,63 @@
+# Codeberg / Forgejo Actions — on a `v*` tag push, build the Python package (the
+# hatch build hook cross-compiles all six Go binaries) and publish it: to the
+# repo's built-in PyPI registry (for `pip install`) and as a Codeberg Release.
+#
+# Runs on Codeberg's HOSTED runners — no self-hosted instance needed: unlike the
+# Docker-image build, this needs only Go + Python (Docker-free) and finishes in a
+# couple of minutes. (The Docker image is a separate, deferred pipeline.)
+#
+# Setup required on the Codeberg repo (Settings → Actions):
+#   * Enable "integrated CI/CD pipelines" (Forgejo Actions).
+#   * Secret PACKAGE_TOKEN: a Forgejo access token with `write:package` scope
+#     (used to upload to the PyPI registry). The automatic token handles the
+#     release itself.
+#   * Confirm `runs-on:` matches a label your runner advertises (Codeberg hosted
+#     runners use `docker`).
+
+name: release
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build-and-publish:
+    runs-on: docker
+    steps:
+      - uses: https://code.forgejo.org/actions/checkout@v4
+
+      # Verify the tag matches the packaged library version (drop `.dev0` before
+      # tagging — the same gate the Docker pipeline applies to APP_VERSION).
+      - name: Verify tag == library __version__
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          ver="$(grep -E '^__version__' residualrisk/__init__.py | sed -E 's/.*"([^"]+)".*/\1/')"
+          [ "$ver" = "$tag" ] || { echo "::error::__version__ '$ver' != tag '$tag'"; exit 1; }
+
+      - uses: https://code.forgejo.org/actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Build wheel + sdist (cross-compiles all six Go targets)
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv build
+
+      - name: Publish to the Codeberg PyPI registry
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv publish \
+            --publish-url "https://codeberg.org/api/packages/${{ github.repository_owner }}/pypi" \
+            --username "${{ github.repository_owner }}" \
+            --password "${{ secrets.PACKAGE_TOKEN }}" \
+            dist/*
+
+      - name: Create the Codeberg release with the artifacts attached
+        uses: https://code.forgejo.org/actions/forgejo-release@v2
+        with:
+          direction: upload
+          release-dir: dist
+          tag: ${{ github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,46 @@
+# GitHub Actions — the ONE job we keep on GitHub after Codeberg becomes primary:
+# validate that the Linux-cross-compiled macOS/Windows binaries in the wheel
+# actually run on real macOS/Windows (Codeberg's hosted runners are Linux-only, so
+# they cannot do this). The wheel is built once on Linux (as it is in CI/Codeberg),
+# then each OS extracts its native binary and runs --version + a small computation.
+
+name: bundled-binary-smoke-test
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - uses: astral-sh/setup-uv@v5
+      - run: uv build            # hatch hook cross-compiles all six targets
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel
+          path: dist/*.whl
+
+  smoke:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, macos-13, windows-latest]   # arm64 + x86_64 mac, x64 win
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4                       # for scripts/
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - uses: actions/download-artifact@v4
+        with:
+          name: wheel
+          path: dist
+      - name: Run the bundled binary for this platform
+        run: python scripts/smoke_bundled_binary.py
