@@ -411,6 +411,35 @@ version:
   is to **re-sync all three** to the same value when a change spans them (as with the
   `.dev0` bump itself).
 
+## Distribution — the bundled-binary wheel
+
+The `residualrisk` wheel **bundles the pre-compiled Go accelerator for every platform**, so
+`pip install residualrisk` runs Go-accelerated with no Go toolchain and no separate build.
+
+- **Build hook** (`hatch_build.py`, registered in `pyproject.toml`): at wheel-build time it
+  cross-compiles `riskdays_go` for all six targets — `linux`/`darwin`/`windows` × `amd64`/`arm64` —
+  static (`CGO_ENABLED=0`) and stripped, into `residualrisk/_bin/riskdays_go-<goos>-<goarch>[.exe]`,
+  and `force_include`s them (the dir is git-ignored). Go cross-compiles all six from one machine (no
+  QEMU/matrix). If `go` is absent the hook **skips** bundling → a pure-Python wheel. The result is a
+  single **`py3-none-any` "fat" wheel** (~6 MB); `find_go_binary()` selects and version-checks the
+  right binary at runtime (see its search order above). Per-platform wheels are possible (build one
+  target + set `build_data["tag"]`), but the fat wheel is what we ship.
+- **Publishing** (`.forgejo/workflows/release.yml`, on Codeberg's **hosted** runner — no self-hosted
+  instance needed, unlike the Docker image): on a `v*` tag it verifies `tag == __version__`, runs
+  `uv build`, publishes to the **Codeberg PyPI registry**
+  (`https://codeberg.org/api/packages/eduardgrebe/pypi`), and creates a Codeberg Release with the
+  artifacts. Requires Forgejo Actions enabled + a repo secret **`PACKAGE_TOKEN`** (Forgejo token,
+  `write:package` scope); confirm the `runs-on` label matches the runner (`docker` on Codeberg).
+- **Installing** (see `README.md` for pip / uv / `pyproject.toml`): use `--extra-index-url`, **not**
+  `--index-url`, so dependencies still resolve from PyPI — e.g. `pip install --extra-index-url
+  https://codeberg.org/api/packages/eduardgrebe/pypi/simple/ residualrisk`.
+- **Cross-OS smoke test** (`.github/workflows/smoke-test.yml`, kept on GitHub even as the mirror,
+  because Codeberg's hosted runners are Linux-only): builds the wheel on Linux, then *runs* the
+  cross-compiled macOS/Windows binaries on real macOS/Windows runners via
+  `scripts/smoke_bundled_binary.py` (`--version` + a small computation). **Gap:** `windows-arm64`
+  has no hosted runner, so it ships untested (Windows/ARM runs the amd64 build via emulation; the
+  pure-Python engine is the fallback).
+
 ## Common Tasks
 
 ### Adding a New Parameter
