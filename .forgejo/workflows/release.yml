@@ -60,6 +60,21 @@ jobs:
             --password "${{ secrets.PACKAGE_TOKEN }}" \
             dist/*
 
+      # A stable tag is exactly vX.Y.Z; anything else (aN/bN/rcN/.devN — PEP 440
+      # pre/dev releases) is flagged as a pre-release so it isn't shown as "Stable"
+      # on the Releases page or mistaken for the current stable build.
+      - name: Classify the tag (stable vs pre-release)
+        id: release_type
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          if printf '%s' "$ver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            pre=false
+          else
+            pre=true
+          fi
+          echo "prerelease=$pre" >> "$GITHUB_OUTPUT"
+          echo "::notice::tag ${GITHUB_REF_NAME} → prerelease=$pre"
+
       - name: Create the Codeberg release with the artifacts attached
         uses: https://code.forgejo.org/actions/forgejo-release@v2
         with:
@@ -67,3 +82,4 @@ jobs:
           release-dir: dist
           tag: ${{ github.ref_name }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          prerelease: ${{ steps.release_type.outputs.prerelease }}
