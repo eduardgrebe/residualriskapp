@@ -106,6 +106,12 @@ COPY --chown=appuser:appuser LICENSE ./
 # Copy Streamlit configuration (optional - will use defaults if not present)
 COPY --chown=appuser:appuser .streamlit/ ./.streamlit/
 
+# hatch_build.py is the custom build hook pyproject.toml references — it must be
+# present for `uv sync` to build the residualrisk wheel. This stage has no Go
+# toolchain, so the hook skips cross-compilation and builds a pure-Python wheel;
+# the accelerator comes from the go-builder stage (go/bin/riskdays_go, copied above).
+COPY --chown=appuser:appuser hatch_build.py ./
+
 # Install the residualrisk package now that source is present
 RUN uv sync --frozen
 
