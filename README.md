@@ -74,6 +74,47 @@ A Streamlit-based interactive web interface is provided that can make use of eit
 
 4. **Open your browser** to http://localhost:8501
 
+### Installing the Python library (with bundled Go acceleration)
+
+The `residualrisk` library is published to this project's **Codeberg PyPI registry**, and its
+wheels **bundle the pre-compiled Go accelerator for every platform** (Linux / macOS / Windows,
+x86-64 + arm64). So `pip install` gives you the fast Go engine with **no Go toolchain and no
+separate build** — and if a platform's binary is ever unusable, the library transparently falls
+back to the pure-Python engine.
+
+**pip** — the registry hosts only `residualrisk`, so add it *alongside* PyPI (dependencies such as
+numpy/scipy still come from PyPI). Use `--extra-index-url`, **not** `--index-url` (the latter
+replaces PyPI entirely and breaks dependency resolution):
+
+```bash
+pip install --extra-index-url https://codeberg.org/api/packages/eduardgrebe/pypi/simple/ residualrisk
+```
+
+**uv** (quick):
+
+```bash
+uv pip install --extra-index-url https://codeberg.org/api/packages/eduardgrebe/pypi/simple/ residualrisk
+```
+
+**uv, in a project's `pyproject.toml`** — declare the dependency, define the registry as a named
+index, and pin `residualrisk` to it (everything else still resolves from PyPI):
+
+```toml
+[project]
+dependencies = ["residualrisk"]
+
+[[tool.uv.index]]
+name = "codeberg"
+url = "https://codeberg.org/api/packages/eduardgrebe/pypi/simple/"
+
+[tool.uv.sources]
+residualrisk = { index = "codeberg" }
+```
+
+Then `uv sync` (or `uv add residualrisk`) resolves it from Codeberg. If the registry is ever made
+private, supply a Codeberg token via the index's auth (uv `UV_INDEX_CODEBERG_USERNAME` /
+`UV_INDEX_CODEBERG_PASSWORD` env vars, or a `~/.netrc` entry for `codeberg.org`).
+
 ### Building the Go Implementation
 
 The webapp defaults to the Go implementation. Without the binary, it falls back to the Python implementation, which is 10-50x slower and impractical for the simulation counts used in normal operation.
