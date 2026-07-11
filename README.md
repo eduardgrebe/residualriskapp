@@ -250,19 +250,19 @@ rd_pe, rd_cri, rd_range, rdests, _ = rr.risk_days_bs(
     volume_transfused_range=(15, 30),
     pool_size=16,
     retests=1,
-    k_posterior_sample=k_samples,    # numpy array of posterior draws
+    k_posterior_sample=k_samples,  # numpy array of posterior draws
     n_bs=10000,
-    use_go=True,                      # use Go acceleration (10-50x faster)
+    use_go=True,  # use Go acceleration (10-50x faster)
 )
 
 # Shortcut: use a canned NAT assay's published LoDs instead of the explicit
 # lod50 / lod50_sd / lod95_lod50_ratio triplet (mutually exclusive with them).
-rr.list_assays()                      # {'ultrio': 'Procleix Ultrio (Tigris)', ...}
+rr.list_assays()  # {'ultrio': 'Procleix Ultrio (Tigris)', ...}
 rd_pe, rd_cri, rd_range, rdests, _ = rr.risk_days_bs(
     k=0.013,
     doubling_time=20.5 / 24,
     doubling_time_norm_sd=1.33 / 24,
-    assay="ultrio_elite",             # in place of lod50/lod50_sd/lod95_lod50_ratio
+    assay="ultrio_elite",  # in place of lod50/lod50_sd/lod95_lod50_ratio
     volume_transfused=20,
     volume_transfused_range=(15, 30),
     pool_size=16,
@@ -278,7 +278,7 @@ lod = rr.lods_for_assay("ultrio_elite")
 # Alternative: sample k from an Inverse Gamma distribution (α=2, β=0.002019)
 # k_pe can be the mode (β/(α+1)), median, or mean (β/(α-1)) of the distribution
 rd_pe, rd_cri, rd_range, rdests, _ = rr.risk_days_bs(
-    k=0.002019 / 3,                  # mode = β/(α+1) = 0.002019/3
+    k=0.002019 / 3,  # mode = β/(α+1) = 0.002019/3
     doubling_time=20.5 / 24,
     doubling_time_norm_sd=1.33 / 24,
     lod50=2.73,
@@ -298,7 +298,7 @@ print(f"95% CrI: [{rd_cri[0]:.2f}, {rd_cri[1]:.2f}]")
 
 # Alternative: sample k from a lognormal mixture (Recommendation B: 90% human + 10% animal)
 rd_pe, rd_cri, rd_range, rdests, _ = rr.risk_days_bs(
-    k=0.000649,                      # approximate mixture mode
+    k=0.000649,  # approximate mixture mode
     doubling_time=20.5 / 24,
     doubling_time_norm_sd=1.33 / 24,
     lod50=2.73,
@@ -321,11 +321,13 @@ rd_pe, rd_cri, rd_range, rdests, _ = rr.risk_days_bs(
 rr_pe, rr_cri, rr_sd = rr.residual_risk_rd(
     iwp_pe=rd_pe,
     iwp_bs=rdests,
-    incidence=2.5 / 1e5,              # per person-year
+    incidence=2.5 / 1e5,  # per person-year
     incidence_norm_sd=0.5 / 1e5,
-    per=1e6,                          # report per 1 million transfusions
+    per=1e6,  # report per 1 million transfusions
 )
-print(f"Residual risk: {rr_pe:.3f} per million (95% CrI {rr_cri[0]:.3f}–{rr_cri[1]:.3f})")
+print(
+    f"Residual risk: {rr_pe:.3f} per million (95% CrI {rr_cri[0]:.3f}–{rr_cri[1]:.3f})"
+)
 
 # Record provenance alongside outputs
 print(f"residualrisk version: {rr.__version__}")
@@ -351,9 +353,24 @@ RSE = `lod50_sd / lod50` (the coefficient of variation of the 50% LoD; invariant
 
 ### R integration (reticulate)
 
+Install the `residualrisk` Python package in a virtual environment if not installed:
+
+```bash
+uv venv
+uv pip install --extra-index-url https://codeberg.org/api/packages/eduardgrebe/pypi/simple/ residualrisk
+```
+
+Launch R and install the `reticulate` package if not installed:
+
+```r
+install.packages("reticulate")
+```
+
+Import the Python package using `reticulate`:
+
 ```r
 library(reticulate)
-use_virtualenv("/path/to/residualriskapp/.venv", required = TRUE)
+use_virtualenv("./.venv", required = TRUE) # Assumes venv is in the working directory
 rr <- import("residualrisk")
 bs <- rr$risk_days_bs(...)           # returns a Python tuple; index with [[1]], [[2]], ...
 ```
