@@ -111,11 +111,17 @@ func ModeRounded(data []float64, precision int) float64 {
 		freq[v]++
 	}
 
-	// Find mode (most frequent value)
+	// Find mode (most frequent value). Go randomises map iteration order, so a bare
+	// `count > maxCount` picks an arbitrary winner among tied values. Break ties
+	// toward the SMALLEST value, matching scipy.stats.mode (and the Python
+	// mode_rounded) as the doc comment above claims.
+	//
+	// maxCount starts at 0 and every count is >= 1, so the first iteration always
+	// assigns mode — the float64 zero value never survives as a spurious tie target.
 	maxCount := 0
 	var mode float64
 	for v, count := range freq {
-		if count > maxCount {
+		if count > maxCount || (count == maxCount && v < mode) {
 			maxCount = count
 			mode = v
 		}

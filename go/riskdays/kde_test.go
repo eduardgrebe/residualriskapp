@@ -93,3 +93,40 @@ func TestKDEModeLog_AutoGrid(t *testing.T) {
 	}
 	t.Logf("auto grid mode: %v", m)
 }
+
+// The cap path must sample WITHOUT replacement, matching the Python path
+// (np.random.choice(..., replace=False)). The previous implementation drew
+// independent indices via rng.Intn, so it duplicated points and biased the density;
+// with 200 draws from 1000 distinct values, collisions are near-certain.
+func TestSampleWithoutReplacement_NoDuplicates(t *testing.T) {
+	data := make([]float64, 1000)
+	for i := range data {
+		data[i] = float64(i) // all distinct
+	}
+	got := sampleWithoutReplacement(data, 200, 42)
+	if len(got) != 200 {
+		t.Fatalf("len = %d, want 200", len(got))
+	}
+	seen := make(map[float64]bool, len(got))
+	for _, v := range got {
+		if seen[v] {
+			t.Fatalf("duplicate value %v — sampled WITH replacement", v)
+		}
+		seen[v] = true
+	}
+}
+
+// A fixed seed must give a reproducible sample.
+func TestSampleWithoutReplacement_Deterministic(t *testing.T) {
+	data := make([]float64, 500)
+	for i := range data {
+		data[i] = float64(i)
+	}
+	a := sampleWithoutReplacement(data, 100, 42)
+	b := sampleWithoutReplacement(data, 100, 42)
+	for i := range a {
+		if a[i] != b[i] {
+			t.Fatalf("index %d: %v != %v — not reproducible for a fixed seed", i, a[i], b[i])
+		}
+	}
+}

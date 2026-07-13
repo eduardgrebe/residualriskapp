@@ -50,12 +50,7 @@ func KDEModeLog(data []float64, nGrid int, cap int, threads int) float64 {
 	// ---- cap large inputs ----
 	work := data
 	if cap > 0 && len(data) > cap {
-		work = make([]float64, cap)
-		rng := rand.New(rand.NewSource(42))
-		for i := 0; i < cap; i++ {
-			j := rng.Intn(len(data))
-			work[i] = data[j]
-		}
+		work = sampleWithoutReplacement(data, cap, 42)
 	}
 
 	// ---- auto grid size when nGrid <= 0 ----
@@ -169,4 +164,17 @@ func KDEModeLog(data []float64, nGrid int, cap int, threads int) float64 {
 	}
 
 	return math.Exp(minVal + step*float64(bestIdx))
+}
+
+// sampleWithoutReplacement draws n values from data without replacement, seeded for
+// reproducibility. This matches the Python path (np.random.choice(..., replace=False));
+// sampling WITH replacement would duplicate points and bias the density estimate.
+// Caller guarantees 0 < n <= len(data).
+func sampleWithoutReplacement(data []float64, n int, seed int64) []float64 {
+	rng := rand.New(rand.NewSource(seed))
+	out := make([]float64, n)
+	for i, j := range rng.Perm(len(data))[:n] {
+		out[i] = data[j]
+	}
+	return out
 }
