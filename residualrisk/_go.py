@@ -269,6 +269,9 @@ def risk_days_bs_go(
     mode_precision=2,
     progress=None,
     return_sim_df=False,
+    # Keep `limits` LAST: both call sites in core.py pass everything up to
+    # return_sim_df positionally, so inserting it earlier would silently shift them.
+    limits=(-100, 500),
 ):
     """
     Go implementation of risk_days_bs() via CLI subprocess.
@@ -321,6 +324,7 @@ def risk_days_bs_go(
         "threads": threads,
         "point_estimate": point_estimate,
         "mode_precision": mode_precision,
+        "limits": [limits[0], limits[1]],
     }
 
     # Add k distribution parameters
@@ -551,6 +555,9 @@ def risk_days_prep_bs_go(
     mode_precision=2,
     progress=None,
     return_sim_df=False,
+    # Keep `limits` LAST: both call sites in core.py pass everything up to
+    # return_sim_df positionally, so inserting it earlier would silently shift them.
+    limits=(-100, 500),
 ):
     """
     Go implementation of risk_days_prep_bs() via CLI subprocess.
@@ -597,6 +604,7 @@ def risk_days_prep_bs_go(
         "threads": threads,
         "point_estimate": point_estimate,
         "mode_precision": mode_precision,
+        "limits": [limits[0], limits[1]],
         # PrEP-specific
         "prep_mode": True,
         "set_point": set_point,

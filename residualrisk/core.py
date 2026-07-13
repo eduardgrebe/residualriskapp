@@ -569,6 +569,9 @@ def _risk_days_bs_python(
     progress=None,
     return_sim_df=False,
     integration_method="gauss-legendre",
+    # Keep `limits` LAST: risk_days_bs calls this positionally through
+    # integration_method, so inserting it earlier would silently shift the args.
+    limits=(-100, 500),
 ):
     if n_bs <= 0:
         raise ValueError("n_bs must be greater than zero to perform simulations.")
@@ -606,7 +609,7 @@ def _risk_days_bs_python(
             lod95_lod50_ratio,
             retests,
             z,
-            (-100, 500),
+            limits,
         )
         for i in range(n_bs)
     ]
@@ -674,6 +677,13 @@ def _risk_days_bs_python(
             lod50,
             lod95_lod50_ratio,
             retests,
+            # z and limits were previously omitted here, so the "primary parameters"
+            # point estimate silently used _risk_days' own defaults (z=1.6449,
+            # limits=(-100, 500)) while the bootstrap used the caller's values. A
+            # custom z therefore produced a PE inconsistent with its own CrI — and
+            # with the Go backend, which does honour z.
+            z=z,
+            limits=limits,
             integration_method=integration_method,
         )
     elif point_estimate == "median":
@@ -742,6 +752,7 @@ def risk_days_bs(
     mode_precision=2,
     progress=None,
     return_sim_df=False,
+    limits=(-100, 500),
     use_go=False,
     integration_method="gauss-legendre",
     assay=None,
@@ -807,6 +818,15 @@ def risk_days_bs(
     if _missing:
         raise ValueError(f"Missing required argument(s): {', '.join(_missing)}")
 
+    # Integration domain. Validated pre-dispatch so both backends reject the same
+    # inputs (mirrors the Go Validate()); `not (lo < hi)` also catches NaN, since
+    # every NaN comparison is False.
+    _lo, _hi = limits
+    if not math.isfinite(_lo) or not math.isfinite(_hi) or not (_lo < _hi):
+        raise ValueError(
+            f"limits must be finite with limits[0] < limits[1], got ({_lo}, {_hi})"
+        )
+
     if use_go and integration_method != "gauss-legendre":
         raise ValueError(
             "Go acceleration only implements 'gauss-legendre' integration; "
@@ -858,6 +878,7 @@ def risk_days_bs(
                 mode_precision,
                 progress,
                 return_sim_df,
+                limits=limits,
             )
             return _append_backend(_result, "go")
         except ValueError:
@@ -903,6 +924,7 @@ def risk_days_bs(
         progress,
         return_sim_df,
         integration_method,
+        limits=limits,
     )
     return _append_backend(_result, "python")
 

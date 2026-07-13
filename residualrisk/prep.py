@@ -401,6 +401,7 @@ def risk_days_prep_bs(
     mode_precision=2,
     progress=None,
     return_sim_df=False,
+    limits=(-100, 500),
     use_go=False,
     integration_method="gauss-legendre",
 ):
@@ -445,6 +446,13 @@ def risk_days_prep_bs(
         raise ValueError(f"pool_size must be at least 1, got {pool_size}.")
     if retests < 0:
         raise ValueError(f"retests must be non-negative, got {retests}.")
+    # Integration domain. `not (lo < hi)` also catches NaN, since every NaN
+    # comparison is False.
+    _lo, _hi = limits
+    if not math.isfinite(_lo) or not math.isfinite(_hi) or not (_lo < _hi):
+        raise ValueError(
+            f"limits must be finite with limits[0] < limits[1], got ({_lo}, {_hi})"
+        )
     if set_point <= 0:
         raise ValueError(f"set_point must be positive, got {set_point}.")
     if eclipse < 0:
@@ -530,6 +538,7 @@ def risk_days_prep_bs(
                 mode_precision=mode_precision,
                 progress=progress,
                 return_sim_df=return_sim_df,
+                limits=limits,
             )
             return _append_backend(_result, "go")
         except ValueError:
@@ -592,7 +601,7 @@ def risk_days_prep_bs(
             copies_per_virion, C0, doubling_times[i], set_points[i], eclipses[i],
             a_s[i], b_s[i], offset, volumes_transfused[i], ks[i], pool_size, lod50s[i],
             lod95_lod50_ratio, retests, ser_min, ser_max, ser_alpha, ser_beta, z,
-            de_s[i], (-100, 500),
+            de_s[i], limits,
         )
         for i in range(n_bs)
     ]
@@ -653,7 +662,7 @@ def risk_days_prep_bs(
             copies_per_virion, C0, doubling_time, set_point, eclipse,
             a, b, offset, volume_transfused, k, pool_size, lod50,
             lod95_lod50_ratio, retests, ser_min, ser_max, ser_alpha, ser_beta, z,
-            drug_effect, (-100, 500),
+            drug_effect, limits,
             integration_method=integration_method,
         )
     elif point_estimate == "median":

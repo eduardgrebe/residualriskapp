@@ -438,6 +438,65 @@ func TestValidate_MissingKDistribution_ReturnsError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Integration domain (Limits)
+//
+// The domain was previously duplicated — a Python default plus four hardcoded
+// -100/500 literals in riskdays.go — with no way to drive it from the caller.
+// It is now a single source of truth: Python sends `limits`, Go honours it.
+// ---------------------------------------------------------------------------
+
+// An omitted domain ([0,0]) must be defaulted, so direct CLI callers that send no
+// "limits" key (e.g. scripts/smoke_bundled_binary.py) keep working. SetDefaults()
+// runs before Validate() in riskdays.go, so the default lands before the check.
+func TestSetDefaults_FillsLimitsWhenUnset(t *testing.T) {
+	input := RiskDaysInput{}
+	input.SetDefaults()
+	if input.Limits != ([2]float64{-100, 500}) {
+		t.Errorf("Limits default: got %v, want [-100 500]", input.Limits)
+	}
+}
+
+// An explicit domain must survive SetDefaults — the [0,0] sentinel must not clobber it.
+func TestSetDefaults_PreservesExplicitLimits(t *testing.T) {
+	input := RiskDaysInput{Limits: [2]float64{-50, 300}}
+	input.SetDefaults()
+	if input.Limits != ([2]float64{-50, 300}) {
+		t.Errorf("explicit Limits clobbered: got %v, want [-50 300]", input.Limits)
+	}
+}
+
+// Degenerate domains must be rejected, matching the Python-side check.
+func TestValidate_RejectsDegenerateLimits(t *testing.T) {
+	base := func(lim [2]float64) RiskDaysInput {
+		return RiskDaysInput{
+			NBS: 100, PoolSize: 16, Retests: 1,
+			LOD50: 2.73, LOD95LOD50Ratio: 3.5, DoublingTime: 0.8542,
+			KPosteriorSample: []float64{0.013},
+			Limits:           lim,
+		}
+	}
+	for _, lim := range [][2]float64{
+		{500, -100},         // inverted
+		{5, 5},              // zero width
+		{0, 0},              // the "unset" sentinel is itself degenerate
+		{math.NaN(), 500},   // NaN — every NaN comparison is false
+		{math.Inf(-1), 500}, // -Inf
+		{-100, math.Inf(1)}, // +Inf
+	} {
+		// Validate has a pointer receiver, so bind to a variable (a function's
+		// return value is not addressable).
+		in := base(lim)
+		if err := in.Validate(); err == nil {
+			t.Errorf("expected error for limits=%v, got nil", lim)
+		}
+	}
+	valid := base([2]float64{-100, 500})
+	if err := valid.Validate(); err != nil {
+		t.Errorf("valid limits rejected: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // RiskDaysBS (bootstrap simulation)
 // ---------------------------------------------------------------------------
 

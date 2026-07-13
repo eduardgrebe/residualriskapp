@@ -82,8 +82,8 @@ func riskDaysBSBaseline(input RiskDaysInput, ks, doublingTimes, lod50s, volumesT
 			LOD95LOD50Ratio:  input.LOD95LOD50Ratio,
 			Retests:          input.Retests,
 			Z:                input.Z,
-			LimitMin:         -100,
-			LimitMax:         500,
+			LimitMin:         input.Limits[0],
+			LimitMax:         input.Limits[1],
 		}
 	}
 
@@ -172,8 +172,8 @@ func riskDaysBSBaseline(input RiskDaysInput, ks, doublingTimes, lod50s, volumesT
 			LOD95LOD50Ratio:  input.LOD95LOD50Ratio,
 			Retests:          input.Retests,
 			Z:                input.Z,
-			LimitMin:         -100,
-			LimitMax:         500,
+			LimitMin:         input.Limits[0],
+			LimitMax:         input.Limits[1],
 		}
 		var err error
 		rdPE, err = RiskDays(primaryParams)
@@ -289,8 +289,8 @@ func riskDaysBSPrep(input RiskDaysInput, rng *RandomGenerator, ks, doublingTimes
 			SerAlpha:         input.SerAlpha,
 			SerBeta:          input.SerBeta,
 			Z:                input.Z,
-			LimitMin:         -100,
-			LimitMax:         500,
+			LimitMin:         input.Limits[0],
+			LimitMax:         input.Limits[1],
 		}
 	}
 
@@ -375,8 +375,8 @@ func riskDaysBSPrep(input RiskDaysInput, rng *RandomGenerator, ks, doublingTimes
 			SerAlpha:         input.SerAlpha,
 			SerBeta:          input.SerBeta,
 			Z:                input.Z,
-			LimitMin:         -100,
-			LimitMax:         500,
+			LimitMin:         input.Limits[0],
+			LimitMax:         input.Limits[1],
 		}
 		rdPE = RiskDaysPrep(primaryParams)
 	case "median":

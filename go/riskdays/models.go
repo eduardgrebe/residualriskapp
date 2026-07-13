@@ -17,7 +17,10 @@
 
 package riskdays
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 // RiskDaysInput represents all input parameters for the risk days bootstrap calculation
 type RiskDaysInput struct {
@@ -39,6 +42,13 @@ type RiskDaysInput struct {
 	CopiesPerVirion int     `json:"copies_per_virion"` // default: 2
 	Alpha           float64 `json:"alpha"`             // default: 0.05
 	Z               float64 `json:"z"`                 // default: 1.6449
+
+	// Limits is the integration domain (days) for the risk-days integral, mirroring
+	// the Python `limits` argument — the single source of truth for the domain.
+	// [0,0] = unset → SetDefaults fills [-100, 500]. Unlike the PrEP *scalars*, a
+	// zero-array sentinel is safe here: Validate() requires Limits[0] < Limits[1],
+	// so [0,0] is a degenerate domain that can never be a meaningful explicit value.
+	Limits [2]float64 `json:"limits"` // default: [-100, 500]
 
 	// K distribution parameters (one of these groups must be provided)
 	KPosteriorSample []float64 `json:"k_posterior_sample,omitempty"`
@@ -160,6 +170,12 @@ func (input *RiskDaysInput) SetDefaults() {
 	if input.ModePrecision == 0 {
 		input.ModePrecision = 2
 	}
+	// Integration domain: the zero array means "not supplied". Safe to default (a
+	// zero-width domain is degenerate and rejected by Validate), which keeps direct
+	// CLI callers that omit `limits` working.
+	if input.Limits == ([2]float64{}) {
+		input.Limits = [2]float64{-100, 500}
+	}
 
 	// PrEP: the scalar parameters (set_point, eclipse, a, b, offset, drug_effect,
 	// ser_*) are deliberately NOT defaulted from a 0 sentinel. A 0 sentinel cannot
@@ -200,6 +216,13 @@ func (input *RiskDaysInput) Validate() error {
 	}
 	if input.DoublingTime <= 0 {
 		return fmt.Errorf("doubling_time must be positive")
+	}
+	// Integration domain. `!(a < b)` also rejects NaN (every NaN comparison is false);
+	// the IsInf guard keeps the fixed Gauss-Legendre rule on a finite domain.
+	if math.IsInf(input.Limits[0], 0) || math.IsInf(input.Limits[1], 0) ||
+		!(input.Limits[0] < input.Limits[1]) {
+		return fmt.Errorf("limits must be finite with limits[0] < limits[1], got [%v, %v]",
+			input.Limits[0], input.Limits[1])
 	}
 	if input.KPosteriorSample != nil && len(input.KPosteriorSample) == 0 {
 		return fmt.Errorf("k_posterior_sample must not be empty")
