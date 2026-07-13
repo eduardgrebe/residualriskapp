@@ -55,40 +55,58 @@ class TestSerologyWeibullLabels:
         assert "Seroconversion Weibull scale (β)" not in labels
 
 
-class TestOffsetFloorPreventsSliderCrash:
-    """Offset=0 with 'Vary sinusoidal oscillation parameters' enabled built the
-    amplitude-range slider with min==max (== the offset), raising
-    StreamlitAPIException on render. Offset is now floored at 0.05 so that state
-    is unreachable (regression for estimator.py:855).
+class TestOffsetNotExposed:
+    """The Offset control is deliberately gone. After tcrit was retargeted to the
+    plateau's central level, the offset is *exactly* a set-point multiplier —
+    (set_point, o, a) is the same model as (set_point*o, 1, a/o) — so it added no
+    expressive power while being a first-order lever on the answer (sweeping it
+    0.5–2.0 moved the RDE ~5x). The set point is the parameter to vary: clinical
+    units, its own bootstrap range, and it drives tcrit correctly.
+
+    Removing it also makes two former UI bugs structurally unreachable: offset=0 built
+    the amplitude-range slider with min==max (StreamlitAPIException on render), and
+    a > offset raised ValueError from the library on Run.
     """
 
-    def test_offset_input_floored_above_zero(self):
+    def test_no_offset_input_rendered(self):
         at = _run_with_prep()
-        offsets = [n for n in at.number_input if n.label == "Offset"]
-        assert offsets, "Offset input not found"
-        assert all(o.min and o.min > 0.0 for o in offsets), [o.min for o in offsets]
+        assert not [n for n in at.number_input if n.label == "Offset"], (
+            "the Offset control is back — see this class's docstring before restoring it"
+        )
 
-    def test_vary_sin_at_minimum_offset_renders_without_crash(self):
+    def test_amplitude_capped_at_one(self):
+        """With the offset pinned at 1, a > offset is unreachable: the amplitude
+        widget must not let a exceed it."""
+        at = _run_with_prep()
+        amps = [n for n in at.number_input if n.label == "Amplitude (a)"]
+        assert amps, "Amplitude (a) input not found"
+        assert all(a.max == 1.0 for a in amps), [a.max for a in amps]
+
+    def test_vary_sin_renders_without_crash(self):
         at = _run_with_prep()
         for cb in at.checkbox:
             if "Vary sinusoidal" in (cb.label or ""):
                 cb.set_value(True)
-        for n in at.number_input:
-            if n.label == "Offset":
-                n.set_value(n.min)  # smallest allowed offset
         at.run()
         assert not at.exception, at.exception
         # the amplitude-range slider was built (min < max) rather than crashing
-        assert any("Amplitude (a) range" in (s.label or "") for s in at.slider)
+        sliders = [s for s in at.slider if "Amplitude (a) range" in (s.label or "")]
+        assert sliders
+        assert all(s.max == 1.0 for s in sliders), [s.max for s in sliders]
 
 
 class TestInvalidPrepInputsCaught:
-    """a > offset makes the library raise ValueError on Run. The mechanistic
-    branch now catches it and shows st.sidebar.error instead of a full-page
-    traceback — mirroring the lookback branch (regression for estimator.py:816).
+    """A library ValueError on Run must surface as st.sidebar.error, not a full-page
+    traceback — the mechanistic branch catches it, mirroring the lookback branch
+    (regression for estimator.py:816).
+
+    This used to be provoked with a > offset. The Offset control is gone (see
+    TestOffsetNotExposed) and the amplitude is capped at 1, so that input is no longer
+    reachable; an inverted seroconversion window (min > max) is, and exercises the same
+    catch — the point of the test is the error *path*, not the specific parameter.
     """
 
-    def test_amplitude_over_offset_shows_error_not_traceback(self):
+    def test_invalid_prep_params_show_error_not_traceback(self):
         if find_go_binary() is None:
             pytest.skip("needs the Go binary so the baseline runs without ProcessPoolExecutor")
         at = _run_with_prep()
@@ -96,10 +114,11 @@ class TestInvalidPrepInputsCaught:
             if "number of simulations" in (s.label or ""):
                 s.set_value(1000)  # smallest count → fast baseline before the PrEP error
         for n in at.number_input:
-            if n.label == "Offset":
-                n.set_value(0.5)
-            elif n.label == "Amplitude (a)":
-                n.set_value(0.9)  # a (0.9) > offset (0.5) → invalid
+            # ser_max <= ser_min → the library raises on Run.
+            if n.label == "Time to seroconversion min (days)":
+                n.set_value(200)
+            elif n.label == "Time to seroconversion max (days)":
+                n.set_value(100)
         at.run()
         for b in at.button:
             if (b.label or "") in ("Run simulations", "Calculate RDEs"):

@@ -72,17 +72,32 @@ def _sin_varied(t, a, b, offset):
     return offset + a * np.sin(b * t)
 
 
-def _find_tcrit(eclipse, C0, doubling_time, set_point, copies_per_virion=2):
-    """Time at which exponential growth first reaches the set-point.
+def _find_tcrit(eclipse, C0, doubling_time, set_point, copies_per_virion=2, offset=1.0):
+    """Time at which exponential growth reaches the plateau's central level.
 
     ``set_point`` is a **clinical viral load in RNA copies/mL** (as reported in
     the literature), whereas the model's concentration ``C`` is in **virions/mL**
     (RNA copies = ``copies_per_virion`` * virions, ``= 2`` for HIV). The plateau
-    concentration is therefore ``set_point / copies_per_virion`` virions/mL, and
-    growth reaches it at the closed-form solution of
-    ``C0 * 2**((t - eclipse) / doubling_time) = set_point / copies_per_virion``:
+    *centres* on ``offset * set_point / copies_per_virion`` virions/mL, and — since
+    the sinusoid starts at zero phase (``sin(0) = 0``, see :func:`_sin_varied`) — it
+    also *begins* there. Growth must therefore run to that level, not to the bare
+    set-point:
 
-        tcrit = eclipse + doubling_time * log2((set_point / copies_per_virion) / C0)
+        tcrit = eclipse + doubling_time * log2((offset * set_point / copies_per_virion) / C0)
+
+    **Why the offset belongs here.** Targeting the bare set-point left the growth
+    branch ending at ``set_point/copies_per_virion`` while the plateau branch began
+    at ``offset`` times that — an instantaneous jump in viral load by exactly a
+    factor of ``offset`` at ``tcrit``, for any ``offset != 1``. Physically
+    impossible, and reachable from the API (the UI no longer exposes ``offset``).
+    Retargeting restores continuity for every positive offset, and is a bit-for-bit
+    no-op at the default ``offset = 1``, so no prior result moves. ``offset`` must be
+    > 0 (validated in ``risk_days_prep_bs`` and Go ``Validate()``): at 0 the target
+    level is 0 and ``tcrit`` is ``-inf``.
+
+    ``offset`` is passed **last**, after ``copies_per_virion``, because the callers
+    below supply ``copies_per_virion`` positionally — inserting it earlier would
+    silently bind the two.
 
     Mirrors the Go backend's ``FindTcrit`` (``go/riskdays/prep.go``) exactly, so
     the two implementations agree to machine precision. Replaces the former
@@ -90,19 +105,27 @@ def _find_tcrit(eclipse, C0, doubling_time, set_point, copies_per_virion=2):
     grid), O(1), and immune to the empty-``argmin`` crash that occurred when
     ``tcrit`` exceeded the search grid.
     """
-    return eclipse + doubling_time * math.log2((set_point / copies_per_virion) / C0)
+    return eclipse + doubling_time * math.log2(
+        (offset * set_point / copies_per_virion) / C0
+    )
 
 
 def _vl_postbt(t, eclipse, C0, doubling_time, set_point, a, b, offset, tcrit, copies_per_virion=2):
     # Returns the modelled concentration C in **virions/mL**. ``set_point`` is a
-    # clinical viral load in **RNA copies/mL**, so the plateau is
-    # ``set_point / copies_per_virion`` virions/mL (RNA copies = 2 * virions for
-    # HIV); the growth phase and C0 are already in virions/mL.
+    # clinical viral load in **RNA copies/mL**, so the plateau centres on
+    # ``offset * set_point / copies_per_virion`` virions/mL (RNA copies = 2 * virions
+    # for HIV); the growth phase and C0 are already in virions/mL.
+    #
+    # The trajectory is CONTINUOUS at tcrit: _find_tcrit targets the plateau's
+    # central level, so the growth branch ends at offset*set_point/copies_per_virion,
+    # which is exactly what the plateau branch returns at t = tcrit (sin(0) = 0).
+    # Keep the two in step — targeting a different level in _find_tcrit reintroduces
+    # a jump discontinuity in viral load here.
     if t < eclipse:
         vl = 0.0
     elif t <= tcrit:
         # Exponential growth phase. The exponent is bounded here (at t=tcrit it
-        # equals log2((set_point/copies_per_virion)/C0)), so no overflow.
+        # equals log2((offset*set_point/copies_per_virion)/C0)), so no overflow.
         vl = C0 * 2 ** ((t - eclipse) / doubling_time)
     else:
         # Oscillating plateau (virions/mL). The exponential is deliberately NOT
@@ -156,7 +179,7 @@ def _prob_infectious_prep(
     copies_per_virion=2.0,
     drug_effect=1.0,
 ):
-    tcrit = _find_tcrit(eclipse, C0, doubling_time, set_point, copies_per_virion)
+    tcrit = _find_tcrit(eclipse, C0, doubling_time, set_point, copies_per_virion, offset=offset)
     C = _vl_postbt(
         t=t,
         eclipse=eclipse,
@@ -205,7 +228,7 @@ def _prob_nondetection_prep(
     z=1.6449,
     seroconversion_delay_median=45,
 ):
-    tcrit = _find_tcrit(eclipse, C0, doubling_time, set_point, copies_per_virion)
+    tcrit = _find_tcrit(eclipse, C0, doubling_time, set_point, copies_per_virion, offset=offset)
     Cv = _vl_postbt(
         t=t,
         eclipse=eclipse,
@@ -483,6 +506,11 @@ def risk_days_prep_bs(
         raise ValueError(f"ser_alpha must be positive, got {ser_alpha}.")
     if ser_beta <= 0:
         raise ValueError(f"ser_beta must be positive, got {ser_beta}.")
+    # The offset scales the plateau's central level, which _find_tcrit now targets
+    # (offset * set_point / copies_per_virion). At offset <= 0 that target is
+    # non-positive and tcrit is -inf / NaN.
+    if offset <= 0:
+        raise ValueError(f"offset must be positive, got {offset}.")
     # The sinusoidal amplitude must not exceed the offset, or the plateau viral
     # load would go negative (it would otherwise be clamped to 0 in _vl_postbt).
     if a > offset:

@@ -101,7 +101,7 @@ $X_{95}$, $z$, $S_\text{pool}$, $m_\text{retest}$, and $\Phi$. The additional sy
 |---|---|---|
 | $\tau_\text{ecl}$ | `eclipse` | Eclipse duration: delay before viral outgrowth begins (days) |
 | $C_\text{sp}$ | `set_point` | Plateau ("set-point") viral concentration on PrEP |
-| $t_c$ | `tcrit` | Time at which growth reaches the set-point (plateau onset) |
+| $t_c$ | `tcrit` | Time at which growth reaches the plateau's central level $o\,C_\text{sp}$ (plateau onset) |
 | $a$ | `a` | Plateau oscillation amplitude (fraction of $C_\text{sp}$) |
 | $b$ | `b` | Plateau oscillation angular frequency (rad/day) |
 | $o$ | `offset` | Plateau oscillation centre (multiple of $C_\text{sp}$; $o=1$ centres on it) |
@@ -151,12 +151,29 @@ $$
 clamped to a physical floor of zero, $C(t)\leftarrow\max(0, C(t))$. The growth phase is the
 base model's exponential ramp (Fiebig et al., 2003), delayed by the eclipse period
 $\tau_\text{ecl}$. Growth gives way to the plateau at the **critical time** $t_c$, defined
-as the moment growth first reaches the plateau concentration $C_\text{sp}/\chi$. Solving
-$C_0\,2^{(t_c - \tau_\text{ecl})/\lambda} = C_\text{sp}/\chi$ in closed form (`_find_tcrit`):
+as the moment growth reaches the plateau's *central* level $o\,C_\text{sp}/\chi$. Because the
+sinusoid starts at zero phase ($\sin 0 = 0$), that central level is also where the plateau
+*begins* — so this is the level growth must reach for the trajectory to be continuous.
+Solving $C_0\,2^{(t_c - \tau_\text{ecl})/\lambda} = o\,C_\text{sp}/\chi$ in closed form
+(`_find_tcrit`):
 
 $$
-t_c \;=\; \tau_\text{ecl} \;+\; \lambda\,\log_2\!\big((C_\text{sp}/\chi)/C_0\big).
+t_c \;=\; \tau_\text{ecl} \;+\; \lambda\,\log_2\!\big((o\,C_\text{sp}/\chi)/C_0\big).
 $$
+
+The offset $o$ belongs inside this expression. Targeting the bare set-point $C_\text{sp}/\chi$
+instead — as earlier versions did — left the growth branch ending at $C_\text{sp}/\chi$ while
+the plateau branch began at $o\,C_\text{sp}/\chi$, so $C(t)$ jumped discontinuously by a factor
+of exactly $o$ at $t_c$ for any $o\neq1$. With the offset included, $C(t)$ is continuous at
+$t_c$ for every $o>0$; at the default $o=1$ the expression reduces to the earlier one exactly,
+so no previously published estimate changes. ($o\le0$ is rejected: the target level would be
+non-positive and $t_c$ undefined.)
+
+Note that $o$ is, consequently, *exactly* a set-point multiplier: the model
+$(C_\text{sp},\,o,\,a)$ is identical to $(o\,C_\text{sp},\,1,\,a/o)$ — same $t_c$, same plateau,
+same RDE. The application therefore fixes $o=1$ and does not expose it; vary $C_\text{sp}$
+instead, which is expressed in clinical units and carries its own bootstrap range. The
+parameter remains available to callers of the Python API for reproducing prior analyses.
 
 This closed form replaced an earlier grid search (and is reproduced exactly in Go as
 `FindTcrit`, so the two backends agree to machine precision). The growth exponential is
@@ -442,7 +459,7 @@ drawn from the following distributions (`risk_days_prep_bs`):
 | $V_\text{trans}$ (volume) | $\mathcal{U}(V_\text{min}, V_\text{max})$ | product-specific |
 | $a,\ b$ (oscillation) | fixed (optional $\mathcal{U}$) | fixed in the published analysis |
 | $\delta$ (drug effect) | fixed (optional $\mathcal{U}$) | see §5.2 |
-| $o$ (offset) | fixed | never varied |
+| $o$ (offset) | fixed at 1 | never varied; not exposed in the app (§3.2) |
 | $t_0,\ t_1,\ \alpha_s,\ \beta_s$ (serology) | fixed | modality-specific (§4.2) |
 
 Several points are worth noting:
@@ -454,7 +471,8 @@ Several points are worth noting:
 - **The oscillation parameters $a,b$ and the drug effect $\delta$ are fixed by default.** The
   implementation optionally samples each from a uniform range
   (`a_dist_uniform`, `b_dist_uniform`, `drug_effect_dist_uniform`); the offset $o$ is never
-  varied, and $a$ (and any sampled upper bound) must not exceed $o$ (§3.2).
+  varied and is fixed at 1 in the application, so $a$ (and any sampled upper bound) must not
+  exceed 1 — a larger amplitude would drive the plateau viral load negative (§3.2).
 - **The positivity correction applies here too.** The doubling time and LoD are drawn from
   *positive-truncated* normals via the shared `_sample_positive_normal` (truncating at zero,
   not at the mean). The original PrEP analysis used the un-corrected truncation, which

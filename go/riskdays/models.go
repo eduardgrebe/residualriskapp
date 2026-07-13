@@ -289,6 +289,12 @@ func (input *RiskDaysInput) Validate() error {
 		if input.SerBeta <= 0 {
 			return fmt.Errorf("ser_beta must be positive in PrEP mode")
 		}
+		// The offset scales the plateau's central level, which FindTcrit targets
+		// (offset * set_point / copies_per_virion). At offset <= 0 that target is
+		// non-positive and tcrit is -Inf / NaN.
+		if input.Offset <= 0 {
+			return fmt.Errorf("offset must be positive in PrEP mode, got %v", input.Offset)
+		}
 		// The sinusoidal amplitude must not exceed the offset, or the plateau
 		// viral load would go negative (clamped to 0 in VLPostBT).
 		if input.A > input.Offset {

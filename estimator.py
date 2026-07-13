@@ -869,14 +869,25 @@ if include_prep_oral or include_prep_inj:
         )
 
         col2.write("**Sinusoidal set-point oscillation parameters**")
+        # The plateau oscillates as set_point * (offset + a*sin(b*t)), with the offset
+        # fixed at the library default of 1.0 — so the plateau centres on the set
+        # point and the amplitude a is a plain fraction of it. The offset is
+        # deliberately NOT exposed: it is exactly redundant with the set point
+        # (offset=o with amplitude a reproduces set_point*o with amplitude a/o) while
+        # being a first-order lever on the answer, so it was a trap — the set point is
+        # the parameter to vary, in interpretable clinical units and with its own
+        # bootstrap range. Library callers can still pass offset= to risk_days_prep_bs.
         prep_a = col2.number_input(
             "Amplitude (a)",
             min_value=0.0,
-            max_value=2.0,
+            max_value=1.0,
             value=0.7,
             step=0.05,
             format="%.2f",
-            help="Amplitude of sinusoidal oscillation around the viral set point.",
+            help="Amplitude of the sinusoidal oscillation around the viral set point, "
+            "as a fraction of it: the plateau swings between (1 - a) and (1 + a) times "
+            "the set point. Capped at 1 — a larger amplitude would drive the plateau "
+            "viral load negative.",
         )
         prep_b = col2.number_input(
             "Frequency (b)",
@@ -887,37 +898,24 @@ if include_prep_oral or include_prep_inj:
             format="%.2f",
             help="Frequency of sinusoidal oscillation.",
         )
-        prep_offset = col2.number_input(
-            "Offset",
-            min_value=0.05,
-            max_value=2.0,
-            value=1.0,
-            step=0.05,
-            format="%.2f",
-            help="Vertical offset of the sinusoidal oscillation (multiplied by the "
-            "set point). Must be > 0 — at 0 the plateau oscillates around zero and "
-            "the amplitude-range slider would be degenerate.",
-        )
 
         prep_vary_sin = col2.checkbox(
             "Vary sinusoidal oscillation parameters (a, b)",
             value=False,
             help="When enabled, the amplitude (a) and frequency (b) are sampled "
             "uniformly across bootstrap iterations instead of held fixed at the "
-            "values above. The offset is always held fixed.",
+            "values above.",
         )
         if prep_vary_sin:
-            _a_max = float(prep_offset)
             prep_a_dist_uniform = col2.slider(
                 "Amplitude (a) range",
                 min_value=0.0,
-                max_value=_a_max,
-                value=(min(0.5, _a_max), min(0.9, _a_max)),
+                max_value=1.0,
+                value=(0.5, 0.9),
                 step=0.05,
                 format="%.2f",
-                help="Uniform sampling range for the amplitude a. The upper bound "
-                "is capped at the offset — a > offset would drive the plateau "
-                "viral load negative.",
+                help="Uniform sampling range for the amplitude a. Capped at 1 — a "
+                "larger amplitude would drive the plateau viral load negative.",
             )
             prep_b_dist_uniform = col2.slider(
                 "Frequency (b) range",
@@ -1372,7 +1370,6 @@ if st.sidebar.button(button_label):
                     eclipse_dist_uniform=eclipse_range,
                     a=prep_a,
                     b=prep_b,
-                    offset=prep_offset,
                     a_dist_uniform=prep_a_dist_uniform,
                     b_dist_uniform=prep_b_dist_uniform,
                     drug_effect=drug_effect_oral,
@@ -1433,7 +1430,6 @@ if st.sidebar.button(button_label):
                     eclipse_dist_uniform=eclipse_range,
                     a=prep_a,
                     b=prep_b,
-                    offset=prep_offset,
                     a_dist_uniform=prep_a_dist_uniform,
                     b_dist_uniform=prep_b_dist_uniform,
                     drug_effect=drug_effect_inj,

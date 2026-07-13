@@ -85,7 +85,7 @@ func TestSinVaried_Peak(t *testing.T) {
 func TestFindTcrit(t *testing.T) {
 	// Analytic: eclipse + dt * log2((sp/copiesPerVirion) / C0)
 	// = 7 + 0.8542 * log2((336/2) / 0.00025) = 7 + 0.8542 * 19.3355... ≈ 23.54
-	tcrit := FindTcrit(7.0, 0.00025, 0.8542, 336, 2.0)
+	tcrit := FindTcrit(7.0, 0.00025, 0.8542, 336, 2.0, 1.0)
 	expected := 23.5357 // From Python verification (336 copies/mL -> 168 virions/mL)
 	if math.Abs(tcrit-expected) > 0.001 {
 		t.Errorf("FindTcrit(7, 0.00025, 0.8542, 336) = %v, want ~%v", tcrit, expected)
@@ -96,7 +96,7 @@ func TestFindTcrit(t *testing.T) {
 
 func TestVLPostBT_Eclipse(t *testing.T) {
 	// During eclipse (t < 7), VL should be 0
-	tcrit := FindTcrit(7.0, 0.00025, 0.8542, 336, 2.0)
+	tcrit := FindTcrit(7.0, 0.00025, 0.8542, 336, 2.0, 1.0)
 	for _, tVal := range []float64{0, 3, 5, 6.999} {
 		vl := VLPostBT(tVal, 7.0, 0.00025, 0.8542, 336, 0.7, 0.6, 1.0, tcrit, 2.0)
 		if vl != 0 {
@@ -107,7 +107,7 @@ func TestVLPostBT_Eclipse(t *testing.T) {
 
 func TestVLPostBT_ExponentialPhase(t *testing.T) {
 	// Between eclipse and tcrit, VL = C0 * 2^((t-eclipse)/dt)
-	tcrit := FindTcrit(7.0, 0.00025, 0.8542, 336, 2.0)
+	tcrit := FindTcrit(7.0, 0.00025, 0.8542, 336, 2.0, 1.0)
 	tVal := 10.0
 	got := VLPostBT(tVal, 7.0, 0.00025, 0.8542, 336, 0.7, 0.6, 1.0, tcrit, 2.0)
 	expected := 0.00025 * math.Pow(2, (10-7)/0.8542)
@@ -122,7 +122,7 @@ func TestVLPostBT_ExponentialPhase(t *testing.T) {
 
 func TestVLPostBT_SetPointPhase(t *testing.T) {
 	// After tcrit, VL = (set_point/copiesPerVirion) * SinVaried(t-tcrit, a, b, offset)
-	tcrit := FindTcrit(7.0, 0.00025, 0.8542, 336, 2.0)
+	tcrit := FindTcrit(7.0, 0.00025, 0.8542, 336, 2.0, 1.0)
 	tVal := 50.0
 	got := VLPostBT(tVal, 7.0, 0.00025, 0.8542, 336, 0.7, 0.6, 1.0, tcrit, 2.0)
 	expected := (336.0 / 2.0) * SinVaried(50-tcrit, 0.7, 0.6, 1.0)
@@ -538,5 +538,75 @@ func TestRiskDaysBSPrep_PrimaryParamsPE(t *testing.T) {
 	// but the primary params PE should match the single-call exactly
 	if math.Abs(out.PointEstimate-pe)/pe > 0.01 {
 		t.Errorf("PE (primary params) = %v, single-call = %v", out.PointEstimate, pe)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// tcrit targets the plateau's CENTRAL level (offset * setPoint), not the bare
+// set-point.
+//
+// The plateau begins at offset*setPoint/copiesPerVirion (the sinusoid starts at zero
+// phase), so solving growth to the bare set-point left an instantaneous jump in
+// viral load by exactly a factor of offset at tcrit, for any offset != 1. Retargeting
+// restores continuity everywhere and is a no-op at the default offset = 1.
+// Mirrors tests/test_prep_tcrit_offset.py.
+// ---------------------------------------------------------------------------
+
+func TestFindTcrit_ContinuousAtCrossover(t *testing.T) {
+	const eclipse, C0, dt, setPoint, cpv, b = 7.0, 0.00025, 0.8542, 336.0, 2.0, 0.6
+	const eps = 1e-9
+	for _, offset := range []float64{0.5, 0.8, 1.0, 1.2, 1.5, 2.0} {
+		a := math.Min(0.7, offset) // a <= offset, or the plateau would go negative
+		tcrit := FindTcrit(eclipse, C0, dt, setPoint, cpv, offset)
+		left := VLPostBT(tcrit-eps, eclipse, C0, dt, setPoint, a, b, offset, tcrit, cpv)
+		right := VLPostBT(tcrit+eps, eclipse, C0, dt, setPoint, a, b, offset, tcrit, cpv)
+		if math.Abs(right-left)/left > 1e-6 {
+			t.Errorf("offset=%v: viral load jumps %.2fx at tcrit (%.4f -> %.4f)",
+				offset, right/left, left, right)
+		}
+		// The analytic statement of the same thing.
+		if want := offset * setPoint / cpv; math.Abs(left-want)/want > 1e-9 {
+			t.Errorf("offset=%v: growth ends at %.4f, want the plateau centre %.4f",
+				offset, left, want)
+		}
+	}
+}
+
+func TestFindTcrit_OffsetOneIsUnchanged(t *testing.T) {
+	// Every shipped and published result used offset = 1; the retarget must not
+	// move it by a single bit.
+	const eclipse, C0, dt, setPoint, cpv = 7.0, 0.00025, 0.8542, 336.0, 2.0
+	old := eclipse + dt*math.Log2((setPoint/cpv)/C0)
+	if got := FindTcrit(eclipse, C0, dt, setPoint, cpv, 1.0); got != old {
+		t.Errorf("FindTcrit(offset=1) = %v, want the pre-retarget value %v", got, old)
+	}
+}
+
+func TestFindTcrit_OffsetIsASetPointMultiplier(t *testing.T) {
+	// After the retarget, (setPoint, offset) and (setPoint*offset, 1) are the same
+	// model — which is why the UI no longer exposes the offset.
+	const eclipse, C0, dt, setPoint, cpv = 7.0, 0.00025, 0.8542, 336.0, 2.0
+	for _, offset := range []float64{0.5, 0.8, 1.2, 1.5, 2.0} {
+		a := FindTcrit(eclipse, C0, dt, setPoint, cpv, offset)
+		b := FindTcrit(eclipse, C0, dt, setPoint*offset, cpv, 1.0)
+		if math.Abs(a-b) > 1e-12 {
+			t.Errorf("offset=%v: tcrit %v != reparameterised %v", offset, a, b)
+		}
+	}
+}
+
+func TestValidate_RejectsNonPositiveOffset(t *testing.T) {
+	// offset <= 0 makes the target level non-positive and tcrit -Inf. PrEP scalars
+	// are deliberately not defaulted from a 0 sentinel (see SetDefaults), so an
+	// omitted offset arrives as 0 and must be rejected here rather than silently
+	// producing a zero plateau.
+	for _, offset := range []float64{0.0, -0.5} {
+		in := prepInput(100, 1)
+		in.Offset = offset
+		in.A = 0.0 // keep the a <= offset check from firing first
+		in.SetDefaults()
+		if err := in.Validate(); err == nil {
+			t.Errorf("expected Validate() to reject offset=%v", offset)
+		}
 	}
 }
