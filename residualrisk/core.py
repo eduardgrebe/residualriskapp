@@ -349,6 +349,85 @@ def mode_kde(data, n_grid=5_000, cap=50_000):
     return _kde_mode_log(data, n_grid=n_grid, cap=cap)
 
 
+def _validate_k_inputs(
+    k_posterior_sample=None,
+    k_gamma_shape=None,
+    k_gamma_scale=None,
+    k_invgamma_alpha=None,
+    k_invgamma_beta=None,
+    k_invgamma_mode=None,
+    k_lnmix_w=None,
+    k_lnmix_mu1=None,
+    k_lnmix_sigma1=None,
+    k_lnmix_mu2=None,
+    k_lnmix_sigma2=None,
+):
+    """Require **exactly one** k-distribution, fully specified.
+
+    The four k input modes were previously a *silent priority cascade* (posterior >
+    gamma > invgamma > lnmix): passing two ran the higher-priority one with no
+    warning, so a stale ``k_posterior_sample`` left in a reused config dict would
+    quietly turn an "InvGamma sensitivity analysis" back into the posterior. A
+    partial spec was equally silent — ``k_gamma_shape`` without ``k_gamma_scale``
+    fell straight through to whichever *other* mode happened to be populated.
+
+    A mode counts as specified if **any** of its parameters is non-``None``, which is
+    what catches both cases. The app was never exposed (it passes explicit ``None``
+    for every unselected mode); this protects library callers assembling parameters
+    themselves. Mirrored in the Go backend's ``Validate()`` so both paths reject the
+    same inputs, and consistent with the public ``sample_invgamma()``, which already
+    raises when given both ``beta`` and ``mode``.
+    """
+    specified = []
+    if k_posterior_sample is not None:
+        specified.append("k_posterior_sample")
+    if k_gamma_shape is not None or k_gamma_scale is not None:
+        specified.append("k_gamma_shape/k_gamma_scale")
+    if any(p is not None for p in (k_invgamma_alpha, k_invgamma_beta, k_invgamma_mode)):
+        specified.append("k_invgamma_*")
+    if any(
+        p is not None
+        for p in (k_lnmix_w, k_lnmix_mu1, k_lnmix_sigma1, k_lnmix_mu2, k_lnmix_sigma2)
+    ):
+        specified.append("k_lnmix_*")
+
+    if not specified:
+        raise ValueError(
+            "A k-distribution must be specified: k_posterior_sample, "
+            "k_gamma_shape+k_gamma_scale, k_invgamma_alpha+(k_invgamma_beta or "
+            "k_invgamma_mode), or the k_lnmix_* parameters."
+        )
+    if len(specified) > 1:
+        raise ValueError(
+            f"Exactly one k-distribution may be specified, got {len(specified)}: "
+            f"{', '.join(specified)}. Pass None for the modes you are not using."
+        )
+
+    # Completeness within the single chosen mode.
+    if "k_gamma_shape/k_gamma_scale" in specified and (
+        k_gamma_shape is None or k_gamma_scale is None
+    ):
+        raise ValueError("k_gamma_shape and k_gamma_scale must be given together.")
+    if "k_invgamma_*" in specified:
+        if k_invgamma_alpha is None:
+            raise ValueError(
+                "k_invgamma_beta/k_invgamma_mode require k_invgamma_alpha."
+            )
+        if (k_invgamma_beta is None) == (k_invgamma_mode is None):
+            raise ValueError(
+                "Provide exactly one of k_invgamma_beta or k_invgamma_mode, not "
+                "both and not neither."
+            )
+    if "k_lnmix_*" in specified and any(
+        p is None
+        for p in (k_lnmix_w, k_lnmix_mu1, k_lnmix_sigma1, k_lnmix_mu2, k_lnmix_sigma2)
+    ):
+        raise ValueError(
+            "All lnmix parameters (k_lnmix_w, mu1, sigma1, mu2, sigma2) must be "
+            "provided together."
+        )
+
+
 def _sample_k(
     n_bs,
     seed,
@@ -366,15 +445,31 @@ def _sample_k(
 ):
     """Sample *n_bs* values of *k* from the specified distribution.
 
-    Dispatches in priority order:
+    **Exactly one** k-distribution must be given (enforced by
+    :func:`_validate_k_inputs`; these modes are mutually exclusive, not a priority
+    cascade):
+
     1. ``k_posterior_sample`` — resample with replacement from an array
-    2. ``k_gamma_shape`` / ``k_gamma_scale`` — legacy Gamma (deprecated)
+    2. ``k_gamma_shape`` + ``k_gamma_scale`` — legacy Gamma (deprecated)
     3. ``k_invgamma_alpha`` + (``k_invgamma_beta`` or ``k_invgamma_mode``) — Inverse Gamma
     4. ``k_lnmix_*`` — two-component lognormal mixture
 
     Assumes ``np.random.seed(seed)`` has already been called by the caller
     (legacy global-state RNG contract used throughout the bootstrap functions).
     """
+    _validate_k_inputs(
+        k_posterior_sample=k_posterior_sample,
+        k_gamma_shape=k_gamma_shape,
+        k_gamma_scale=k_gamma_scale,
+        k_invgamma_alpha=k_invgamma_alpha,
+        k_invgamma_beta=k_invgamma_beta,
+        k_invgamma_mode=k_invgamma_mode,
+        k_lnmix_w=k_lnmix_w,
+        k_lnmix_mu1=k_lnmix_mu1,
+        k_lnmix_sigma1=k_lnmix_sigma1,
+        k_lnmix_mu2=k_lnmix_mu2,
+        k_lnmix_sigma2=k_lnmix_sigma2,
+    )
     if k_posterior_sample is not None:
         return np.random.choice(k_posterior_sample, size=n_bs, replace=True)
     elif k_gamma_shape is not None and k_gamma_scale is not None:
@@ -826,6 +921,23 @@ def risk_days_bs(
         raise ValueError(
             f"limits must be finite with limits[0] < limits[1], got ({_lo}, {_hi})"
         )
+
+    # Exactly one k-distribution. Validated here, pre-dispatch, so the Go path fails
+    # identically and as early as the Python one (which would otherwise only find out
+    # inside _sample_k, in a worker process).
+    _validate_k_inputs(
+        k_posterior_sample=k_posterior_sample,
+        k_gamma_shape=k_gamma_shape,
+        k_gamma_scale=k_gamma_scale,
+        k_invgamma_alpha=k_invgamma_alpha,
+        k_invgamma_beta=k_invgamma_beta,
+        k_invgamma_mode=k_invgamma_mode,
+        k_lnmix_w=k_lnmix_w,
+        k_lnmix_mu1=k_lnmix_mu1,
+        k_lnmix_sigma1=k_lnmix_sigma1,
+        k_lnmix_mu2=k_lnmix_mu2,
+        k_lnmix_sigma2=k_lnmix_sigma2,
+    )
 
     if use_go and integration_method != "gauss-legendre":
         raise ValueError(

@@ -95,8 +95,18 @@ class TestSampleK:
 
     def test_invgamma_missing_beta_and_mode(self):
         np.random.seed(0)
-        with pytest.raises(ValueError, match="k_invgamma_alpha requires"):
+        with pytest.raises(ValueError, match="exactly one of k_invgamma_beta"):
             _sample_k(100, seed=0, k_invgamma_alpha=2.0)
+
+    def test_invgamma_beta_and_mode_together_raise(self):
+        """Both beta and mode is now an error, matching the public sample_invgamma()
+        contract — _sample_k used to silently prefer beta."""
+        np.random.seed(0)
+        with pytest.raises(ValueError, match="exactly one of k_invgamma_beta"):
+            _sample_k(
+                100, seed=0,
+                k_invgamma_alpha=2.0, k_invgamma_beta=0.002, k_invgamma_mode=0.000673,
+            )
 
     def test_lnmix_sampler(self):
         np.random.seed(0)
@@ -116,19 +126,37 @@ class TestSampleK:
 
     def test_no_distribution_raises_sampler(self):
         np.random.seed(0)
-        with pytest.raises(ValueError, match="At least one k-distribution"):
+        with pytest.raises(ValueError, match="A k-distribution must be specified"):
             _sample_k(100, seed=0)
 
-    def test_posterior_takes_priority(self):
-        """When posterior is provided alongside parametric args, posterior wins."""
+    def test_multiple_k_modes_raise(self):
+        """Two k-distributions is an error, not a silent priority cascade.
+
+        This test replaces `test_posterior_takes_priority`, which asserted the old
+        behaviour: posterior + invgamma silently ran the *posterior*. That is exactly
+        the failure mode being fixed — a stale k_posterior_sample in a reused config
+        dict turned an InvGamma sensitivity analysis back into the posterior with no
+        warning. Specifying both must now raise.
+        """
         np.random.seed(0)
         posterior = np.array([0.001, 0.001, 0.001])
-        ks = _sample_k(
-            50, seed=0,
-            k_posterior_sample=posterior,
-            k_invgamma_alpha=2.0, k_invgamma_beta=0.002,
-        )
-        assert all(k == 0.001 for k in ks)
+        with pytest.raises(ValueError, match="Exactly one k-distribution"):
+            _sample_k(
+                50, seed=0,
+                k_posterior_sample=posterior,
+                k_invgamma_alpha=2.0, k_invgamma_beta=0.002,
+            )
+
+    def test_partial_gamma_spec_raises(self):
+        """A half-specified mode used to fall through to whichever *other* mode was
+        populated: k_gamma_shape alone + k_invgamma_* silently ran the InvGamma."""
+        np.random.seed(0)
+        with pytest.raises(ValueError, match="Exactly one k-distribution"):
+            _sample_k(
+                50, seed=0,
+                k_gamma_shape=2.0,  # no k_gamma_scale
+                k_invgamma_alpha=2.0, k_invgamma_beta=0.002,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -200,8 +228,19 @@ class TestPrepBsKDistributions:
         assert sim_df is None
 
     def test_no_distribution_raises_bootstrap(self):
-        with pytest.raises(ValueError, match="At least one k-distribution"):
+        with pytest.raises(ValueError, match="A k-distribution must be specified"):
             risk_days_prep_bs(**COMMON_PREP_KWARGS)
+
+    def test_multiple_k_modes_raise_bootstrap(self):
+        """Rejected pre-dispatch, so it raises in-process (not inside a worker) and
+        raises identically whichever backend was requested."""
+        with pytest.raises(ValueError, match="Exactly one k-distribution"):
+            risk_days_prep_bs(
+                **COMMON_PREP_KWARGS,
+                k_posterior_sample=np.array([0.001, 0.002]),
+                k_invgamma_alpha=2.0,
+                k_invgamma_beta=0.002,
+            )
 
     @pytest.mark.multiprocessing
     def test_return_sim_df(self):

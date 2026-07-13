@@ -1201,3 +1201,92 @@ if output.VolumesTransfused != nil {
 t.Errorf("expected VolumesTransfused nil when ReturnParams=false")
 }
 }
+
+// ---------------------------------------------------------------------------
+// Mutual exclusivity of the k input modes (Validate)
+//
+// RiskDaysBS dispatches on the first non-nil k parameter in a fixed order
+// (posterior > gamma > invgamma > lnmix), so two populated modes silently ran the
+// higher-priority one — e.g. a stale k_posterior_sample alongside k_invgamma_*
+// quietly turned an InvGamma run back into the posterior. Validate() now requires
+// exactly one, mirroring Python core._validate_k_inputs(). This is the backstop for
+// a hand-written JSON payload, which never passes through the Python validator.
+// ---------------------------------------------------------------------------
+
+func TestValidate_RejectsMultipleKDistributions(t *testing.T) {
+	posterior := []float64{0.0005, 0.001, 0.0015}
+	w, mu1, sd1, mu2, sd2 := 0.90, -7.2403, 0.3241, -3.7423, 0.5258
+	shape, scale := 2.0, 0.001
+
+	cases := map[string]func(*RiskDaysInput){
+		"posterior+invgamma": func(in *RiskDaysInput) { in.KPosteriorSample = posterior },
+		"posterior+gamma": func(in *RiskDaysInput) {
+			in.KInvGammaAlpha, in.KInvGammaBeta = nil, nil
+			in.KPosteriorSample = posterior
+			in.KGammaShape, in.KGammaScale = &shape, &scale
+		},
+		"invgamma+lnmix": func(in *RiskDaysInput) {
+			in.KLnMixW, in.KLnMixMu1, in.KLnMixSigma1 = &w, &mu1, &sd1
+			in.KLnMixMu2, in.KLnMixSigma2 = &mu2, &sd2
+		},
+		"gamma+lnmix": func(in *RiskDaysInput) {
+			in.KInvGammaAlpha, in.KInvGammaBeta = nil, nil
+			in.KGammaShape, in.KGammaScale = &shape, &scale
+			in.KLnMixW, in.KLnMixMu1, in.KLnMixSigma1 = &w, &mu1, &sd1
+			in.KLnMixMu2, in.KLnMixSigma2 = &mu2, &sd2
+		},
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			in := invGammaBSInput() // starts with exactly the invgamma mode set
+			mutate(&in)
+			in.SetDefaults()
+			if err := in.Validate(); err == nil {
+				t.Fatal("expected Validate() to reject two k distributions")
+			}
+		})
+	}
+}
+
+func TestValidate_RejectsPartialGammaSpec(t *testing.T) {
+	// A half-specified mode used to fall straight through to the next branch of the
+	// cascade: shape without scale + invgamma silently ran the InvGamma.
+	shape := 2.0
+	in := invGammaBSInput()
+	in.KGammaShape = &shape // no KGammaScale
+	in.SetDefaults()
+	if err := in.Validate(); err == nil {
+		t.Fatal("expected Validate() to reject a partially-specified gamma alongside invgamma")
+	}
+}
+
+func TestValidate_RejectsIncompleteLnMix(t *testing.T) {
+	w, mu1 := 0.90, -7.2403
+	in := invGammaBSInput()
+	in.KInvGammaAlpha, in.KInvGammaBeta = nil, nil
+	in.KLnMixW, in.KLnMixMu1 = &w, &mu1 // missing sigma1, mu2, sigma2
+	in.SetDefaults()
+	if err := in.Validate(); err == nil {
+		t.Fatal("expected Validate() to reject an incomplete lnmix spec")
+	}
+}
+
+func TestValidate_AcceptsExactlyOneKDistribution(t *testing.T) {
+	// Guard against the new check rejecting valid single-mode inputs.
+	for name, in := range map[string]RiskDaysInput{
+		"invgamma": invGammaBSInput(),
+		"lnmix":    lnMixBSInput(),
+		"posterior": func() RiskDaysInput {
+			i := defaultBSInput()
+			i.KPosteriorSample = []float64{0.0005, 0.001, 0.0015}
+			return i
+		}(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			in.SetDefaults()
+			if err := in.Validate(); err != nil {
+				t.Fatalf("Validate() rejected a valid single-mode input: %v", err)
+			}
+		})
+	}
+}

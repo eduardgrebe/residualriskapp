@@ -36,6 +36,7 @@ from .core import (
     _prob_pos_init,
     _sample_k,
     _sample_positive_normal,
+    _validate_k_inputs,
     get_cpu_core_count,
 )
 
@@ -453,6 +454,21 @@ def risk_days_prep_bs(
         raise ValueError(
             f"limits must be finite with limits[0] < limits[1], got ({_lo}, {_hi})"
         )
+    # Exactly one k-distribution — pre-dispatch, so the Go path fails identically and
+    # as early as the Python one. See core._validate_k_inputs.
+    _validate_k_inputs(
+        k_posterior_sample=k_posterior_sample,
+        k_gamma_shape=k_gamma_shape,
+        k_gamma_scale=k_gamma_scale,
+        k_invgamma_alpha=k_invgamma_alpha,
+        k_invgamma_beta=k_invgamma_beta,
+        k_invgamma_mode=k_invgamma_mode,
+        k_lnmix_w=k_lnmix_w,
+        k_lnmix_mu1=k_lnmix_mu1,
+        k_lnmix_sigma1=k_lnmix_sigma1,
+        k_lnmix_mu2=k_lnmix_mu2,
+        k_lnmix_sigma2=k_lnmix_sigma2,
+    )
     if set_point <= 0:
         raise ValueError(f"set_point must be positive, got {set_point}.")
     if eclipse < 0:

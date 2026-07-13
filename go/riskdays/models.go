@@ -20,6 +20,7 @@ package riskdays
 import (
 	"fmt"
 	"math"
+	"strings"
 )
 
 // RiskDaysInput represents all input parameters for the risk days bootstrap calculation
@@ -227,12 +228,46 @@ func (input *RiskDaysInput) Validate() error {
 	if input.KPosteriorSample != nil && len(input.KPosteriorSample) == 0 {
 		return fmt.Errorf("k_posterior_sample must not be empty")
 	}
-	if input.KPosteriorSample == nil &&
-		(input.KGammaShape == nil || input.KGammaScale == nil) &&
-		(input.KInvGammaAlpha == nil || input.KInvGammaBeta == nil) &&
+	// Exactly one k distribution. riskdays.go dispatches on the first non-nil in a
+	// fixed order (posterior > gamma > invgamma > lnmix), so two populated modes
+	// would silently run the higher-priority one — e.g. a stale k_posterior_sample
+	// alongside k_invgamma_* quietly turns an InvGamma run back into the posterior.
+	// A mode counts as specified if ANY of its parameters is set, which also catches
+	// a partial spec (k_gamma_shape without k_gamma_scale) that would otherwise fall
+	// through to a different distribution. Mirrors Python core._validate_k_inputs().
+	var kModes []string
+	if input.KPosteriorSample != nil {
+		kModes = append(kModes, "k_posterior_sample")
+	}
+	if input.KGammaShape != nil || input.KGammaScale != nil {
+		kModes = append(kModes, "k_gamma_shape/k_gamma_scale")
+	}
+	if input.KInvGammaAlpha != nil || input.KInvGammaBeta != nil {
+		kModes = append(kModes, "k_invgamma_*")
+	}
+	if input.KLnMixW != nil || input.KLnMixMu1 != nil || input.KLnMixSigma1 != nil ||
+		input.KLnMixMu2 != nil || input.KLnMixSigma2 != nil {
+		kModes = append(kModes, "k_lnmix_*")
+	}
+	switch {
+	case len(kModes) == 0:
+		return fmt.Errorf("a k distribution must be provided: k_posterior_sample, both k_gamma parameters, both k_invgamma parameters, or all k_lnmix parameters")
+	case len(kModes) > 1:
+		return fmt.Errorf("exactly one k distribution may be specified, got %d: %s", len(kModes), strings.Join(kModes, ", "))
+	}
+	// Completeness within the single chosen mode.
+	if (input.KGammaShape == nil) != (input.KGammaScale == nil) {
+		return fmt.Errorf("k_gamma_shape and k_gamma_scale must be provided together")
+	}
+	if (input.KInvGammaAlpha == nil) != (input.KInvGammaBeta == nil) {
+		// Python converts k_invgamma_mode -> beta before serialising, so the Go
+		// side only ever sees alpha+beta.
+		return fmt.Errorf("k_invgamma_alpha and k_invgamma_beta must be provided together")
+	}
+	if len(kModes) == 1 && kModes[0] == "k_lnmix_*" &&
 		(input.KLnMixW == nil || input.KLnMixMu1 == nil || input.KLnMixSigma1 == nil ||
 			input.KLnMixMu2 == nil || input.KLnMixSigma2 == nil) {
-		return fmt.Errorf("a k distribution must be provided: k_posterior_sample, both k_gamma parameters, both k_invgamma parameters, or all k_lnmix parameters")
+		return fmt.Errorf("all k_lnmix parameters (w, mu1, sigma1, mu2, sigma2) must be provided together")
 	}
 
 	if input.PrepMode {
