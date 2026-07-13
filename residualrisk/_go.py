@@ -20,6 +20,7 @@ Python wrapper for calling the Go implementation of risk_days_bs()
 """
 
 import json
+import logging
 import queue
 import struct
 import subprocess
@@ -32,7 +33,14 @@ import polars as pl
 
 # Cache of bundled-binary validity checks (abs path -> bool), so the --version
 # handshake runs at most once per process.
+logger = logging.getLogger(__name__)
+
 _bundled_validity: dict = {}
+
+# path -> bool: does this binary actually execute? (see _binary_runs). Cached so the
+# smoke test costs one subprocess per path per process, not one per call — the app
+# calls find_go_binary() at load, at dispatch, and for the UI backend gate.
+_binary_ok: dict = {}
 
 
 def _current_go_platform():
@@ -92,6 +100,36 @@ def _binary_version_matches(path):
         return False
 
 
+def _binary_runs(path):
+    """True iff ``path --version`` actually executes (exit 0). Cached per path.
+
+    Existence is not enough. A binary can be present but unrunnable: built for the
+    wrong architecture (an amd64 build on arm64), truncated/corrupt, non-executable,
+    or missing a shared library. Such a file is still "found", so
+    ``find_go_binary()`` hands it back, ``estimator.py``'s ``used_go`` gate reports
+    Go acceleration as available, and only the *first dispatch* discovers otherwise —
+    silently degrading to the 10-50x slower Python engine.
+
+    Smoke-testing each candidate once means an unusable binary is skipped in favour
+    of the next one (or None), so the app degrades *honestly*: it says Go is
+    unavailable, warns, and uses Python.
+
+    Note this deliberately does NOT require a version match — unlike the bundled
+    binary (see ``_bundled_go_binary``), where a version mismatch signals a stale
+    wheel and must be rejected. A developer's ``go/bin/`` build may legitimately lag
+    the library version; refusing to run it would be hostile.
+    """
+    if path not in _binary_ok:
+        try:
+            result = subprocess.run(
+                [path, "--version"], capture_output=True, text=True, timeout=10
+            )
+            _binary_ok[path] = result.returncode == 0
+        except Exception:
+            _binary_ok[path] = False
+    return _binary_ok[path]
+
+
 def find_go_binary():
     """
     Find the riskdays_go Go binary.
@@ -108,25 +146,42 @@ def find_go_binary():
     """
     import os
 
+    # Every candidate is smoke-tested with `--version` (_binary_runs, cached): a
+    # binary that exists but cannot execute — wrong architecture, corrupt,
+    # non-executable, missing shared library — must NOT be returned, or the app
+    # reports Go acceleration as available and only discovers otherwise on the first
+    # dispatch, silently degrading to the far slower Python engine. Skipping it lets
+    # the next candidate win, and if none run we return None and degrade honestly.
     env_override = os.environ.get("RESIDUALRISK_GO_BINARY")
     if env_override and Path(env_override).exists():
-        return env_override
+        if _binary_runs(env_override):
+            return env_override
+        # An *explicit* override that cannot run is worth saying out loud: silently
+        # falling through to some other binary would be baffling for the operator who
+        # deliberately pointed us at this one.
+        logger.warning(
+            "RESIDUALRISK_GO_BINARY=%s exists but does not run (`--version` failed) — "
+            "ignoring it and continuing the search.",
+            env_override,
+        )
 
     # Package lives at <repo>/residualrisk/_go.py; binary at <repo>/go/bin/
     repo_root = Path(__file__).parent.parent
     relative_binary = repo_root / "go" / "bin" / "riskdays_go"
-    if relative_binary.exists():
+    if relative_binary.exists() and _binary_runs(str(relative_binary)):
         return str(relative_binary)
 
     # Bundled binary shipped inside the wheel (residualrisk/_bin/), selected by
     # platform and validated against the library version. See hatch_build.py.
+    # Stricter than the others: it must run AND match __version__, since a mismatch
+    # means a stale wheel rather than a dev build that merely lags.
     bundled = _bundled_go_binary()
     if bundled:
         return bundled
 
     # User-local install — the recommended manual-install location (no sudo).
     user_binary = Path.home() / ".local" / "bin" / "riskdays_go"
-    if user_binary.exists():
+    if user_binary.exists() and _binary_runs(str(user_binary)):
         return str(user_binary)
 
     # Try PATH
@@ -135,7 +190,9 @@ def find_go_binary():
             ["which", "riskdays_go"], capture_output=True, text=True, check=False
         )
         if result.returncode == 0:
-            return result.stdout.strip()
+            found = result.stdout.strip()
+            if found and _binary_runs(found):
+                return found
     except Exception:
         pass
 

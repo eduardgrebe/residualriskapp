@@ -1096,6 +1096,24 @@ def total_residual_risk_rd(
        independence approximation. (The pure-Python bootstrap draws in a
        different order and is **not** aligned; see the UI caveat.)
 
+       **Every component must use the same k-distribution** — the same mode *and*
+       the same parameters. This function receives only
+       ``(iwp_pe, iwp_bs, incidence, incidence_norm_sd)``: it cannot see which k
+       distribution produced each ``iwp_bs``, so it **cannot check this for you**.
+       Mixing k-distributions across components makes their per-iteration ``k``
+       values differ by construction — the shared-parameter alignment collapses and
+       the summed-quantile interval silently stops being a valid joint CrI (it is
+       then neither a joint interval nor a clean independence approximation). The
+       app is safe: its single k-distribution selector applies to every component.
+       This is a constraint on *library* callers who assemble components themselves.
+
+       On the Python path there is a further wrinkle: the shared draws differ **by
+       k-mode** even at one fixed seed, because each k-distribution consumes a
+       different amount of entropy from the RNG stream, so every subsequent draw
+       shifts. A fixed seed therefore does not reproduce the same shared parameters
+       across k-modes — do not assume two Python runs with different k-modes share
+       anything but the seed.
+
     2. **Incidence is independent across populations.** Each component's
        incidence is drawn with its own seed (``seed + i``), reflecting the
        assumption that the populations' incidence-rate uncertainties are

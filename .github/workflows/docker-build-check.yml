@@ -1,0 +1,39 @@
+# Build the Docker image on every PR and main push — WITHOUT pushing it.
+#
+# docker-publish.yml only builds on `v*` tags, so a broken Dockerfile was previously
+# discovered at *release* time. That is precisely how the hatch_build.py break landed:
+# adding a hatchling build hook to pyproject.toml made the image's `uv sync --frozen`
+# require a file the Dockerfile never copied, and nothing noticed until the tag build
+# failed. This job catches that class of break at the commit that causes it.
+#
+# Deliberately cheap: native single-arch and `push: false` — this is a *check*, not a
+# publish (the multi-arch build and the registry push stay in the tag job). Ubuntu
+# runners are plentiful, unlike the concurrency-limited macOS ones the bundled-binary
+# smoke test needs — which is why that workflow is tags-only.
+#
+# Stays on GitHub even under the Codeberg-primary plan: Codeberg's hosted runners have
+# no Docker daemon, so a docker build cannot run there.
+
+name: docker-build-check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build the image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
