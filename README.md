@@ -82,10 +82,13 @@ x86-64 + arm64). So `pip install` gives you the fast Go engine with **no Go tool
 separate build** — and if a platform's binary is ever unusable, the library transparently falls
 back to the pure-Python engine.
 
-> **Currently pre-release:** only pre-release builds are on the registry so far, so a bare
-> `residualrisk` won't resolve until a stable `1.1.0` is published. Allow pre-releases — pip: add
-> `--pre`; uv: add `--prerelease=allow` (works with `uv pip install` and `uv sync`) — or pin an
-> exact version (e.g. `residualrisk==1.1.0b3`).
+> **Currently pre-release:** only pre-release builds are on the registry so far. The simplest and
+> most portable approach is to **name a version in the requirement** — e.g.
+> `residualrisk==1.1.0b4` — which opts that one package into pre-releases automatically, with no
+> flag, on both pip and uv. A *bare* `residualrisk` is not equivalent, and the two tools disagree
+> about it: **uv** resolves it to the latest beta (pre-releases are permitted when nothing else can
+> satisfy the requirement), while **pip** refuses unless you add `--pre`. See
+> [pinning a version](#pinning-a-version) below — for an analysis, pin.
 
 **pip** — the registry hosts only `residualrisk`, so add it *alongside* PyPI (dependencies such as
 numpy/scipy still come from PyPI). Use `--extra-index-url`, **not** `--index-url` (the latter
@@ -106,7 +109,7 @@ index, and pin `residualrisk` to it (everything else still resolves from PyPI):
 
 ```toml
 [project]
-dependencies = ["residualrisk"]
+dependencies = ["residualrisk==1.1.0b4"]
 
 [[tool.uv.index]]
 name = "codeberg"
@@ -116,9 +119,38 @@ url = "https://codeberg.org/api/packages/eduardgrebe/pypi/simple/"
 residualrisk = { index = "codeberg" }
 ```
 
-Then `uv sync` (or `uv add residualrisk`) resolves it from Codeberg. If the registry is ever made
-private, supply a Codeberg token via the index's auth (uv `UV_INDEX_CODEBERG_USERNAME` /
+Then `uv sync` (or `uv add "residualrisk==1.1.0b4"`) resolves it from Codeberg. If the registry is
+ever made private, supply a Codeberg token via the index's auth (uv `UV_INDEX_CODEBERG_USERNAME` /
 `UV_INDEX_CODEBERG_PASSWORD` env vars, or a `~/.netrc` entry for `codeberg.org`).
+
+#### Pinning a version
+
+Per [PEP 440](https://peps.python.org/pep-0440/#handling-of-pre-releases), pre-releases are excluded
+by default — **unless the requirement's own specifier names one**. While the published releases are
+still betas, a version-bearing requirement is therefore both the reproducible choice *and* the one
+that needs no `--pre` / `--prerelease=allow`:
+
+| Requirement | Resolves to | Use when |
+|---|---|---|
+| `residualrisk==1.1.0b4` | exactly `1.1.0b4` | An analysis you will re-run and must reproduce. **Recommended.** |
+| `residualrisk>=1.1.0b4` | `1.1.0b4` or later, including the eventual stable `1.1.0` and beyond | You want fixes automatically and accept API changes across feature lines. |
+| `residualrisk>=1.1.0b4,<1.2` | later `1.1.x` releases only | You want fixes but not the next feature line. |
+| `residualrisk` (bare) | **tool-dependent — avoid** (see below) | Only once a stable `1.1.0` is published. |
+
+All three version-bearing forms work unchanged on either tool and need no flag —
+`pip install "residualrisk==1.1.0b4" --extra-index-url …`, `uv add "residualrisk>=1.1.0b4"`, or the
+`dependencies` list above. The pre-release opt-in is *per package*: pinning `residualrisk` to a beta
+does not let pre-release numpy or scipy in.
+
+The **bare** form is the one to avoid, for two reasons. It is not portable — uv resolves it to the
+latest beta today (PEP 440 permits pre-releases when nothing else can satisfy the requirement, and
+no stable release exists yet), whereas pip fails outright without `--pre`. And it is not stable over
+time: the moment a stable `1.1.0` is published, uv will silently switch from the beta you were
+getting to the stable, changing your dependency without any change on your part.
+
+For a scientific analysis, prefer the **exact pin** and commit your lockfile (`uv.lock`). Because
+the Go accelerator is bundled in the wheel, the pin fixes the numerical engine too — not just the
+Python layer.
 
 ### Building the Go Implementation
 
@@ -367,7 +399,7 @@ Install the `residualrisk` Python package in a virtual environment if not instal
 
 ```bash
 uv venv
-uv pip install --extra-index-url https://codeberg.org/api/packages/eduardgrebe/pypi/simple/ residualrisk
+uv pip install --extra-index-url https://codeberg.org/api/packages/eduardgrebe/pypi/simple/ "residualrisk==1.1.0b4"
 ```
 
 Launch R and install the `reticulate` package if not installed:
