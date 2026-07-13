@@ -73,6 +73,38 @@ PREP_BS_KWARGS = dict(
 )
 
 
+def _assert_prep_rows_recompute_iwp(sim_df, rtol=1e-9):
+    """Every row's stored parameters must reproduce that row's ``iwp`` via
+    ``_risk_days_prep``.
+
+    This is the real correctness invariant of ``sim_df`` and the only check that can
+    catch a parameter<->iwp **row misalignment** — e.g. a bootstrap pairing
+    submission-order parameters with completion-order results (the ``core.py:640``
+    bug class). The pre-existing checks cannot see it: a misaligned frame still has
+    every column, and its ``iwp`` column still equals ``rdests``.
+
+    Both backends and ``_risk_days_prep`` use the same fixed 1000-point
+    Gauss-Legendre rule, so a correctly aligned row recomputes essentially exactly.
+    The domain is read from the row (``limits``) rather than assumed, so this stays
+    honest when a caller passes a custom one.
+    """
+    assert sim_df.height > 0, "sim_df is empty — nothing was checked"
+    for row in sim_df.iter_rows(named=True):
+        rd = _risk_days_prep(
+            int(row["copies_per_virion"]), row["C0"], row["doubling_time"],
+            row["set_point"], row["eclipse"], row["a"], row["b"], row["offset"],
+            row["volume_transfused"], row["k"], int(row["pool_size"]), row["lod50"],
+            row["lod95_lod50_ratio"], int(row["retests"]),
+            row["ser_min"], row["ser_max"], row["ser_alpha"], row["ser_beta"],
+            row["z"], row["drug_effect"], tuple(row["limits"]),
+        )
+        assert np.isclose(rd, row["iwp"], rtol=rtol), (
+            f"row param->iwp mismatch: recomputed {rd:.10g} vs stored {row['iwp']:.10g} "
+            f"(k={row['k']:.6g}, set_point={row['set_point']:.6g}, "
+            f"eclipse={row['eclipse']:.4g}, drug_effect={row['drug_effect']:.4g})"
+        )
+
+
 # ---------------------------------------------------------------------------
 # Result structure & statistics
 # ---------------------------------------------------------------------------
@@ -163,6 +195,12 @@ class TestPrepBsSimDf(unittest.TestCase):
             self.sim_df["iwp"].to_numpy(), self.rdests, decimal=10
         )
 
+    def test_sim_df_rows_recompute_iwp(self):
+        """The invariant every other sim_df check misses: each row's *parameters*
+        must reproduce that row's iwp. Column presence and ``iwp == rdests`` are both
+        still true of a row-misaligned frame."""
+        _assert_prep_rows_recompute_iwp(self.sim_df)
+
     def test_sim_df_set_points_sampled(self):
         """set_point values should be drawn from the uniform distribution."""
         sp = self.sim_df["set_point"].to_numpy()
@@ -241,11 +279,42 @@ class TestPrepBsPointEstimates(unittest.TestCase):
         self.assertAlmostEqual(rd_pe, float(np.mean(rdests)), places=10)
 
     def test_primary_parameters(self):
-        rd_pe, rd_cri, _, rdests, _ = self._run("primary parameters")
+        """The "primary parameters" PE is a *deterministic* single integration at the
+        point values — not a statistic of the bootstrap — so it must EQUAL the
+        recomputed integral. That pins it far more tightly than any bound could.
+
+        (This previously asserted ``rd_pe > 0`` twice — the second was a copy-paste of
+        the first, so the "plausible range" its comment promised was never actually
+        checked. A CrI/range bound would in fact be *wrong* here: the plug-in PE can
+        legitimately land in the far right tail, above the upper CrI — see TODO,
+        "PrEP RDE point-estimate default → mode".)
+        """
+        rd_pe, _, _, _, _ = self._run("primary parameters")
+        expected = _risk_days_prep(
+            2,                                    # copies_per_virion (default)
+            0.00025,                              # C0 (default)
+            PREP_BS_KWARGS["doubling_time"],
+            PREP_BS_KWARGS["set_point"],
+            PREP_BS_KWARGS["eclipse"],
+            PREP_BS_KWARGS["a"],
+            PREP_BS_KWARGS["b"],
+            PREP_BS_KWARGS["offset"],
+            PREP_BS_KWARGS["volume_transfused"],
+            PREP_BS_KWARGS["k"],
+            PREP_BS_KWARGS["pool_size"],
+            PREP_BS_KWARGS["lod50"],
+            PREP_BS_KWARGS["lod95_lod50_ratio"],
+            PREP_BS_KWARGS["retests"],
+            PREP_BS_KWARGS["ser_min"],
+            PREP_BS_KWARGS["ser_max"],
+            PREP_BS_KWARGS["ser_alpha"],
+            PREP_BS_KWARGS["ser_beta"],
+            1.6449,                               # z (default)
+            1.0,                                  # drug_effect (default)
+            (-100, 500),                          # limits (default)
+        )
         self.assertGreater(rd_pe, 0)
-        # Primary-params PE uses fixed (non-sampled) values, so it need not
-        # lie within the CrI, but it should be in a plausible range.
-        self.assertGreater(rd_pe, 0)
+        self.assertAlmostEqual(rd_pe, expected, places=10)
 
 
 # ---------------------------------------------------------------------------
@@ -318,6 +387,38 @@ class TestPrepBsKDistPaths(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # PrEP-specific parameter effects
 # ---------------------------------------------------------------------------
+
+@unittest.skipUnless(find_go_binary(), "Go binary not available")
+class TestPrepBsSimDfGo(unittest.TestCase):
+    """The Go backend builds sim_df from its own per-iteration arrays, so the
+    param->iwp invariant must hold there independently of the Python path.
+
+    Sandbox-safe: the Go backend is a subprocess, not a ProcessPoolExecutor, so
+    these run where the Python bootstrap tests cannot.
+    """
+
+    def _sim_df(self, **over):
+        *_, sim_df = risk_days_prep_bs(
+            **{**PREP_BS_KWARGS, **over},
+            k_invgamma_alpha=2.0,
+            k_invgamma_beta=0.002019,
+            return_sim_df=True,
+            use_go=True,
+        )
+        return sim_df
+
+    def test_rows_recompute_iwp(self):
+        _assert_prep_rows_recompute_iwp(self._sim_df())
+
+    def test_rows_recompute_iwp_with_custom_limits(self):
+        """Shows the recompute reads each row's *recorded* domain rather than assuming
+        the default — and that the Go sim_df records the domain it actually used.
+        (The Go frame carried no ``limits`` column at all until this was fixed.)
+        """
+        sim_df = self._sim_df(limits=(0, 60))
+        self.assertEqual(sim_df["limits"].to_list()[0], [0, 60])
+        _assert_prep_rows_recompute_iwp(sim_df)
+
 
 @unittest.skipUnless(find_go_binary(), "Go binary not available")
 class TestPrepBsParameterEffects(unittest.TestCase):

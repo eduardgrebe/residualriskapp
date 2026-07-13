@@ -487,6 +487,11 @@ def risk_days_bs_go(
                 (pl.col("lod50") * lod95_lod50_ratio).alias("lod95"),
                 pl.lit(retests).alias("retests"),
                 pl.lit(z).alias("z"),
+                # The integration domain. Every other parameter is recorded, and
+                # `limits` is caller-settable, so a Go-path frame must record it too
+                # — the Python sim_df has always carried it. Pass the raw values (no
+                # float cast) so the dtype follows the input types, as Python's does.
+                pl.lit([limits[0], limits[1]]).alias("limits"),
                 pl.lit(seed).alias("random_seed"),
             )
             return (rd_pe, rd_cri, rd_range, rdests, sim_df)
@@ -778,6 +783,11 @@ def risk_days_prep_bs_go(
                 pl.lit(ser_max).alias("ser_max"),
                 pl.lit(ser_alpha).alias("ser_alpha"),
                 pl.lit(ser_beta).alias("ser_beta"),
+                # The integration domain. Every other parameter is recorded, and
+                # `limits` is caller-settable, so a Go-path frame must record it too
+                # — the Python sim_df has always carried it. Pass the raw values (no
+                # float cast) so the dtype follows the input types, as Python's does.
+                pl.lit([limits[0], limits[1]]).alias("limits"),
                 pl.lit(seed).alias("random_seed"),
             )
             return (rd_pe, rd_cri, rd_range, rdests, sim_df)
