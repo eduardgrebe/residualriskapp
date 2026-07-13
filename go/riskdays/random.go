@@ -27,8 +27,8 @@ import (
 
 // RandomGenerator holds the random number generator state
 type RandomGenerator struct {
-	rng  exprand.Source
-	stdRng *rand.Rand  // For methods that need standard library rand
+	rng    exprand.Source
+	stdRng *rand.Rand // For methods that need standard library rand
 }
 
 // NewRandomGenerator creates a new random generator with specified seed

@@ -90,7 +90,7 @@ func KDEModeLog(data []float64, nGrid int, cap int, threads int) float64 {
 		d := lv - mean
 		ssq += d * d
 	}
-	std := math.Sqrt(ssq / float64(n - 1))
+	std := math.Sqrt(ssq / float64(n-1))
 
 	// ---- Silverman bandwidth ----
 	if std <= 0 || n <= 1 {
