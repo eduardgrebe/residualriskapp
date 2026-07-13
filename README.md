@@ -144,6 +144,8 @@ The webapp defaults to the Go implementation. Without the binary, it falls back 
 
 The Python code automatically detects the binary at `<repo>/go/bin/riskdays_go`. To point at a binary installed elsewhere, set `RESIDUALRISK_GO_BINARY=/absolute/path/to/riskdays_go`.
 
+Each candidate is smoke-tested (`riskdays_go --version` must exit 0) before it is used, so a binary that exists but cannot run — wrong architecture, corrupt, missing a shared library — is skipped rather than reported as available and then failing at the first calculation. If nothing runnable is found, the pure-Python engine is used (10–50× slower). A `RESIDUALRISK_GO_BINARY` you set explicitly but that fails the check is logged as a warning.
+
 ### Docker Deployment (Recommended for Production)
 
 For production deployments or if you want to avoid installing dependencies locally, use Docker:
@@ -234,6 +236,14 @@ See `go/README.md` for detailed documentation of the JSON schema and parameters.
 ### Python API
 
 `residualrisk` is a proper installable package. Install it into the environment of any downstream analysis with `uv pip install -e /path/to/residualriskapp` (editable) or pin to a git tag/SHA for reproducibility.
+
+> **The four *k* input distributions are mutually exclusive.** Pass **exactly one** of
+> `k_posterior_sample`, `k_gamma_shape`+`k_gamma_scale` (legacy Gamma),
+> `k_invgamma_alpha`+(`k_invgamma_beta` **or** `k_invgamma_mode`), or the five `k_lnmix_*`
+> parameters — the examples below show one each. Specifying two raises `ValueError`, as does a
+> partially-specified one (e.g. `k_gamma_shape` without `k_gamma_scale`); a mode counts as
+> specified if *any* of its parameters is non-`None`. So when reusing a parameter dict across
+> runs, clear the previous distribution's keys rather than adding to them.
 
 ```python
 import residualrisk as rr

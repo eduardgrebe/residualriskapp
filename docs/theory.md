@@ -400,7 +400,10 @@ non-negligible probability to the animal range.
 
 #### 5.2.2 Available input distributions
 
-The tool can sample $k$ from any of the following (the first specified wins):
+The tool can sample $k$ from any of the following. They are **mutually exclusive**: exactly one
+must be specified, and supplying more than one — or a partially-specified one — raises an error.
+(These were formerly a silent priority cascade in which the first one specified won, so a leftover
+posterior sample could quietly override a parametric distribution the caller had asked for.)
 
 1. **A raw posterior sample** — bootstrap draws (with replacement) from one of the
    posterior arrays above (human, animal, or exponential-decay). Selected by

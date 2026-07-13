@@ -77,8 +77,18 @@ plt.rcParams.update(
 
 def _vl_copies(t, scen):
     """Viral concentration in copies/mL (= chi * C) along the PrEP trajectory."""
+    # Pass the offset: tcrit targets the plateau's *central* level
+    # (offset * set_point / chi), which is where the plateau begins. Omitting it here
+    # while passing it to _vl_postbt below would put the growth and plateau branches
+    # on different levels and redraw the very discontinuity the model fixes. Harmless
+    # while SHARED["offset"] == 1.0, which is why it went unnoticed — but it must
+    # track the model, not the current constant.
     tcrit = prep._find_tcrit(
-        SHARED["eclipse"], SHARED["C0"], SHARED["doubling_time"], scen["set_point"]
+        SHARED["eclipse"],
+        SHARED["C0"],
+        SHARED["doubling_time"],
+        scen["set_point"],
+        offset=SHARED["offset"],
     )
     c = np.array(
         [
