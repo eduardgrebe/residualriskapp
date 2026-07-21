@@ -18,7 +18,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26"
@@ -37,7 +37,7 @@ jobs:
         os: [macos-latest, macos-13, windows-latest]   # arm64 + x86_64 mac, x64 win
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4                       # for scripts/
+      - uses: actions/checkout@v7                       # for scripts/
       - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
