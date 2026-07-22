@@ -186,7 +186,7 @@ def _prerelease_notice(version: str) -> str | None:
         kind = "a release candidate"
     else:
         return None
-    return f"This is {kind} ({version}). Use at your own risk."
+    return f"This is {kind} ({version}). Use with caution."
 
 
 header_container = st.container()
