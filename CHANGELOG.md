@@ -73,4 +73,6 @@ The PrEP-breakthrough model, mainlined onto `main` (2026-07). Working toward the
     `main` — the Docker image was previously built only on release tags, so a broken Dockerfile
     surfaced at release time.
 
+- **Beta 5 (`1.1.0b5`)** — **Dependency bump release.** Chore release with updated dependencies to ensure final release will use current versions of all packages.
+
 _The detailed record lives in the git tag history (`v1.1.0a1` …) and `TODO.md`._
