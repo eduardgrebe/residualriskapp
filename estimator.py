@@ -283,7 +283,7 @@ if is_mechanistic_ui:
                 "use. "
             )
         else:
-            st.sidebar.write("*Go implementation will be used.*")
+            st.sidebar.caption("Go implementation will be used.")
 
 sim_param_container = st.expander(
     "Simulation settings", expanded=True, icon=":material/menu_open:"
@@ -324,18 +324,19 @@ with sim_param_container:
         point_estimate = col1.selectbox(
             "Select method for point estimate of RDEs",
             options=["primary parameters", "median", "mode", "mean"],
-            index=2,
-            help="How the reported RDE point estimate is computed: the mode (default), "
-            "median or mean of the bootstrap distribution, or 'primary parameters' — a "
+            index=1,
+            help="How the reported RDE point estimate is computed: the median (default), "
+            "mode or mean of the bootstrap distribution, or 'primary parameters' — a "
             "single evaluation at the input point values. The bootstrap summaries always "
-            "lie within the credible interval; 'primary parameters' need not.",
+            "lie within the credible interval; 'primary parameters' need not. Median tends "
+            "to be more conservative than mode because of a typically right-skewed distribution.",
         )
         if point_estimate == "primary parameters":
             col1.warning(
                 "'Primary parameters' evaluates the RDE once at the input point values. "
-                "Because the RDE distribution is right-skewed, this estimate can fall in "
+                "When the RDE distribution is right-skewed, this estimate can fall in "
                 "the far right tail — occasionally above the upper credible limit. The "
-                "mode or median summarise the distribution more representatively.",
+                "median or mode summarises the distribution more accurately.",
                 icon="⚠️",
             )
     else:
@@ -354,7 +355,7 @@ with sim_param_container:
         max_value=0.20,
         value=0.05,
         step=0.01,
-        help="Significance level for the reported credible interval; it covers the central (1 - α) of the bootstrap RDE distribution (0.05 → 95%).",
+        help="Significance level for the reported credible interval; it covers the central (1 - α) of the bootstrap RDE distribution.",
     )
 
     sig_level = round((1 - alpha) * 100)
@@ -395,12 +396,15 @@ if is_mechanistic_ui:
             options=[
                 "Belov human posterior",
                 "Belov animal posterior",
-                "Human-weighted exponential decay distribution",
                 "Inverse Gamma distribution",
                 "Lognormal mixture distribution",
+                "Human-weighted exponential decay distribution",
             ],
-            index=3,
-            help="Distribution for the infectivity parameter k, sampled each bootstrap iteration. See the Documentation page for the options.",
+            index=2,
+            help="Distribution for the infectivity parameter k, sampled each bootstrap iteration. "
+            "The default is Inverse Gamma, centred on the Belov human posterior, but with some "
+            "support in the region of animal transmission data. See the Documentation page for "
+            "more details.",
         )
         match k_param_distribution_choice:
             case "Belov human posterior":
@@ -608,7 +612,7 @@ if is_mechanistic_ui:
                     value=_LN_S1_DEF,
                     format="%.4f",
                     step=0.01,
-                    help="Log-scale SD for component 1 (human). Default: 0.3241.",
+                    help="Log-scale standard deviation for component 1 (human). Default: 0.3241.",
                 )
                 k_lnmix_mu2 = adv_col2.number_input(
                     "μ₂ (animal, log-scale mean)",
@@ -623,7 +627,7 @@ if is_mechanistic_ui:
                     value=_LN_S2_DEF,
                     format="%.4f",
                     step=0.01,
-                    help="Log-scale SD for component 2 (animal). Default: 0.5258.",
+                    help="Log-scale standard deviation for component 2 (animal). Default: 0.5258.",
                 )
             else:
                 k_lnmix_mu1 = _LN_MU1_DEF
@@ -727,7 +731,7 @@ if is_mechanistic_ui:
             format_func=lambda key: (
                 NAT_ASSAYS[key]["display_name"] if key in NAT_ASSAYS else key
             ),
-            help="Select a NAT assay to use its published 50%/95% limits of "
+            help="Select a NAT assay to use its published 50% and 95% limits of "
             "detection (copies/mL, HIV-1 Group M), or choose "
             f"'{MANUAL_LOD_OPTION}' to enter values manually.",
         )
@@ -741,7 +745,7 @@ if is_mechanistic_ui:
                 max_value=500.0,
                 value=NAT_ASSAYS["cobas_mpx"]["lod50"],
                 step=0.01,
-                help="Viral concentration detected 50% of the time (copies/mL, HIV-1 Group M).",
+                help="Viral concentration detected with 50% probability (copies/mL, HIV-1 Group M).",
             )
             lod50_sd = col2.number_input(
                 "NAT assay 50% LoD SD (copies/mL)",
@@ -758,7 +762,7 @@ if is_mechanistic_ui:
                 max_value=500.0,
                 value=NAT_ASSAYS["cobas_mpx"]["lod95"],
                 step=0.01,
-                help="Viral concentration detected 95% of the time (copies/mL); with the 50% LoD it sets the slope of the detection curve.",
+                help="Viral concentration detected with 95% of probability (copies/mL); with the 50% LoD it sets the slope of the detection curve.",
             )
             conversion_note = (
                 "Limits of detection entered directly in copies/mL "
@@ -834,7 +838,7 @@ if rde_method == "Lookback data":
             value=10.0,
             step=0.5,
             help="Diagnostic delay of the least sensitive positive test at the "
-            "seroconversion donation.",
+            "positive donation.",
         )
 
         col2.write("**Inter-donation intervals (IDIs)**")
@@ -889,8 +893,8 @@ if include_prep_oral or include_prep_inj:
             format="%.2f",
             help="Amplitude of the sinusoidal oscillation around the viral set point, "
             "as a fraction of it: the plateau swings between (1 - a) and (1 + a) times "
-            "the set point. Capped at 1 — a larger amplitude would drive the plateau "
-            "viral load negative.",
+            "the set point. Capped at 1 — a (larger amplitude would drive the plateau "
+            "viral load negative).",
         )
         prep_b = col2.number_input(
             "Frequency (b)",
@@ -918,7 +922,7 @@ if include_prep_oral or include_prep_inj:
                 step=0.05,
                 format="%.2f",
                 help="Uniform sampling range for the amplitude a. Capped at 1 — a "
-                "larger amplitude would drive the plateau viral load negative.",
+                "(larger amplitude would drive the plateau viral load negative).",
             )
             prep_b_dist_uniform = col2.slider(
                 "Frequency (b) range",
@@ -938,7 +942,7 @@ if include_prep_oral:
         col1, col2 = st.columns(2)
 
         vl_setpoint_oral = col1.number_input(
-            "Viral load set point (c/mL)",
+            "Viral load set point (copies/mL)",
             min_value=1,
             max_value=5000,
             value=340,
@@ -946,7 +950,7 @@ if include_prep_oral:
             help="Median oPrEP breakthrough viral load set point.",
         )
         vl_setpoint_range_oral = col1.slider(
-            "Viral load set point range (c/mL)",
+            "Viral load set point range (copies/mL)",
             min_value=1,
             max_value=5000,
             value=(10, 2270),
@@ -974,8 +978,8 @@ if include_prep_oral:
             step=0.05,
             help=(
                 "Uncertainty range for the oPrEP drug effect, sampled uniformly per "
-                "bootstrap iteration. Set to (1.0, 1.0) for no reduction; e.g. "
-                "(0.5, 1.0) reproduces the prior analysis."
+                "bootstrap iteration. Set to (1.0, 1.0) for no reduction in any "
+                "of the iterations."
             ),
         )
         # (1.0, 1.0) → no range; hold fixed at the point value (pass None).
@@ -989,7 +993,7 @@ if include_prep_oral:
             max_value=500,
             value=29,
             step=1,
-            help="Minimum time from infection to seroconversion in oPrEP users.",
+            help="Minimum time from infection to seroconversion in oPrEP b/t infection.",
         )
         seroconversion_max_oral = col2.number_input(
             "Time to seroconversion max (days)",
@@ -997,7 +1001,7 @@ if include_prep_oral:
             max_value=500,
             value=250,
             step=1,
-            help="Maximum time from infection to seroconversion in oPrEP users.",
+            help="Maximum time from infection to seroconversion in oPrEP b/t infection.",
         )
         seroconversion_weibull_alpha_oral = col2.number_input(
             "Seroconversion Weibull scale (α)",
@@ -1023,7 +1027,7 @@ if include_prep_inj:
         col1, col2 = st.columns(2)
 
         vl_setpoint_inj = col1.number_input(
-            "Viral load set point (c/mL)",
+            "Viral load set point (copies/mL)",
             min_value=1,
             max_value=5000,
             value=30,
@@ -1031,7 +1035,7 @@ if include_prep_inj:
             help="Median iPrEP breakthrough viral load set point.",
         )
         vl_setpoint_range_inj = col1.slider(
-            "Viral load set point range (c/mL)",
+            "Viral load set point range (copies/mL)",
             min_value=1,
             max_value=5000,
             value=(10, 2500),
@@ -1060,8 +1064,7 @@ if include_prep_inj:
             step=0.05,
             help=(
                 "Uncertainty range for the iPrEP drug effect, sampled uniformly per "
-                "bootstrap iteration. Set to (1.0, 1.0) for no reduction; e.g. "
-                "(0.5, 1.0) reproduces the prior analysis."
+                "bootstrap iteration. Set to (1.0, 1.0) for no reduction in any iteration."
             ),
         )
         # (1.0, 1.0) → no range; hold fixed at the point value (pass None).
@@ -1075,7 +1078,7 @@ if include_prep_inj:
             max_value=500,
             value=42,
             step=1,
-            help="Minimum time from infection to seroconversion in iPrEP users.",
+            help="Minimum time from infection to seroconversion in iPrEP b/t infection.",
         )
         seroconversion_max_inj = col2.number_input(
             "Time to seroconversion max (days)",
@@ -1083,7 +1086,7 @@ if include_prep_inj:
             max_value=500,
             value=250,
             step=1,
-            help="Maximum time from infection to seroconversion in iPrEP users.",
+            help="Maximum time from infection to seroconversion in iPrEP b/t infection.",
         )
         seroconversion_weibull_alpha_inj = col2.number_input(
             "Seroconversion Weibull scale (α)",
@@ -1133,7 +1136,7 @@ with incidence_param_container:
             max_value=10000.000,
             value=inc_per100k * 0.2,
             step=0.01,
-            help="Standard deviation of the incidence estimate (per 100,000 PY); drawn each bootstrap iteration.",
+            help="Standard deviation of the incidence estimate (per 100,000 PY); drawn each bootstrap iteration from truncated normal.",
         )
         inc_perpy_sd = inc_per100k_sd / 100000
         inc_perpd_sd = inc_per100k_sd / 100000 / 365.25
@@ -1158,7 +1161,7 @@ with incidence_param_container:
                 max_value=10000.000,
                 value=inc_prep_oral_per100k * 0.3,
                 step=0.01,
-                help="Standard deviation of oPrEP breakthrough incidence.",
+                help="Standard deviation of oPrEP breakthrough incidence; drawn each bootstrap iteration from truncated normal..",
                 key="inc_prep_oral_sd",
             )
             inc_prep_oral_perpy = inc_prep_oral_per100k / 100000
@@ -1184,7 +1187,7 @@ with incidence_param_container:
                 max_value=10000.000,
                 value=inc_prep_inj_per100k * 0.3,
                 step=0.001,
-                help="Standard deviation of iPrEP breakthrough incidence.",
+                help="Standard deviation of iPrEP breakthrough incidence; drawn each bootstrap iteration from truncated normal.",
                 key="inc_prep_inj_sd",
             )
             inc_prep_inj_perpy = inc_prep_inj_per100k / 100000
@@ -1880,8 +1883,3 @@ else:
 
 # The shared sidebar footer (VRI logo + app/library version caption) is rendered
 # by the app.py router so it appears on every page.
-
-# # Vitalant Research Institute logo — centred footer at the bottom of the page.
-# st.divider()
-# _, _footer_logo, _ = st.columns([1, 2, 1])
-# _footer_logo.image(str(_STATIC_DIR / "vri_logo.png"), width="stretch")
