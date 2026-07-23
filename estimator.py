@@ -218,7 +218,8 @@ rde_method = st.selectbox(
     help="Risk day equivalents (RDEs) are equivalent to the infectious window "
     "period (IWP). Lookback data: estimates the IWP directly from "
     "lookback investigation data. Mechanistic model: simulates the "
-    "IWP from viral dynamics and assay parameters. ",
+    "IWP from viral dynamics, transmissibility and assay sensitivity "
+    "parameters. ",
 )
 
 is_mechanistic_ui = rde_method == "Mechanistic model"
@@ -229,17 +230,17 @@ if is_mechanistic_ui:
     include_prep_oral = st.checkbox(
         "Include oral PrEP breakthrough risk",
         value=False,
-        help="Add a separate oral PrEP (oPrEP) breakthrough infection RDE "
-        "estimate on top of the baseline window-period risk.",
+        help="Add an additional oral PrEP (oPrEP) breakthrough infection risk "
+        "model, i.e., RDEs associated with oPrEP breakthrough infection. ",
     )
     include_prep_inj = st.checkbox(
         "Include injectable PrEP breakthrough risk",
         value=False,
-        help="Add a separate injectable PrEP (iPrEP) breakthrough infection "
-        "RDE estimate on top of the baseline window-period risk.",
+        help="Add an additional injectable PrEP (iPrEP) breakthrough infection risk "
+        "model, i.e., RDEs associated with iPrEP breakthrough infection. ",
     )
 
-st.sidebar.write("Number of CPU cores: ", n_cpu)
+# st.sidebar.write("Number of CPU cores: ", n_cpu)
 
 
 def _generate_random_seed() -> None:
@@ -257,27 +258,32 @@ st.sidebar.number_input(
     min_value=1,
     max_value=999999,
     step=1,
-    help="Random seed for the Monte Carlo draws. Fix it to reproduce a run exactly, or click Generate random seed.",
+    help="Random seed for the Monte Carlo draws. Fix it to reproduce a run exactly, or click to generate a random seed.",
     key="seed",
 )
 st.sidebar.button("Generate random seed", on_click=_generate_random_seed)
 
 if is_mechanistic_ui:
-    implementation = st.sidebar.selectbox(
-        "Simulation implementation",
-        options=["Go", "Python"],
-        index=0,  # Go is default
-        help="Compute backend. Go is the fast multi-core default; Python is a slower single-core reference/fallback.",
-    )
+    # For production use we disallow Python runs
+    implementation = "Go"
     use_go_acceleration = implementation == "Go"
+    # implementation = st.sidebar.selectbox(
+    #     "Simulation implementation",
+    #     options=["Go", "Python"],
+    #     index=0,  # Go is default
+    #     help="Compute backend. Go is the fast multi-core default; Python is a slower single-core reference/fallback.",
+    # )
+    # use_go_acceleration = implementation == "Go"
     if use_go_acceleration:
         if rr.find_go_binary() is None:
             st.sidebar.warning(
                 "Go binary not found. Simulations fall back to the Python "
                 "implementation, which is significantly slower — and mode point "
-                "estimates use a coarser KDE grid (5 000 vs the Go path's 100 000), "
-                "which differs slightly (~0.1%)."
+                "estimates use a coarser KDE grid. Not recommended for production "
+                "use. "
             )
+        else:
+            st.sidebar.write("*Go implementation will be used.*")
 
 sim_param_container = st.expander(
     "Simulation settings", expanded=True, icon=":material/menu_open:"
@@ -1188,7 +1194,7 @@ with incidence_param_container:
             )
 
 button_label = "Run simulations" if is_mechanistic_ui else "Calculate RDEs"
-if st.sidebar.button(button_label):
+if st.sidebar.button(button_label, type="primary"):
     if rde_method == "Mechanistic model":
         progressbar = st.sidebar.progress(0, text="Running simulations...")
         try:
