@@ -719,5 +719,5 @@ shared viral-growth, dose-response, NAT-detection, $k$-distribution, and numeric
 *This documentation describes the PrEP-breakthrough extension as implemented in the current
 `residualrisk` library (PrEP model, `prep.py` / `prep*.go`; see the app sidebar for the exact
 version numbers in this deployment) and corresponds to the analysis presented at ISBT 2025
-(Grebe et al., PA28-L04). It is a first draft for review; the remaining passage marked
-"Reviewer note" flags a point requiring confirmation.*
+(Grebe et al., PA28-L04). It is a first draft awaiting review; the one remaining flagged
+point is marked "to be confirmed" in-line (the Eshleman 2023 conference citation, §12).*

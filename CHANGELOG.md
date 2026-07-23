@@ -16,7 +16,7 @@ project moved straight to `1.1.0`. So `1.1.0` does **not** imply a public `1.0.0
 ## [Unreleased] — 1.1.0 (pre-release)
 
 The PrEP-breakthrough model, mainlined onto `main` (2026-07). Working toward the first stable
-`1.1.0`; currently at beta pre-release `1.1.0b4`. Highlights:
+`1.1.0`; currently at beta pre-release `1.1.0b5`. Highlights:
 
 - Oral- and injectable-PrEP breakthrough-infection RDE components, with per-component and
   additive total residual risk.
