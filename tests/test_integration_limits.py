@@ -1,11 +1,19 @@
-# Residual HIV Transfusion Transmission Risk Estimation Tool
-# Copyright (C) 2025-2026  Vitalant and Eduard Grebe Consulting
+# Residual HIV Transfusion Transmission Risk Estimator
+# Copyright (C) 2025-2026 Vitalant and Eduard Grebe Consulting
 # Author: Eduard Grebe <egrebe@vitalant.org> <eduard@grebe.consulting>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published
 # by the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for the exposed integration domain (``limits``).
 
@@ -65,9 +73,27 @@ def _py_baseline(limits):
 def _py_prep(limits):
     """The PrEP integral at the point values (PrEP defaults) — no multiprocessing."""
     return P._risk_days_prep(
-        2, 0.00025, 0.8542, 336, 7.0, 0.7, 0.6, 1,
-        200, 0.000673, 16, 2.73, 3.5, 1,
-        28.7, 250, 50.49434, 1.15062, 1.6449, 1.0, limits,
+        2,
+        0.00025,
+        0.8542,
+        336,
+        7.0,
+        0.7,
+        0.6,
+        1,
+        200,
+        0.000673,
+        16,
+        2.73,
+        3.5,
+        1,
+        28.7,
+        250,
+        50.49434,
+        1.15062,
+        1.6449,
+        1.0,
+        limits,
     )
 
 
@@ -130,7 +156,9 @@ class TestLimitsReachGo:
     def test_omitting_limits_uses_the_default(self):
         """Callers that never pass `limits` must be unaffected."""
         assert _go_pe((-100, 500)) == pytest.approx(
-            rr.risk_days_bs(**_BASE, use_go=True, point_estimate="primary parameters")[0],
+            rr.risk_days_bs(**_BASE, use_go=True, point_estimate="primary parameters")[
+                0
+            ],
             rel=1e-12,
         )
 

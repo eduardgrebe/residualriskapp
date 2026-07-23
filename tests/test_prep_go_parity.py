@@ -1,5 +1,5 @@
-# Residual HIV Transfusion Transmission Risk Estimation Tool
-# Copyright (C) 2025  Vitalant and Eduard Grebe Consulting
+# Residual HIV Transfusion Transmission Risk Estimator
+# Copyright (C) 2025-2026 Vitalant and Eduard Grebe Consulting
 # Author: Eduard Grebe <egrebe@vitalant.org> <eduard@grebe.consulting>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -74,9 +74,7 @@ class TestPrepGoParity(unittest.TestCase):
 
     def test_go_prep_returns_valid(self):
         """Go PrEP wrapper returns valid results."""
-        rd_pe, rd_cri, rd_range, rdests, sim_df = risk_days_prep_bs_go(
-            **COMMON_KWARGS
-        )
+        rd_pe, rd_cri, rd_range, rdests, sim_df = risk_days_prep_bs_go(**COMMON_KWARGS)
         self.assertGreater(rd_pe, 0)
         self.assertEqual(len(rdests), 500)
         self.assertLessEqual(rd_cri[0], rd_pe)
@@ -139,21 +137,31 @@ class TestPrepGoParity(unittest.TestCase):
         """a=0 (a flat plateau) is a valid input; Go must use it, not silently
         substitute the old 0.7 default. Regression for the models.go SetDefaults
         ==0-sentinel that overrode explicit zeros and diverged from Python."""
-        _, _, _, _, sim_df = risk_days_prep_bs_go(**{**COMMON_KWARGS, "n_bs": 100, "a": 0.0})
+        _, _, _, _, sim_df = risk_days_prep_bs_go(**{
+            **COMMON_KWARGS,
+            "n_bs": 100,
+            "a": 0.0,
+        })
         self.assertEqual(sim_df["a"].n_unique(), 1)
         self.assertEqual(sim_df["a"][0], 0.0)
 
     def test_go_prep_sim_df_records_backend(self):
         """The PrEP dispatcher tags the returned sim_df with backend='go'."""
-        _, _, _, _, sim_df = risk_days_prep_bs(**{**COMMON_KWARGS, "n_bs": 100}, use_go=True)
+        _, _, _, _, sim_df = risk_days_prep_bs(
+            **{**COMMON_KWARGS, "n_bs": 100}, use_go=True
+        )
         self.assertIn("backend", sim_df.columns)
         self.assertEqual(sim_df["backend"].unique().to_list(), ["go"])
 
     def test_go_prep_varied_ab(self):
         """With ranges, Go samples a and b uniformly per iteration; sim_df
         carries the real per-iteration values, within range and a <= offset."""
-        kw = {**COMMON_KWARGS, "n_bs": 300,
-              "a_dist_uniform": (0.5, 0.9), "b_dist_uniform": (0.4, 0.8)}
+        kw = {
+            **COMMON_KWARGS,
+            "n_bs": 300,
+            "a_dist_uniform": (0.5, 0.9),
+            "b_dist_uniform": (0.4, 0.8),
+        }
         _, _, _, _, sim_df = risk_days_prep_bs_go(**kw)
         self.assertGreater(sim_df["a"].n_unique(), 1)
         self.assertGreater(sim_df["b"].n_unique(), 1)
@@ -210,7 +218,11 @@ class TestPrepPythonGoAgreement(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        kwargs = {**COMMON_KWARGS, "point_estimate": "primary parameters", "n_bs": cls.N_BS}
+        kwargs = {
+            **COMMON_KWARGS,
+            "point_estimate": "primary parameters",
+            "n_bs": cls.N_BS,
+        }
         cls.py = risk_days_prep_bs(**kwargs, use_go=False)
         cls.go = risk_days_prep_bs(**kwargs, use_go=True)
 
@@ -233,7 +245,8 @@ class TestPrepPythonGoAgreement(unittest.TestCase):
         # 95% credible-interval bounds within a (wider) RNG-driven tolerance.
         for bound in (0, 1):
             self.assertAlmostEqual(
-                self.py[1][bound], self.go[1][bound],
+                self.py[1][bound],
+                self.go[1][bound],
                 delta=abs(self.go[1][bound]) * 0.25,
             )
 
@@ -332,7 +345,10 @@ def test_python_fallback_mode_matches_go_within_0p1pct():
     static = Path(__file__).resolve().parent.parent / "static"
     samples = {
         "k_human": pl.read_parquet(static / "k_param_human.parquet").to_numpy().ravel(),
-        "k_animal": pl.read_parquet(static / "k_param_animal.parquet").to_numpy().ravel(),
+        "k_animal": pl
+        .read_parquet(static / "k_param_animal.parquet")
+        .to_numpy()
+        .ravel(),
     }
     # Bimodal 1M stress sample: 80% narrow dominant peak (~0.91) + 20% broad
     # secondary (~5.75); the global mode is the dominant peak (well-defined).

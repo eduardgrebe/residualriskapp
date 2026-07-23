@@ -1,5 +1,5 @@
-# Residual HIV Transfusion Transmission Risk Estimation Tool
-# Copyright (C) 2025  Vitalant and Eduard Grebe Consulting
+# Residual HIV Transfusion Transmission Risk Estimator
+# Copyright (C) 2025-2026 Vitalant and Eduard Grebe Consulting
 # Author: Eduard Grebe <egrebe@vitalant.org> <eduard@grebe.consulting>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,8 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # Expects streamlit to be run from the root of the repository
-# streamlit run app/app.py
+# streamlit run app.py with venv activated, or
+# uv run streamlit run app.py
 import io
 import random
 import re

@@ -1,5 +1,5 @@
-# Residual HIV Transfusion Transmission Risk Estimation Tool
-# Copyright (C) 2025-2026  Vitalant and Eduard Grebe Consulting
+# Residual HIV Transfusion Transmission Risk Estimator
+# Copyright (C) 2025-2026 Vitalant and Eduard Grebe Consulting
 # Author: Eduard Grebe <egrebe@vitalant.org> <eduard@grebe.consulting>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -62,13 +62,62 @@ from typing import NamedTuple
 # for a proper delta-method SE (as residualrisk_analysis/assays/ASSAYS.qmd does
 # for the cobas TaqScreen assays, which likewise publish no 50% LoD).
 NAT_ASSAYS = {
-    "ultrio": {"display_name": "Procleix Ultrio (Tigris)", "lod50": 5.0, "lod50_sd": 0.364, "lod95": 12.2, "cp_per_iu": 0.6, "iu_std": "WHO 1st IS 97/656 (dHIV-1)"},
-    "ultrio_plus": {"display_name": "Procleix Ultrio Plus (Tigris)", "lod50": 2.7, "lod50_sd": 0.191, "lod95": 12.3, "cp_per_iu": 0.58, "iu_std": "WHO 2nd IS 97/650"},
-    "ultrio_elite": {"display_name": "Procleix Ultrio Elite (Panther)", "lod50": 3.1, "lod50_sd": 0.234, "lod95": 10.4, "cp_per_iu": 0.58, "iu_std": "WHO 2nd IS 97/650"},
-    "cobas_taqscreen_mpx": {"display_name": "cobas TaqScreen MPX (s 201)", "lod50": 5.5, "lod50_sd": 0.385, "lod95": 29.4, "cp_per_iu": 0.6, "iu_std": "WHO 1st IS 97/656"},
-    "cobas_taqscreen_mpxv2": {"display_name": "cobas TaqScreen MPX v2.0 (s 201)", "lod50": 5.3, "lod50_sd": 0.250, "lod95": 26.8, "cp_per_iu": 0.58, "iu_std": "WHO 2nd IS 97/650"},
-    "cobas_mpx": {"display_name": "cobas MPX (5800/6800/8800)", "lod50": 1.3, "lod50_sd": 0.0785, "lod95": 9.0, "cp_per_iu": 0.35, "iu_std": "WHO 3rd IS 10/152"},
-    "biomanguinhos": {"display_name": "Brazilian NAT Platform (Bio-Manguinhos)", "lod50": 27.13, "lod50_sd": 3.527, "lod95": 55.6, "cp_per_iu": 0.58, "iu_std": "WHO 2nd IS 97/650"},  # SD provisional (RSE 13%) -- see note above
+    "ultrio": {
+        "display_name": "Procleix Ultrio (Tigris)",
+        "lod50": 5.0,
+        "lod50_sd": 0.364,
+        "lod95": 12.2,
+        "cp_per_iu": 0.6,
+        "iu_std": "WHO 1st IS 97/656 (dHIV-1)",
+    },
+    "ultrio_plus": {
+        "display_name": "Procleix Ultrio Plus (Tigris)",
+        "lod50": 2.7,
+        "lod50_sd": 0.191,
+        "lod95": 12.3,
+        "cp_per_iu": 0.58,
+        "iu_std": "WHO 2nd IS 97/650",
+    },
+    "ultrio_elite": {
+        "display_name": "Procleix Ultrio Elite (Panther)",
+        "lod50": 3.1,
+        "lod50_sd": 0.234,
+        "lod95": 10.4,
+        "cp_per_iu": 0.58,
+        "iu_std": "WHO 2nd IS 97/650",
+    },
+    "cobas_taqscreen_mpx": {
+        "display_name": "cobas TaqScreen MPX (s 201)",
+        "lod50": 5.5,
+        "lod50_sd": 0.385,
+        "lod95": 29.4,
+        "cp_per_iu": 0.6,
+        "iu_std": "WHO 1st IS 97/656",
+    },
+    "cobas_taqscreen_mpxv2": {
+        "display_name": "cobas TaqScreen MPX v2.0 (s 201)",
+        "lod50": 5.3,
+        "lod50_sd": 0.250,
+        "lod95": 26.8,
+        "cp_per_iu": 0.58,
+        "iu_std": "WHO 2nd IS 97/650",
+    },
+    "cobas_mpx": {
+        "display_name": "cobas MPX (5800/6800/8800)",
+        "lod50": 1.3,
+        "lod50_sd": 0.0785,
+        "lod95": 9.0,
+        "cp_per_iu": 0.35,
+        "iu_std": "WHO 3rd IS 10/152",
+    },
+    "biomanguinhos": {
+        "display_name": "Brazilian NAT Platform (Bio-Manguinhos)",
+        "lod50": 27.13,
+        "lod50_sd": 3.527,
+        "lod95": 55.6,
+        "cp_per_iu": 0.58,
+        "iu_std": "WHO 2nd IS 97/650",
+    },  # SD provisional (RSE 13%) -- see note above
 }
 
 

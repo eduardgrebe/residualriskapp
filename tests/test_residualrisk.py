@@ -1,5 +1,5 @@
-# Residual HIV Transfusion Transmission Risk Estimation Tool
-# Copyright (C) 2025  Vitalant and Eduard Grebe Consulting
+# Residual HIV Transfusion Transmission Risk Estimator
+# Copyright (C) 2025-2026 Vitalant and Eduard Grebe Consulting
 # Author: Eduard Grebe <egrebe@vitalant.org> <eduard@grebe.consulting>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -67,13 +67,11 @@ DEFAULTS["lod95_lod50_ratio"] = DEFAULTS["lod95"] / DEFAULTS["lod50"]
 
 # A small synthetic k posterior: 1000 draws centred around realistic values
 _RNG = np.random.default_rng(seed=0)
-K_POSTERIOR = np.concatenate(
-    [
-        _RNG.exponential(scale=0.003, size=333),
-        _RNG.exponential(scale=0.008, size=334),
-        _RNG.exponential(scale=0.020, size=333),
-    ]
-)
+K_POSTERIOR = np.concatenate([
+    _RNG.exponential(scale=0.003, size=333),
+    _RNG.exponential(scale=0.008, size=334),
+    _RNG.exponential(scale=0.020, size=333),
+])
 
 # Bootstrap settings used in all bootstrap tests
 BS_KWARGS = dict(
@@ -130,7 +128,9 @@ class TestBackendField:
     def test_go_backend_recorded_in_sim_df(self):
         if find_go_binary() is None:
             pytest.skip("needs the Go binary")
-        *_, sim_df = rr.risk_days_bs(**{**BS_KWARGS, "return_sim_df": True}, use_go=True)
+        *_, sim_df = rr.risk_days_bs(
+            **{**BS_KWARGS, "return_sim_df": True}, use_go=True
+        )
         assert "backend" in sim_df.columns
         assert sim_df["backend"].unique().to_list() == ["go"]
 
@@ -839,12 +839,8 @@ class TestSampleInvgamma:
 
     def test_mode_parameterisation(self):
         """(alpha, mode) auto-calculates beta = mode * (alpha + 1)."""
-        beta_samples = rr.sample_invgamma(
-            50_000, alpha=3.0, beta=0.002692, seed=1
-        )
-        mode_samples = rr.sample_invgamma(
-            50_000, alpha=3.0, mode=0.000673, seed=1
-        )
+        beta_samples = rr.sample_invgamma(50_000, alpha=3.0, beta=0.002692, seed=1)
+        mode_samples = rr.sample_invgamma(50_000, alpha=3.0, mode=0.000673, seed=1)
         # beta = 0.000673 * (3 + 1) = 0.002692 — same distribution
         assert np.array_equal(beta_samples, mode_samples)
 
@@ -889,7 +885,9 @@ class TestInvgammaIwpAgreement:
         import polars as pl
 
         static = Path(__file__).resolve().parent.parent / "static"
-        return pl.read_parquet(static / "k_param_human.parquet").get_column("k").to_numpy()
+        return (
+            pl.read_parquet(static / "k_param_human.parquet").get_column("k").to_numpy()
+        )
 
     @staticmethod
     def _common_params() -> dict:
@@ -1155,4 +1153,3 @@ class TestRiskDaysBsGoInvGamma:
         py = rr.risk_days_bs(**_INVGAMMA_BS_KWARGS, use_go=False)
         go = rr.risk_days_bs(**_INVGAMMA_BS_KWARGS, use_go=True)
         assert np.median(py[3]) == pytest.approx(np.median(go[3]), rel=0.15)
-

@@ -1,11 +1,19 @@
-# Residual HIV Transfusion Transmission Risk Estimation Tool
-# Copyright (C) 2025-2026  Vitalant and Eduard Grebe Consulting
+# Residual HIV Transfusion Transmission Risk Estimator
+# Copyright (C) 2025-2026 Vitalant and Eduard Grebe Consulting
 # Author: Eduard Grebe <egrebe@vitalant.org> <eduard@grebe.consulting>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published
 # by the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 """UI-level checks for the Streamlit estimator page via ``streamlit.testing``.
 
@@ -108,11 +116,15 @@ class TestInvalidPrepInputsCaught:
 
     def test_invalid_prep_params_show_error_not_traceback(self):
         if find_go_binary() is None:
-            pytest.skip("needs the Go binary so the baseline runs without ProcessPoolExecutor")
+            pytest.skip(
+                "needs the Go binary so the baseline runs without ProcessPoolExecutor"
+            )
         at = _run_with_prep()
         for s in at.select_slider:
             if "number of simulations" in (s.label or ""):
-                s.set_value(1000)  # smallest count → fast baseline before the PrEP error
+                s.set_value(
+                    1000
+                )  # smallest count → fast baseline before the PrEP error
         for n in at.number_input:
             # ser_max <= ser_min → the library raises on Run.
             if n.label == "Time to seroconversion min (days)":
@@ -189,6 +201,6 @@ class TestPrereleaseBanner:
         monkeypatch.setattr(residualrisk, "__version__", "1.1.0")
         at = AppTest.from_file(_ESTIMATOR, default_timeout=120).run()
         assert not at.exception, at.exception
-        assert not any(
-            "Use at your own risk" in (w.value or "") for w in at.warning
-        ), [w.value for w in at.warning]
+        assert not any("Use at your own risk" in (w.value or "") for w in at.warning), [
+            w.value for w in at.warning
+        ]

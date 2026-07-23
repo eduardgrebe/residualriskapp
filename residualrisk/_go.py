@@ -1,5 +1,5 @@
-# Residual HIV Transfusion Transmission Risk Estimation Tool
-# Copyright (C) 2025  Vitalant and Eduard Grebe Consulting
+# Residual HIV Transfusion Transmission Risk Estimator
+# Copyright (C) 2025-2026 Vitalant and Eduard Grebe Consulting
 # Author: Eduard Grebe <egrebe@vitalant.org> <eduard@grebe.consulting>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -53,8 +53,10 @@ def _current_go_platform():
         platform.system().lower()
     )
     goarch = {
-        "x86_64": "amd64", "amd64": "amd64",
-        "arm64": "arm64", "aarch64": "arm64",
+        "x86_64": "amd64",
+        "amd64": "amd64",
+        "arm64": "arm64",
+        "aarch64": "arm64",
     }.get(platform.machine().lower())
     return goos, goarch
 
@@ -93,8 +95,7 @@ def _binary_version_matches(path):
             [path, "--version"], capture_output=True, text=True, timeout=10
         )
         return (
-            result.returncode == 0
-            and result.stdout.strip() == residualrisk.__version__
+            result.returncode == 0 and result.stdout.strip() == residualrisk.__version__
         )
     except Exception:
         return False
@@ -242,7 +243,12 @@ def mode_kde_go(
         idx = rng.choice(len(arr), size=cap, replace=False)
         arr = arr[idx]
 
-    payload = json.dumps({"data": arr.tolist(), "n_grid": n_grid, "cap": 0, "threads": threads})
+    payload = json.dumps({
+        "data": arr.tolist(),
+        "n_grid": n_grid,
+        "cap": 0,
+        "threads": threads,
+    })
     try:
         result = subprocess.run(
             [go_bin, "--kde-mode"],
@@ -407,7 +413,10 @@ def risk_days_bs_go(
         input_data["k_invgamma_alpha"] = k_invgamma_alpha
         input_data["k_invgamma_beta"] = _beta
     elif k_lnmix_w is not None:
-        if any(p is None for p in [k_lnmix_mu1, k_lnmix_sigma1, k_lnmix_mu2, k_lnmix_sigma2]):
+        if any(
+            p is None
+            for p in [k_lnmix_mu1, k_lnmix_sigma1, k_lnmix_mu2, k_lnmix_sigma2]
+        ):
             raise ValueError(
                 "All lnmix parameters (k_lnmix_w, mu1, sigma1, mu2, sigma2) must be provided together."
             )
@@ -435,8 +444,8 @@ def risk_days_bs_go(
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=False,   # always bytes — we decode stderr lines manually
-            bufsize=0,    # unbuffered for binary; progress lines are small
+            text=False,  # always bytes — we decode stderr lines manually
+            bufsize=0,  # unbuffered for binary; progress lines are small
         )
 
         # Send input and close stdin
@@ -509,7 +518,9 @@ def risk_days_bs_go(
 
         # Get stdout bytes
         raw = stdout_data[0] if stdout_data else b""
-        if isinstance(raw, str) or (isinstance(raw, bytes) and raw.startswith(b"STDOUT_ERROR:")):
+        if isinstance(raw, str) or (
+            isinstance(raw, bytes) and raw.startswith(b"STDOUT_ERROR:")
+        ):
             raise RuntimeError(f"Failed to read stdout: {raw}")
 
         if use_binary:
@@ -518,10 +529,12 @@ def risk_days_bs_go(
             #   [N bytes]  JSON header
             #   [rest]     column-major float64 LE arrays (iwp, k, doubling_time, lod50, volume_transfused)
             header_len = struct.unpack_from("<Q", raw, 0)[0]
-            header = json.loads(raw[8:8 + header_len])
+            header = json.loads(raw[8 : 8 + header_len])
             n_cols = len(header["columns"])
             n_bs_actual = header["n_bs"]
-            arrays = np.frombuffer(raw[8 + header_len:], dtype="<f8").reshape(n_cols, n_bs_actual)
+            arrays = np.frombuffer(raw[8 + header_len :], dtype="<f8").reshape(
+                n_cols, n_bs_actual
+            )
             col_idx = {name: i for i, name in enumerate(header["columns"])}
 
             rd_pe = header["point_estimate"]
@@ -531,11 +544,11 @@ def risk_days_bs_go(
 
             # Build sim_df from the REAL per-iteration parameters returned by Go.
             sim_df = pl.DataFrame({
-                "k":                 arrays[col_idx["k"]],
-                "doubling_time":     arrays[col_idx["doubling_time"]],
-                "lod50":             arrays[col_idx["lod50"]],
+                "k": arrays[col_idx["k"]],
+                "doubling_time": arrays[col_idx["doubling_time"]],
+                "lod50": arrays[col_idx["lod50"]],
                 "volume_transfused": arrays[col_idx["volume_transfused"]],
-                "iwp":               arrays[col_idx["iwp"]],
+                "iwp": arrays[col_idx["iwp"]],
             }).with_columns(
                 pl.lit(copies_per_virion).alias("copies_per_virion"),
                 pl.lit(C0).alias("C0"),
@@ -642,6 +655,7 @@ def risk_days_prep_bs_go(
 
     if threads is None:
         import multiprocessing
+
         threads = max(1, multiprocessing.cpu_count() - 1)
 
     # Build input JSON — baseline fields + prep_mode + PrEP-specific fields
@@ -714,7 +728,10 @@ def risk_days_prep_bs_go(
         input_data["k_invgamma_alpha"] = k_invgamma_alpha
         input_data["k_invgamma_beta"] = _beta
     elif k_lnmix_w is not None:
-        if any(p is None for p in [k_lnmix_mu1, k_lnmix_sigma1, k_lnmix_mu2, k_lnmix_sigma2]):
+        if any(
+            p is None
+            for p in [k_lnmix_mu1, k_lnmix_sigma1, k_lnmix_mu2, k_lnmix_sigma2]
+        ):
             raise ValueError(
                 "All lnmix parameters (k_lnmix_w, mu1, sigma1, mu2, sigma2) must be provided together."
             )
@@ -800,15 +817,19 @@ def risk_days_prep_bs_go(
             raise RuntimeError(f"Go binary failed: {error_msg}")
 
         raw = stdout_data[0] if stdout_data else b""
-        if isinstance(raw, str) or (isinstance(raw, bytes) and raw.startswith(b"STDOUT_ERROR:")):
+        if isinstance(raw, str) or (
+            isinstance(raw, bytes) and raw.startswith(b"STDOUT_ERROR:")
+        ):
             raise RuntimeError(f"Failed to read stdout: {raw}")
 
         if use_binary:
             header_len = struct.unpack_from("<Q", raw, 0)[0]
-            header = json.loads(raw[8:8 + header_len])
+            header = json.loads(raw[8 : 8 + header_len])
             n_cols = len(header["columns"])
             n_bs_actual = header["n_bs"]
-            arrays = np.frombuffer(raw[8 + header_len:], dtype="<f8").reshape(n_cols, n_bs_actual)
+            arrays = np.frombuffer(raw[8 + header_len :], dtype="<f8").reshape(
+                n_cols, n_bs_actual
+            )
             col_idx = {name: i for i, name in enumerate(header["columns"])}
 
             rd_pe = header["point_estimate"]
@@ -817,16 +838,16 @@ def risk_days_prep_bs_go(
             rdests = arrays[col_idx["iwp"]].tolist()
 
             sim_df = pl.DataFrame({
-                "k":                 arrays[col_idx["k"]],
-                "doubling_time":     arrays[col_idx["doubling_time"]],
-                "set_point":         arrays[col_idx["set_point"]],
-                "eclipse":           arrays[col_idx["eclipse"]],
-                "a":                 arrays[col_idx["a"]],
-                "b":                 arrays[col_idx["b"]],
-                "drug_effect":       arrays[col_idx["drug_effect"]],
-                "lod50":             arrays[col_idx["lod50"]],
+                "k": arrays[col_idx["k"]],
+                "doubling_time": arrays[col_idx["doubling_time"]],
+                "set_point": arrays[col_idx["set_point"]],
+                "eclipse": arrays[col_idx["eclipse"]],
+                "a": arrays[col_idx["a"]],
+                "b": arrays[col_idx["b"]],
+                "drug_effect": arrays[col_idx["drug_effect"]],
+                "lod50": arrays[col_idx["lod50"]],
                 "volume_transfused": arrays[col_idx["volume_transfused"]],
-                "iwp":               arrays[col_idx["iwp"]],
+                "iwp": arrays[col_idx["iwp"]],
             }).with_columns(
                 pl.lit(copies_per_virion).alias("copies_per_virion"),
                 pl.lit(C0).alias("C0"),

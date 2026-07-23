@@ -1,5 +1,5 @@
-# Residual HIV Transfusion Transmission Risk Estimation Tool
-# Copyright (C) 2025  Vitalant and Eduard Grebe Consulting
+# Residual HIV Transfusion Transmission Risk Estimator
+# Copyright (C) 2025-2026 Vitalant and Eduard Grebe Consulting
 # Author: Eduard Grebe <egrebe@vitalant.org> <eduard@grebe.consulting>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -130,7 +130,9 @@ def test_lod50_sd_matches_cov_derivation(name):
 
     # Stored values are rounded to 3 or 4 decimal places; accept either.
     candidates = [round(derived_sd, n) for n in (3, 4)]
-    assert any(math.isclose(stored_sd, c, rel_tol=0, abs_tol=1e-9) for c in candidates), (
+    assert any(
+        math.isclose(stored_sd, c, rel_tol=0, abs_tol=1e-9) for c in candidates
+    ), (
         f"{name}: stored lod50_sd={stored_sd} does not match CoV derivation "
         f"{derived_sd:.6f} (CoV={cov:.6f}, lod50={lod50}); "
         f"expected one of {candidates}"

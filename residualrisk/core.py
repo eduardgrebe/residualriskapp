@@ -1,5 +1,5 @@
-# Residual HIV Transfusion Transmission Risk Estimation Tool
-# Copyright (C) 2025  Vitalant and Eduard Grebe Consulting
+# Residual HIV Transfusion Transmission Risk Estimator
+# Copyright (C) 2025-2026 Vitalant and Eduard Grebe Consulting
 # Author: Eduard Grebe <egrebe@vitalant.org> <eduard@grebe.consulting>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -250,9 +250,7 @@ def _risk_days(
         # with quad can be reproduced exactly via the Python API.
         from scipy.integrate import quad
 
-        rd = quad(
-            _prob_infectious_nondetection, limits[0], limits[1], args=args
-        )[0]
+        rd = quad(_prob_infectious_nondetection, limits[0], limits[1], args=args)[0]
     else:
         raise ValueError(
             "integration_method must be 'gauss-legendre' or 'quad', "
@@ -485,12 +483,22 @@ def _sample_k(
                 )
         return stats.invgamma.rvs(k_invgamma_alpha, scale=_beta, size=n_bs)
     elif k_lnmix_w is not None:
-        if any(p is None for p in [k_lnmix_mu1, k_lnmix_sigma1, k_lnmix_mu2, k_lnmix_sigma2]):
+        if any(
+            p is None
+            for p in [k_lnmix_mu1, k_lnmix_sigma1, k_lnmix_mu2, k_lnmix_sigma2]
+        ):
             raise ValueError(
                 "All lnmix parameters (k_lnmix_w, mu1, sigma1, mu2, sigma2) must be provided together."
             )
-        return sample_lnmix(n_bs, k_lnmix_w, k_lnmix_mu1, k_lnmix_sigma1,
-                            k_lnmix_mu2, k_lnmix_sigma2, seed=seed)
+        return sample_lnmix(
+            n_bs,
+            k_lnmix_w,
+            k_lnmix_mu1,
+            k_lnmix_sigma1,
+            k_lnmix_mu2,
+            k_lnmix_sigma2,
+            seed=seed,
+        )
     else:
         raise ValueError(
             "At least one k-distribution must be specified: k_posterior_sample, "
@@ -539,17 +547,14 @@ def sample_invgamma(n, alpha, beta=None, mode=None, seed=None):
         If neither or both of *beta* and *mode* are provided.
     """
     if beta is None and mode is None:
-        raise ValueError(
-            "Exactly one of 'beta' or 'mode' must be provided."
-        )
+        raise ValueError("Exactly one of 'beta' or 'mode' must be provided.")
     if beta is not None and mode is not None:
-        raise ValueError(
-            "Provide 'beta' or 'mode', not both."
-        )
+        raise ValueError("Provide 'beta' or 'mode', not both.")
     if mode is not None:
         beta = mode * (alpha + 1)
     rng = np.random.default_rng(seed)
     from scipy.stats import invgamma
+
     return invgamma.rvs(alpha, scale=beta, size=n, random_state=rng)
 
 
@@ -673,7 +678,8 @@ def _risk_days_bs_python(
 
     np.random.seed(seed)
     ks = _sample_k(
-        n_bs, seed,
+        n_bs,
+        seed,
         k_posterior_sample=k_posterior_sample,
         k_gamma_shape=k_gamma_shape,
         k_gamma_scale=k_gamma_scale,
@@ -753,10 +759,12 @@ def _risk_days_bs_python(
             "z",
             "limits",
         ]
-        sim_df = pl.DataFrame(
-            {name: list(col) for name, col in zip(_col_names, zip(*args_list))}
-        ).with_columns(
-            (pl.col("lod50") * pl.col("lod95_lod50_ratio")).alias("lod95"),  # Convert ratio to actual lod95
+        sim_df = pl.DataFrame({
+            name: list(col) for name, col in zip(_col_names, zip(*args_list))
+        }).with_columns(
+            (pl.col("lod50") * pl.col("lod95_lod50_ratio")).alias(
+                "lod95"
+            ),  # Convert ratio to actual lod95
             pl.Series("iwp", rdests),
             pl.lit(seed).alias("random_seed"),
         )

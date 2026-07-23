@@ -1,11 +1,19 @@
-# Residual HIV Transfusion Transmission Risk Estimation Tool
-# Copyright (C) 2025-2026  Vitalant and Eduard Grebe Consulting
+# Residual HIV Transfusion Transmission Risk Estimator
+# Copyright (C) 2025-2026 Vitalant and Eduard Grebe Consulting
 # Author: Eduard Grebe <egrebe@vitalant.org> <eduard@grebe.consulting>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published
 # by the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 """``tcrit`` targets the plateau's central level, so the PrEP viral-load trajectory
 is continuous at the growth→plateau crossover for **every** offset.
@@ -70,9 +78,25 @@ def _vl(t, offset, tcrit, set_point=_SP, a=_A):
 def _py_rde(offset, set_point=_SP, a=_A):
     """The PrEP integral at the point values — single integration, no pool."""
     return P._risk_days_prep(
-        _CPV, _C0, _DT, set_point, _ECLIPSE, a, _B, offset,
-        200, 0.000673, 16, 2.73, 3.5, 1,
-        28.7, 250, 50.49434, 1.15062, 1.6449,
+        _CPV,
+        _C0,
+        _DT,
+        set_point,
+        _ECLIPSE,
+        a,
+        _B,
+        offset,
+        200,
+        0.000673,
+        16,
+        2.73,
+        3.5,
+        1,
+        28.7,
+        250,
+        50.49434,
+        1.15062,
+        1.6449,
     )
 
 
@@ -101,7 +125,7 @@ class TestContinuityAtTcrit:
     def test_trajectory_is_continuous(self, offset):
         tc = _tcrit(offset)
         eps = 1e-9
-        left = _vl(tc - eps, offset, tc)   # end of exponential growth
+        left = _vl(tc - eps, offset, tc)  # end of exponential growth
         right = _vl(tc + eps, offset, tc)  # start of the oscillating plateau
         assert left == pytest.approx(right, rel=1e-6), (
             f"viral load jumps by {right / left:.2f}x at tcrit for offset={offset}"
@@ -194,19 +218,40 @@ class TestOffsetValidation:
         if binary is None:
             pytest.skip("no Go binary available")
         payload = {
-            "k": 0.000673, "doubling_time": _DT, "doubling_time_norm_sd": 0.2813,
-            "lod50": 2.73, "lod50_sd": 0.53, "lod95_lod50_ratio": 3.5,
-            "volume_transfused": 200, "volume_transfused_min": 100,
-            "volume_transfused_max": 340, "pool_size": 16, "retests": 1,
-            "k_invgamma_alpha": 2.0, "k_invgamma_beta": 0.002019,
-            "n_bs": 50, "seed": 42, "threads": 1,
-            "prep_mode": True, "set_point": _SP, "eclipse": _ECLIPSE,
-            "a": 0.0, "b": _B, "drug_effect": 1.0,
-            "ser_min": 28.7, "ser_max": 250, "ser_alpha": 50.49434, "ser_beta": 1.15062,
+            "k": 0.000673,
+            "doubling_time": _DT,
+            "doubling_time_norm_sd": 0.2813,
+            "lod50": 2.73,
+            "lod50_sd": 0.53,
+            "lod95_lod50_ratio": 3.5,
+            "volume_transfused": 200,
+            "volume_transfused_min": 100,
+            "volume_transfused_max": 340,
+            "pool_size": 16,
+            "retests": 1,
+            "k_invgamma_alpha": 2.0,
+            "k_invgamma_beta": 0.002019,
+            "n_bs": 50,
+            "seed": 42,
+            "threads": 1,
+            "prep_mode": True,
+            "set_point": _SP,
+            "eclipse": _ECLIPSE,
+            "a": 0.0,
+            "b": _B,
+            "drug_effect": 1.0,
+            "ser_min": 28.7,
+            "ser_max": 250,
+            "ser_alpha": 50.49434,
+            "ser_beta": 1.15062,
             # "offset" omitted -> 0 -> must be rejected
         }
         result = subprocess.run(
-            [binary], input=json.dumps(payload), capture_output=True, text=True, timeout=60
+            [binary],
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
         assert result.returncode != 0
         assert "offset must be positive" in (result.stderr + result.stdout).lower()

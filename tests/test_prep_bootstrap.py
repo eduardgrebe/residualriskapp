@@ -1,5 +1,5 @@
-# Residual HIV Transfusion Transmission Risk Estimation Tool
-# Copyright (C) 2025-2026  Vitalant and Eduard Grebe Consulting
+# Residual HIV Transfusion Transmission Risk Estimator
+# Copyright (C) 2025-2026 Vitalant and Eduard Grebe Consulting
 # Author: Eduard Grebe <egrebe@vitalant.org> <eduard@grebe.consulting>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -91,12 +91,27 @@ def _assert_prep_rows_recompute_iwp(sim_df, rtol=1e-9):
     assert sim_df.height > 0, "sim_df is empty — nothing was checked"
     for row in sim_df.iter_rows(named=True):
         rd = _risk_days_prep(
-            int(row["copies_per_virion"]), row["C0"], row["doubling_time"],
-            row["set_point"], row["eclipse"], row["a"], row["b"], row["offset"],
-            row["volume_transfused"], row["k"], int(row["pool_size"]), row["lod50"],
-            row["lod95_lod50_ratio"], int(row["retests"]),
-            row["ser_min"], row["ser_max"], row["ser_alpha"], row["ser_beta"],
-            row["z"], row["drug_effect"], tuple(row["limits"]),
+            int(row["copies_per_virion"]),
+            row["C0"],
+            row["doubling_time"],
+            row["set_point"],
+            row["eclipse"],
+            row["a"],
+            row["b"],
+            row["offset"],
+            row["volume_transfused"],
+            row["k"],
+            int(row["pool_size"]),
+            row["lod50"],
+            row["lod95_lod50_ratio"],
+            int(row["retests"]),
+            row["ser_min"],
+            row["ser_max"],
+            row["ser_alpha"],
+            row["ser_beta"],
+            row["z"],
+            row["drug_effect"],
+            tuple(row["limits"]),
         )
         assert np.isclose(rd, row["iwp"], rtol=rtol), (
             f"row param->iwp mismatch: recomputed {rd:.10g} vs stored {row['iwp']:.10g} "
@@ -108,6 +123,7 @@ def _assert_prep_rows_recompute_iwp(sim_df, rtol=1e-9):
 # ---------------------------------------------------------------------------
 # Result structure & statistics
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.multiprocessing
 class TestPrepBsResultStructure(unittest.TestCase):
@@ -158,6 +174,7 @@ class TestPrepBsResultStructure(unittest.TestCase):
 # return_sim_df
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.multiprocessing
 class TestPrepBsSimDf(unittest.TestCase):
     """Verify the simulation DataFrame when return_sim_df=True."""
@@ -182,8 +199,17 @@ class TestPrepBsSimDf(unittest.TestCase):
         self.assertIn("iwp", self.sim_df.columns)
 
     def test_sim_df_has_prep_columns(self):
-        for col in ("set_point", "eclipse", "a", "b", "offset",
-                     "ser_min", "ser_max", "ser_alpha", "ser_beta"):
+        for col in (
+            "set_point",
+            "eclipse",
+            "a",
+            "b",
+            "offset",
+            "ser_min",
+            "ser_max",
+            "ser_alpha",
+            "ser_beta",
+        ):
             self.assertIn(col, self.sim_df.columns, f"Missing column: {col}")
 
     def test_sim_df_has_baseline_columns(self):
@@ -223,6 +249,7 @@ class TestPrepBsSimDf(unittest.TestCase):
 # Reproducibility
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.multiprocessing
 class TestPrepBsReproducibility(unittest.TestCase):
     """Same seed → same results; different seed → different results."""
@@ -259,6 +286,7 @@ class TestPrepBsReproducibility(unittest.TestCase):
 # Point-estimate methods
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.multiprocessing
 class TestPrepBsPointEstimates(unittest.TestCase):
     """Verify each point_estimate method produces sensible results."""
@@ -291,8 +319,8 @@ class TestPrepBsPointEstimates(unittest.TestCase):
         """
         rd_pe, _, _, _, _ = self._run("primary parameters")
         expected = _risk_days_prep(
-            2,                                    # copies_per_virion (default)
-            0.00025,                              # C0 (default)
+            2,  # copies_per_virion (default)
+            0.00025,  # C0 (default)
             PREP_BS_KWARGS["doubling_time"],
             PREP_BS_KWARGS["set_point"],
             PREP_BS_KWARGS["eclipse"],
@@ -309,9 +337,9 @@ class TestPrepBsPointEstimates(unittest.TestCase):
             PREP_BS_KWARGS["ser_max"],
             PREP_BS_KWARGS["ser_alpha"],
             PREP_BS_KWARGS["ser_beta"],
-            1.6449,                               # z (default)
-            1.0,                                  # drug_effect (default)
-            (-100, 500),                          # limits (default)
+            1.6449,  # z (default)
+            1.0,  # drug_effect (default)
+            (-100, 500),  # limits (default)
         )
         self.assertGreater(rd_pe, 0)
         self.assertAlmostEqual(rd_pe, expected, places=10)
@@ -320,6 +348,7 @@ class TestPrepBsPointEstimates(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # k-distribution paths — full bootstrap
 # ---------------------------------------------------------------------------
+
 
 class TestPrepBsKDistPaths(unittest.TestCase):
     """Exercise every k-distribution path through the full bootstrap."""
@@ -387,6 +416,7 @@ class TestPrepBsKDistPaths(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # PrEP-specific parameter effects
 # ---------------------------------------------------------------------------
+
 
 @unittest.skipUnless(find_go_binary(), "Go binary not available")
 class TestPrepBsSimDfGo(unittest.TestCase):
@@ -458,12 +488,8 @@ class TestPrepBsParameterEffects(unittest.TestCase):
 
     def test_shorter_eclipse_higher_risk(self):
         """Shorter eclipse → higher RDE (viremia starts earlier)."""
-        rd_e2, _, _, _, _ = self._run(
-            eclipse=2.0, eclipse_dist_uniform=(1.0, 3.0)
-        )
-        rd_e14, _, _, _, _ = self._run(
-            eclipse=14.0, eclipse_dist_uniform=(12.0, 16.0)
-        )
+        rd_e2, _, _, _, _ = self._run(eclipse=2.0, eclipse_dist_uniform=(1.0, 3.0))
+        rd_e14, _, _, _, _ = self._run(eclipse=14.0, eclipse_dist_uniform=(12.0, 16.0))
         self.assertGreater(rd_e2, rd_e14)
 
     def test_wider_serology_window_higher_risk(self):
@@ -482,6 +508,7 @@ class TestPrepBsParameterEffects(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestPrepBsEdgeCases(unittest.TestCase):
     """Edge cases and error handling."""
@@ -517,6 +544,7 @@ class TestPrepBsEdgeCases(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Go acceleration (use_go=True)
 # ---------------------------------------------------------------------------
+
 
 @unittest.skipIf(find_go_binary() is None, "Go binary not available")
 class TestPrepBsGoDispatch(unittest.TestCase):
@@ -653,9 +681,7 @@ class TestPrepIntegrationMethod(unittest.TestCase):
         gl = _risk_days_prep(
             **_PREP_SINGLE, **_SER_NARROW, integration_method="gauss-legendre"
         )
-        qd = _risk_days_prep(
-            **_PREP_SINGLE, **_SER_NARROW, integration_method="quad"
-        )
+        qd = _risk_days_prep(**_PREP_SINGLE, **_SER_NARROW, integration_method="quad")
         assert gl == pytest.approx(_TRUTH_NARROW, rel=1e-3)
         self.assertGreater(gl, 1.0)
         # quad is catastrophically wrong here (orders of magnitude below truth)
@@ -668,17 +694,13 @@ class TestPrepIntegrationMethod(unittest.TestCase):
         gl = _risk_days_prep(
             **_PREP_SINGLE, **_SER_PROD, integration_method="gauss-legendre"
         )
-        qd = _risk_days_prep(
-            **_PREP_SINGLE, **_SER_PROD, integration_method="quad"
-        )
+        qd = _risk_days_prep(**_PREP_SINGLE, **_SER_PROD, integration_method="quad")
         assert gl == pytest.approx(qd, rel=1e-3)
         assert gl == pytest.approx(_TRUTH_PROD, rel=1e-3)
 
     def test_invalid_method_raises(self):
         with self.assertRaises(ValueError):
-            _risk_days_prep(
-                **_PREP_SINGLE, **_SER_PROD, integration_method="simpson"
-            )
+            _risk_days_prep(**_PREP_SINGLE, **_SER_PROD, integration_method="simpson")
 
     def test_use_go_with_quad_raises(self):
         # Conflict guard: the Go backend only implements gauss-legendre. Raises
@@ -695,15 +717,25 @@ class TestPrepIntegrationMethod(unittest.TestCase):
     def test_scalar_a_exceeds_offset_raises(self):
         # a > offset would drive the plateau viral load negative; rejected up
         # front (before the pool, so sandbox-safe).
-        kw = {**PREP_BS_KWARGS, "a": 1.5, "offset": 1.0,
-              "k_invgamma_alpha": 2.0, "k_invgamma_beta": 0.002019}
+        kw = {
+            **PREP_BS_KWARGS,
+            "a": 1.5,
+            "offset": 1.0,
+            "k_invgamma_alpha": 2.0,
+            "k_invgamma_beta": 0.002019,
+        }
         with self.assertRaises(ValueError):
             risk_days_prep_bs(**kw)
 
     def test_a_dist_upper_exceeds_offset_raises(self):
         # Likewise for the upper bound of the sampling range.
-        kw = {**PREP_BS_KWARGS, "offset": 1.0, "a_dist_uniform": (0.5, 1.2),
-              "k_invgamma_alpha": 2.0, "k_invgamma_beta": 0.002019}
+        kw = {
+            **PREP_BS_KWARGS,
+            "offset": 1.0,
+            "a_dist_uniform": (0.5, 1.2),
+            "k_invgamma_alpha": 2.0,
+            "k_invgamma_beta": 0.002019,
+        }
         with self.assertRaises(ValueError):
             risk_days_prep_bs(**kw)
 
@@ -743,16 +775,24 @@ class TestPrepIntegrationMethod(unittest.TestCase):
     def test_scalar_drug_effect_out_of_range_raises(self):
         # drug_effect must be in (0, 1]; rejected before the pool (sandbox-safe).
         for bad in (1.5, 0.0, -0.1):
-            kw = {**PREP_BS_KWARGS, "drug_effect": bad,
-                  "k_invgamma_alpha": 2.0, "k_invgamma_beta": 0.002019}
+            kw = {
+                **PREP_BS_KWARGS,
+                "drug_effect": bad,
+                "k_invgamma_alpha": 2.0,
+                "k_invgamma_beta": 0.002019,
+            }
             with self.assertRaises(ValueError):
                 risk_days_prep_bs(**kw)
 
     def test_drug_effect_dist_out_of_range_raises(self):
         # The sampling range must satisfy 0 < lo <= hi <= 1.
         for bad in ((0.5, 1.2), (0.0, 0.8), (0.8, 0.5)):
-            kw = {**PREP_BS_KWARGS, "drug_effect_dist_uniform": bad,
-                  "k_invgamma_alpha": 2.0, "k_invgamma_beta": 0.002019}
+            kw = {
+                **PREP_BS_KWARGS,
+                "drug_effect_dist_uniform": bad,
+                "k_invgamma_alpha": 2.0,
+                "k_invgamma_beta": 0.002019,
+            }
             with self.assertRaises(ValueError):
                 risk_days_prep_bs(**kw)
 
@@ -795,7 +835,9 @@ class TestPrepBsInputValidation(unittest.TestCase):
 
     def test_ser_max_not_greater_than_ser_min(self):
         self._assert_raises_both_backends(ser_min=250, ser_max=100)  # ser_max < ser_min
-        self._assert_raises_both_backends(ser_min=250, ser_max=250)  # ser_max == ser_min
+        self._assert_raises_both_backends(
+            ser_min=250, ser_max=250
+        )  # ser_max == ser_min
 
     def test_ser_alpha_not_positive(self):
         self._assert_raises_both_backends(ser_alpha=0.0)
@@ -839,10 +881,11 @@ class TestPrepBsDrugEffect(unittest.TestCase):
 
     def test_varied_drug_effect_within_range(self):
         # Sampled per-iteration drug_effect lies within the requested range.
-        _, _, _, _, sim_df = risk_days_prep_bs(
-            **{**self.BASE, "return_sim_df": True,
-               "drug_effect_dist_uniform": (0.5, 0.9)}
-        )
+        _, _, _, _, sim_df = risk_days_prep_bs(**{
+            **self.BASE,
+            "return_sim_df": True,
+            "drug_effect_dist_uniform": (0.5, 0.9),
+        })
         de = sim_df["drug_effect"].to_numpy()
         assert de.min() >= 0.5 and de.max() <= 0.9
         assert len(set(de.tolist())) > 1

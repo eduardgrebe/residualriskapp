@@ -1,11 +1,19 @@
-# Residual HIV Transfusion Transmission Risk Estimation Tool
-# Copyright (C) 2025-2026  Vitalant and Eduard Grebe Consulting
+# Residual HIV Transfusion Transmission Risk Estimator
+# Copyright (C) 2025-2026 Vitalant and Eduard Grebe Consulting
 # Author: Eduard Grebe <egrebe@vitalant.org> <eduard@grebe.consulting>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published
 # by the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 """The four *k* input modes are mutually exclusive, not a priority cascade.
 
@@ -105,7 +113,9 @@ class TestValidatorDirectly:
         """The message must say *which* modes collided — otherwise the caller has to
         go hunting through a config dict for the stale key."""
         with pytest.raises(ValueError) as exc:
-            C._validate_k_inputs(**_MODES["k_posterior_sample"], **_MODES["k_invgamma_*"])
+            C._validate_k_inputs(
+                **_MODES["k_posterior_sample"], **_MODES["k_invgamma_*"]
+            )
         assert "k_posterior_sample" in str(exc.value)
         assert "k_invgamma_*" in str(exc.value)
 
@@ -181,8 +191,10 @@ class TestBaselineBootstrapEntryPoint:
         )
         with pytest.raises(ValueError, match="Exactly one k-distribution"):
             rr.risk_days_bs(
-                **_BASE, use_go=True,
-                **_MODES["k_posterior_sample"], **_MODES["k_lnmix_*"],
+                **_BASE,
+                use_go=True,
+                **_MODES["k_posterior_sample"],
+                **_MODES["k_lnmix_*"],
             )
 
 
@@ -216,7 +228,11 @@ class TestGoBinaryRejectsPayload:
         if binary is None:
             pytest.skip("no Go binary available")
         return subprocess.run(
-            [binary], input=json.dumps(payload), capture_output=True, text=True, timeout=60
+            [binary],
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
 
     def test_two_modes_rejected(self):
@@ -232,6 +248,8 @@ class TestGoBinaryRejectsPayload:
 
     def test_single_mode_still_accepted(self):
         """Guard against the new check rejecting a *valid* payload."""
-        result = self._run(self._payload(k_invgamma_alpha=2.0, k_invgamma_beta=0.002019))
+        result = self._run(
+            self._payload(k_invgamma_alpha=2.0, k_invgamma_beta=0.002019)
+        )
         assert result.returncode == 0, result.stderr
         assert json.loads(result.stdout)["point_estimate"] > 0

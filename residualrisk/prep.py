@@ -1,5 +1,5 @@
-# Residual HIV Transfusion Transmission Risk Estimation Tool
-# Copyright (C) 2025  Vitalant and Eduard Grebe Consulting
+# Residual HIV Transfusion Transmission Risk Estimator
+# Copyright (C) 2025-2026 Vitalant and Eduard Grebe Consulting
 # Author: Eduard Grebe <egrebe@vitalant.org> <eduard@grebe.consulting>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -110,7 +110,9 @@ def _find_tcrit(eclipse, C0, doubling_time, set_point, copies_per_virion=2, offs
     )
 
 
-def _vl_postbt(t, eclipse, C0, doubling_time, set_point, a, b, offset, tcrit, copies_per_virion=2):
+def _vl_postbt(
+    t, eclipse, C0, doubling_time, set_point, a, b, offset, tcrit, copies_per_virion=2
+):
     # Returns the modelled concentration C in **virions/mL**. ``set_point`` is a
     # clinical viral load in **RNA copies/mL**, so the plateau centres on
     # ``offset * set_point / copies_per_virion`` virions/mL (RNA copies = 2 * virions
@@ -132,7 +134,9 @@ def _vl_postbt(t, eclipse, C0, doubling_time, set_point, a, b, offset, tcrit, co
         # evaluated in this branch: for large t with a small (now-sampleable)
         # doubling_time it would overflow, and the value would only be discarded
         # — cf. the growth-exponent cap in core._concentration.
-        vl = (set_point / copies_per_virion) * _sin_varied(t=t - tcrit, a=a, b=b, offset=offset)
+        vl = (set_point / copies_per_virion) * _sin_varied(
+            t=t - tcrit, a=a, b=b, offset=offset
+        )
     # Modelled viral load can dip below zero when the sinusoidal set-point
     # oscillation amplitude exceeds its offset (a > offset); clamp to a
     # physical floor of zero.
@@ -179,7 +183,9 @@ def _prob_infectious_prep(
     copies_per_virion=2.0,
     drug_effect=1.0,
 ):
-    tcrit = _find_tcrit(eclipse, C0, doubling_time, set_point, copies_per_virion, offset=offset)
+    tcrit = _find_tcrit(
+        eclipse, C0, doubling_time, set_point, copies_per_virion, offset=offset
+    )
     C = _vl_postbt(
         t=t,
         eclipse=eclipse,
@@ -207,7 +213,7 @@ def _prob_nondetection_serology_prep(t, min, max, alpha, beta):
     elif t > max:
         p = 0.0
     else:
-        p = math.exp(-((t - min) / alpha) ** beta)
+        p = math.exp(-(((t - min) / alpha) ** beta))
     return p
 
 
@@ -228,7 +234,9 @@ def _prob_nondetection_prep(
     z=1.6449,
     seroconversion_delay_median=45,
 ):
-    tcrit = _find_tcrit(eclipse, C0, doubling_time, set_point, copies_per_virion, offset=offset)
+    tcrit = _find_tcrit(
+        eclipse, C0, doubling_time, set_point, copies_per_virion, offset=offset
+    )
     Cv = _vl_postbt(
         t=t,
         eclipse=eclipse,
@@ -245,7 +253,9 @@ def _prob_nondetection_prep(
     if Cc == 0.0:
         return 1.0
     elif Cc > 0.0:
-        p_pos_init = _prob_pos_init(Cc, doubling_time, pool_size, lod50, lod95_lod50_ratio, z)
+        p_pos_init = _prob_pos_init(
+            Cc, doubling_time, pool_size, lod50, lod95_lod50_ratio, z
+        )
         p_neg_retest = _prob_neg_retest(
             Cc, doubling_time, pool_size, lod50, lod95_lod50_ratio, retests, z
         )
@@ -344,10 +354,26 @@ def _risk_days_prep(
     # Ideally we would integrate from -np.inf to np.inf, but that causes an
     # overflow error, so we choose safe limits instead.
     args = (
-        eclipse, C0, doubling_time, set_point, a, b, offset,
-        volume_transfused, k, copies_per_virion, pool_size,
-        lod50, lod95_lod50_ratio, retests, ser_min, ser_max,
-        ser_alpha, ser_beta, drug_effect, z,
+        eclipse,
+        C0,
+        doubling_time,
+        set_point,
+        a,
+        b,
+        offset,
+        volume_transfused,
+        k,
+        copies_per_virion,
+        pool_size,
+        lod50,
+        lod95_lod50_ratio,
+        retests,
+        ser_min,
+        ser_max,
+        ser_alpha,
+        ser_beta,
+        drug_effect,
+        z,
     )
     if integration_method == "gauss-legendre":
         # Fixed 1000-point Gauss-Legendre, matching the Go backend. The default:
@@ -600,7 +626,8 @@ def risk_days_prep_bs(
 
     np.random.seed(seed)
     ks = _sample_k(
-        n_bs, seed,
+        n_bs,
+        seed,
         k_posterior_sample=k_posterior_sample,
         k_gamma_shape=k_gamma_shape,
         k_gamma_scale=k_gamma_scale,
@@ -614,7 +641,9 @@ def risk_days_prep_bs(
         k_lnmix_sigma2=k_lnmix_sigma2,
     )
     doubling_times = _sample_positive_normal(doubling_time, doubling_time_norm_sd, n_bs)
-    set_points = np.random.uniform(set_point_dist_uniform[0], set_point_dist_uniform[1], n_bs)
+    set_points = np.random.uniform(
+        set_point_dist_uniform[0], set_point_dist_uniform[1], n_bs
+    )
     eclipses = np.random.uniform(eclipse_dist_uniform[0], eclipse_dist_uniform[1], n_bs)
     lod50s = _sample_positive_normal(lod50, lod50_sd, n_bs)
     volumes_transfused = np.random.uniform(
@@ -626,26 +655,48 @@ def risk_days_prep_bs(
     # varied; a <= offset is enforced above.
     a_s = (
         np.random.uniform(a_dist_uniform[0], a_dist_uniform[1], n_bs)
-        if a_dist_uniform is not None else np.full(n_bs, a)
+        if a_dist_uniform is not None
+        else np.full(n_bs, a)
     )
     b_s = (
         np.random.uniform(b_dist_uniform[0], b_dist_uniform[1], n_bs)
-        if b_dist_uniform is not None else np.full(n_bs, b)
+        if b_dist_uniform is not None
+        else np.full(n_bs, b)
     )
     # Drug-effect factor: held fixed at the scalar unless a uniform range is
     # given (np.full draws no RNG, so reproducibility is unchanged when not
     # varied; the default 1.0 leaves the RDE bit-for-bit identical).
     de_s = (
-        np.random.uniform(drug_effect_dist_uniform[0], drug_effect_dist_uniform[1], n_bs)
-        if drug_effect_dist_uniform is not None else np.full(n_bs, drug_effect)
+        np.random.uniform(
+            drug_effect_dist_uniform[0], drug_effect_dist_uniform[1], n_bs
+        )
+        if drug_effect_dist_uniform is not None
+        else np.full(n_bs, drug_effect)
     )
 
     args_list = [
         (
-            copies_per_virion, C0, doubling_times[i], set_points[i], eclipses[i],
-            a_s[i], b_s[i], offset, volumes_transfused[i], ks[i], pool_size, lod50s[i],
-            lod95_lod50_ratio, retests, ser_min, ser_max, ser_alpha, ser_beta, z,
-            de_s[i], limits,
+            copies_per_virion,
+            C0,
+            doubling_times[i],
+            set_points[i],
+            eclipses[i],
+            a_s[i],
+            b_s[i],
+            offset,
+            volumes_transfused[i],
+            ks[i],
+            pool_size,
+            lod50s[i],
+            lod95_lod50_ratio,
+            retests,
+            ser_min,
+            ser_max,
+            ser_alpha,
+            ser_beta,
+            z,
+            de_s[i],
+            limits,
         )
         for i in range(n_bs)
     ]
@@ -662,9 +713,13 @@ def risk_days_prep_bs(
             # Note: Streamlit warnings about missing ScriptRunContext are expected and harmless when using ProcessPoolExecutor
             if progress is not None:
                 new_percent = int((completed_count / n_bs) * 100)
-                if completed_count == 1 or new_percent > getattr(progress, "_last_percent", 0):
+                if completed_count == 1 or new_percent > getattr(
+                    progress, "_last_percent", 0
+                ):
                     progress._last_percent = new_percent
-                    progress.progress(completed_count / n_bs, text=f"Progress: {new_percent}%")
+                    progress.progress(
+                        completed_count / n_bs, text=f"Progress: {new_percent}%"
+                    )
 
     rd_range = [np.min(rdests), np.max(rdests)]
     rd_cri = np.quantile(rdests, (alpha / 2, 1 - alpha / 2))
@@ -693,9 +748,9 @@ def risk_days_prep_bs(
             "drug_effect",
             "limits",
         ]
-        sim_df = pl.DataFrame(
-            {name: list(col) for name, col in zip(_col_names, zip(*args_list))}
-        ).with_columns(
+        sim_df = pl.DataFrame({
+            name: list(col) for name, col in zip(_col_names, zip(*args_list))
+        }).with_columns(
             (pl.col("lod50") * pl.col("lod95_lod50_ratio")).alias("lod95"),
             pl.Series("iwp", rdests),
             pl.lit(seed).alias("random_seed"),
@@ -703,10 +758,27 @@ def risk_days_prep_bs(
 
     if point_estimate == "primary parameters":
         rd_pe = _risk_days_prep(
-            copies_per_virion, C0, doubling_time, set_point, eclipse,
-            a, b, offset, volume_transfused, k, pool_size, lod50,
-            lod95_lod50_ratio, retests, ser_min, ser_max, ser_alpha, ser_beta, z,
-            drug_effect, limits,
+            copies_per_virion,
+            C0,
+            doubling_time,
+            set_point,
+            eclipse,
+            a,
+            b,
+            offset,
+            volume_transfused,
+            k,
+            pool_size,
+            lod50,
+            lod95_lod50_ratio,
+            retests,
+            ser_min,
+            ser_max,
+            ser_alpha,
+            ser_beta,
+            z,
+            drug_effect,
+            limits,
             integration_method=integration_method,
         )
     elif point_estimate == "median":

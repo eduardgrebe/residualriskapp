@@ -1,5 +1,5 @@
-# Residual HIV Transfusion Transmission Risk Estimation Tool
-# Copyright (C) 2025-2026  Vitalant and Eduard Grebe Consulting
+# Residual HIV Transfusion Transmission Risk Estimator
+# Copyright (C) 2025-2026 Vitalant and Eduard Grebe Consulting
 # Author: Eduard Grebe <egrebe@vitalant.org> <eduard@grebe.consulting>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -48,6 +48,7 @@ def _iwp(n, loc=8.0, scale=1.5, seed=1):
 # Point estimate
 # --------------------------------------------------------------------------- #
 
+
 def test_pe_is_additive_sum_of_component_pes():
     n = 5000
     iwp = _iwp(n)
@@ -65,6 +66,7 @@ def test_pe_is_additive_sum_of_component_pes():
 # --------------------------------------------------------------------------- #
 # Credible-interval shape and consistency
 # --------------------------------------------------------------------------- #
+
 
 def test_cri_ordered_positive_and_brackets_pe():
     n = 8000
@@ -98,6 +100,7 @@ def test_onein_cri_is_inverse_of_perm_cri():
 # Reproducibility
 # --------------------------------------------------------------------------- #
 
+
 def test_reproducible_same_seed():
     n = 3000
     comps = [(8.0, _iwp(n), 0.0005, 0.0001), (10.0, _iwp(n, seed=2), 0.0008, 0.00015)]
@@ -114,13 +117,14 @@ def test_different_seed_changes_cri_not_pe():
     comps = [(8.0, _iwp(n), 0.0005, 0.0001)]
     a = total_residual_risk_rd(comps, seed=1)
     b = total_residual_risk_rd(comps, seed=2)
-    assert a[0] == pytest.approx(b[0])   # PE uses point incidence -> seed-independent
-    assert a[1] != b[1]                  # CrI uses sampled incidence -> seed-dependent
+    assert a[0] == pytest.approx(b[0])  # PE uses point incidence -> seed-independent
+    assert a[1] != b[1]  # CrI uses sampled incidence -> seed-dependent
 
 
 # --------------------------------------------------------------------------- #
 # Equivalence with the validated residual_risk_rd
 # --------------------------------------------------------------------------- #
+
 
 def test_single_component_matches_residual_risk_rd():
     """A one-component total must reproduce residual_risk_rd bit-for-bit:
@@ -131,8 +135,12 @@ def test_single_component_matches_residual_risk_rd():
     pe, cri, onein_pe, onein_cri = total_residual_risk_rd(
         [(iwp_pe, iwp, inc, sd)], per=1e6, seed=SEED
     )
-    r_pe, r_cri, _ = rr.residual_risk_rd(iwp_pe, iwp, inc, sd, per=1e6, seed=SEED, one_in_x=False)
-    o_pe, o_cri, _ = rr.residual_risk_rd(iwp_pe, iwp, inc, sd, per=None, seed=SEED, one_in_x=True)
+    r_pe, r_cri, _ = rr.residual_risk_rd(
+        iwp_pe, iwp, inc, sd, per=1e6, seed=SEED, one_in_x=False
+    )
+    o_pe, o_cri, _ = rr.residual_risk_rd(
+        iwp_pe, iwp, inc, sd, per=None, seed=SEED, one_in_x=True
+    )
     assert pe == pytest.approx(r_pe, rel=1e-12)
     assert onein_pe == pytest.approx(o_pe, rel=1e-12)
     np.testing.assert_allclose(cri, r_cri, rtol=1e-9)
@@ -143,6 +151,7 @@ def test_single_component_matches_residual_risk_rd():
 # Dependence structure: independent incidence, shared (correlated) IWP
 # --------------------------------------------------------------------------- #
 
+
 def test_incidence_drawn_independently_across_components():
     """Constant IWP removes IWP variance, so the total variance is driven purely
     by incidence. Two identical components drawn from independent seeds give
@@ -152,7 +161,9 @@ def test_incidence_drawn_independently_across_components():
     c = 10.0
     iwp = np.full(n, c)
     inc, sd = 0.001, 0.0002
-    *_, samp1 = total_residual_risk_rd([(c, iwp, inc, sd)], per=1e6, seed=SEED, return_samps=True)
+    *_, samp1 = total_residual_risk_rd(
+        [(c, iwp, inc, sd)], per=1e6, seed=SEED, return_samps=True
+    )
     *_, samp2 = total_residual_risk_rd(
         [(c, iwp, inc, sd), (c, iwp, inc, sd)], per=1e6, seed=SEED, return_samps=True
     )
@@ -165,11 +176,16 @@ def test_shared_iwp_induces_positive_correlation():
     independent-sum value (2x a single component's variance). This is the
     property that makes the joint CrI wider than an independence approximation."""
     n = 300_000
-    iwp = _iwp(n, loc=8.0, scale=3.0, seed=7)   # substantial IWP variance
+    iwp = _iwp(n, loc=8.0, scale=3.0, seed=7)  # substantial IWP variance
     inc, sd = 0.001, 0.0002
-    *_, samp1 = total_residual_risk_rd([(8.0, iwp, inc, sd)], per=1e6, seed=SEED, return_samps=True)
+    *_, samp1 = total_residual_risk_rd(
+        [(8.0, iwp, inc, sd)], per=1e6, seed=SEED, return_samps=True
+    )
     *_, samp2 = total_residual_risk_rd(
-        [(8.0, iwp, inc, sd), (8.0, iwp, inc, sd)], per=1e6, seed=SEED, return_samps=True
+        [(8.0, iwp, inc, sd), (8.0, iwp, inc, sd)],
+        per=1e6,
+        seed=SEED,
+        return_samps=True,
     )
     assert np.var(samp2) > 2.2 * np.var(samp1)
 
@@ -178,6 +194,7 @@ def test_shared_iwp_induces_positive_correlation():
 # Input validation
 # --------------------------------------------------------------------------- #
 
+
 def test_empty_components_raises():
     with pytest.raises(ValueError):
         total_residual_risk_rd([])
@@ -185,9 +202,10 @@ def test_empty_components_raises():
 
 def test_length_mismatch_raises():
     with pytest.raises(ValueError):
-        total_residual_risk_rd(
-            [(8.0, np.ones(100), 0.001, 0.0001), (8.0, np.ones(99), 0.001, 0.0001)]
-        )
+        total_residual_risk_rd([
+            (8.0, np.ones(100), 0.001, 0.0001),
+            (8.0, np.ones(99), 0.001, 0.0001),
+        ])
 
 
 def test_nonpositive_incidence_or_iwp_raises():
@@ -209,6 +227,7 @@ def test_empty_iwp_bs_raises():
 # Integration: the shared-parameter alignment the CrI depends on
 # --------------------------------------------------------------------------- #
 
+
 @pytest.mark.skipif(rrpkg.find_go_binary() is None, reason="Go binary not available")
 def test_go_aligns_shared_params_across_components():
     """The total CrI is valid only because baseline/oral/inj share their
@@ -217,12 +236,23 @@ def test_go_aligns_shared_params_across_components():
     params diverge, this test fails and the total CrI silently degrades to an
     independence approximation."""
     shared = dict(
-        k=0.000673, doubling_time=20.5 / 24, doubling_time_norm_sd=1.33 / 24,
-        lod50=2.73, lod50_sd=0.193, lod95_lod50_ratio=12.33 / 2.73,
-        volume_transfused=20, volume_transfused_range=(15, 30),
-        pool_size=16, retests=1,
-        k_invgamma_alpha=2.0, k_invgamma_beta=0.002019,
-        n_bs=1500, seed=987, threads=2, return_sim_df=True, use_go=True,
+        k=0.000673,
+        doubling_time=20.5 / 24,
+        doubling_time_norm_sd=1.33 / 24,
+        lod50=2.73,
+        lod50_sd=0.193,
+        lod95_lod50_ratio=12.33 / 2.73,
+        volume_transfused=20,
+        volume_transfused_range=(15, 30),
+        pool_size=16,
+        retests=1,
+        k_invgamma_alpha=2.0,
+        k_invgamma_beta=0.002019,
+        n_bs=1500,
+        seed=987,
+        threads=2,
+        return_sim_df=True,
+        use_go=True,
     )
     *_, base = risk_days_bs(**shared)
     *_, oral = risk_days_prep_bs(set_point=336, **shared)

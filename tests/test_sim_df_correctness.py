@@ -1,11 +1,19 @@
-# Residual HIV Transfusion Transmission Risk Estimation Tool
-# Copyright (C) 2025-2026  Vitalant and Eduard Grebe Consulting
+# Residual HIV Transfusion Transmission Risk Estimator
+# Copyright (C) 2025-2026 Vitalant and Eduard Grebe Consulting
 # Author: Eduard Grebe <egrebe@vitalant.org> <eduard@grebe.consulting>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published
 # by the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 """
 Tests that sim_df (returned by both the Go and Python paths) contains the REAL
@@ -39,14 +47,22 @@ def _assert_rows_recompute_iwp(sim_df, rtol=1e-9):
     """
     for row in sim_df.iter_rows(named=True):
         rd = core._risk_days(
-            row["copies_per_virion"], row["C0"], row["doubling_time"],
-            row["volume_transfused"], row["k"], int(row["pool_size"]),
-            row["lod50"], row["lod95_lod50_ratio"], int(row["retests"]), z=row["z"],
+            row["copies_per_virion"],
+            row["C0"],
+            row["doubling_time"],
+            row["volume_transfused"],
+            row["k"],
+            int(row["pool_size"]),
+            row["lod50"],
+            row["lod95_lod50_ratio"],
+            int(row["retests"]),
+            z=row["z"],
         )
         assert np.isclose(rd, row["iwp"], rtol=rtol), (
             f"row param->iwp mismatch: recomputed {rd:.10g} vs stored {row['iwp']:.10g} "
             f"(k={row['k']:.6g}, dt={row['doubling_time']:.4g}, lod50={row['lod50']:.4g})"
         )
+
 
 # ---------------------------------------------------------------------------
 # Shared parameters (small n_bs for speed)
@@ -90,8 +106,8 @@ def _lnmix_kwargs():
 # Tests: sim_df shape and columns
 # ---------------------------------------------------------------------------
 
-class TestSimDfStructure:
 
+class TestSimDfStructure:
     def test_columns_complete_invgamma(self):
         _, _, _, _, sim_df = rr.risk_days_bs(**_invgamma_kwargs())
         assert sim_df is not None
@@ -136,6 +152,7 @@ class TestSimDfStructure:
 # Tests: params are real (key correctness test)
 # ---------------------------------------------------------------------------
 
+
 class TestSimDfParamsAreReal:
     """
     The critical property: row i's parameter values must reproduce row i's IWP.
@@ -175,7 +192,8 @@ class TestSimDfParamsAreReal:
         """rdests (the raw IWP list) must equal sim_df.iwp exactly."""
         _, _, _, rdests, sim_df = rr.risk_days_bs(**_invgamma_kwargs())
         np.testing.assert_array_equal(
-            np.array(rdests), sim_df["iwp"].to_numpy(),
+            np.array(rdests),
+            sim_df["iwp"].to_numpy(),
             err_msg="rdests and sim_df.iwp must be identical",
         )
 
@@ -185,14 +203,18 @@ class TestSimDfParamsAreReal:
         _, _, _, _, sim_df = rr.risk_days_bs(**kw)
         # InvGamma(2, 0.002019) median ≈ 0.00145 (approximate)
         median_k = sim_df["k"].median()
-        assert 0.0001 < median_k < 0.05, f"k median {median_k:.6f} outside plausible range"
+        assert 0.0001 < median_k < 0.05, (
+            f"k median {median_k:.6f} outside plausible range"
+        )
 
     def test_k_column_plausible_for_lnmix(self):
         """k values from LnMix(w=0.9) should have median near ~0.00075."""
         kw = {**_lnmix_kwargs(), "n_bs": 2000}
         _, _, _, _, sim_df = rr.risk_days_bs(**kw)
         median_k = sim_df["k"].median()
-        assert 0.0001 < median_k < 0.01, f"k median {median_k:.6f} outside plausible range"
+        assert 0.0001 < median_k < 0.01, (
+            f"k median {median_k:.6f} outside plausible range"
+        )
 
     def test_volume_within_range(self):
         """Volume transfused must be within the specified range."""
@@ -206,15 +228,17 @@ class TestSimDfParamsAreReal:
         kw = {**_invgamma_kwargs(), "n_bs": 500}
         _, _, _, _, sim_df = rr.risk_days_bs(**kw)
         assert (sim_df["doubling_time"] > 0).all()
-        assert sim_df["doubling_time"].mean() == pytest.approx(kw["doubling_time"], rel=0.15)
+        assert sim_df["doubling_time"].mean() == pytest.approx(
+            kw["doubling_time"], rel=0.15
+        )
 
 
 # ---------------------------------------------------------------------------
 # Tests: binary format correctness (format-level, not just semantics)
 # ---------------------------------------------------------------------------
 
-class TestBinaryFormatCorrectness:
 
+class TestBinaryFormatCorrectness:
     def test_return_sim_df_false_returns_none(self):
         kw = {**_invgamma_kwargs(), "return_sim_df": False}
         _, _, _, _, sim_df = rr.risk_days_bs(**kw)
@@ -249,13 +273,15 @@ class TestBinaryFormatCorrectness:
         kw = _invgamma_kwargs()
         _, _, _, _, df1 = rr.risk_days_bs(**kw)
         _, _, _, _, df2 = rr.risk_days_bs(**{**kw, "seed": 77777})
-        assert not np.array_equal(df1["k"].to_numpy(), df2["k"].to_numpy()), \
+        assert not np.array_equal(df1["k"].to_numpy(), df2["k"].to_numpy()), (
             "k samples should differ across seeds"
+        )
 
 
 # ---------------------------------------------------------------------------
 # Tests: Python (use_go=False) bootstrap keeps sim_df rows aligned
 # ---------------------------------------------------------------------------
+
 
 class TestSimDfPythonPathAlignment:
     """The Python bootstrap fills results by submission index so each sim_df row
@@ -273,7 +299,8 @@ class TestSimDfPythonPathAlignment:
         kw = {**_invgamma_kwargs(), "use_go": False, "threads": 4, "n_bs": 400}
         _, _, _, rdests, sim_df = rr.risk_days_bs(**kw)
         np.testing.assert_array_equal(
-            np.array(rdests), sim_df["iwp"].to_numpy(),
+            np.array(rdests),
+            sim_df["iwp"].to_numpy(),
             err_msg="rdests must equal sim_df.iwp",
         )
         _assert_rows_recompute_iwp(sim_df, rtol=1e-9)

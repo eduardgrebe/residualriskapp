@@ -1,5 +1,5 @@
-# Residual HIV Transfusion Transmission Risk Estimation Tool
-# Copyright (C) 2025-2026  Vitalant and Eduard Grebe Consulting
+# Residual HIV Transfusion Transmission Risk Estimator
+# Copyright (C) 2025-2026 Vitalant and Eduard Grebe Consulting
 # Author: Eduard Grebe <egrebe@vitalant.org> <eduard@grebe.consulting>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -57,6 +57,7 @@ COMMON_PREP_KWARGS = dict(
 # _sample_k helper tests
 # ---------------------------------------------------------------------------
 
+
 class TestSampleK:
     """Tests for the shared _sample_k dispatch helper."""
 
@@ -104,17 +105,23 @@ class TestSampleK:
         np.random.seed(0)
         with pytest.raises(ValueError, match="exactly one of k_invgamma_beta"):
             _sample_k(
-                100, seed=0,
-                k_invgamma_alpha=2.0, k_invgamma_beta=0.002, k_invgamma_mode=0.000673,
+                100,
+                seed=0,
+                k_invgamma_alpha=2.0,
+                k_invgamma_beta=0.002,
+                k_invgamma_mode=0.000673,
             )
 
     def test_lnmix_sampler(self):
         np.random.seed(0)
         ks = _sample_k(
-            1000, seed=0,
+            1000,
+            seed=0,
             k_lnmix_w=0.90,
-            k_lnmix_mu1=-7.2403, k_lnmix_sigma1=0.3241,
-            k_lnmix_mu2=-3.7423, k_lnmix_sigma2=0.5258,
+            k_lnmix_mu1=-7.2403,
+            k_lnmix_sigma1=0.3241,
+            k_lnmix_mu2=-3.7423,
+            k_lnmix_sigma2=0.5258,
         )
         assert len(ks) == 1000
         assert all(k > 0 for k in ks)
@@ -142,9 +149,11 @@ class TestSampleK:
         posterior = np.array([0.001, 0.001, 0.001])
         with pytest.raises(ValueError, match="Exactly one k-distribution"):
             _sample_k(
-                50, seed=0,
+                50,
+                seed=0,
                 k_posterior_sample=posterior,
-                k_invgamma_alpha=2.0, k_invgamma_beta=0.002,
+                k_invgamma_alpha=2.0,
+                k_invgamma_beta=0.002,
             )
 
     def test_partial_gamma_spec_raises(self):
@@ -153,15 +162,18 @@ class TestSampleK:
         np.random.seed(0)
         with pytest.raises(ValueError, match="Exactly one k-distribution"):
             _sample_k(
-                50, seed=0,
+                50,
+                seed=0,
                 k_gamma_shape=2.0,  # no k_gamma_scale
-                k_invgamma_alpha=2.0, k_invgamma_beta=0.002,
+                k_invgamma_alpha=2.0,
+                k_invgamma_beta=0.002,
             )
 
 
 # ---------------------------------------------------------------------------
 # PrEP bootstrap with each k-distribution
 # ---------------------------------------------------------------------------
+
 
 class TestPrepBsKDistributions:
     """Integration tests: risk_days_prep_bs with each k-distribution path."""
@@ -246,6 +258,7 @@ class TestPrepBsKDistributions:
     def test_return_sim_df(self):
         """When return_sim_df=True, a Polars DataFrame with expected columns is returned."""
         import polars as pl
+
         rd_pe, rd_cri, rd_range, rdests, sim_df = risk_days_prep_bs(
             **COMMON_PREP_KWARGS,
             k_invgamma_alpha=2.0,

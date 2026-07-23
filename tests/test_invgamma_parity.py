@@ -1,5 +1,5 @@
-# Residual HIV Transfusion Transmission Risk Estimation Tool
-# Copyright (C) 2025  Vitalant and Eduard Grebe Consulting
+# Residual HIV Transfusion Transmission Risk Estimator
+# Copyright (C) 2025-2026 Vitalant and Eduard Grebe Consulting
 # Author: Eduard Grebe <egrebe@vitalant.org> <eduard@grebe.consulting>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -63,15 +63,15 @@ TEST_THREADS = max(1, rr.get_cpu_core_count() - 1)
 # Variance: undefined for alpha <= 2 (Pareto-like tail)
 ALPHA = 2.0
 BETA = 0.002019
-THEORY_MODE = BETA / (ALPHA + 1)       # ≈ 0.000673
-THEORY_MEAN = BETA / (ALPHA - 1)       # = 0.002019
+THEORY_MODE = BETA / (ALPHA + 1)  # ≈ 0.000673
+THEORY_MEAN = BETA / (ALPHA - 1)  # = 0.002019
 THEORY_MEDIAN = scipy_stats.invgamma.ppf(0.5, a=ALPHA, scale=BETA)
 
 # Secondary parameters with alpha > 2 so variance is finite (used for variance tests)
 ALPHA_FIN = 4.0
 BETA_FIN = 0.006  # mode = 0.006/5 = 0.0012, mean = 0.006/3 = 0.002
-THEORY_MEAN_FIN = BETA_FIN / (ALPHA_FIN - 1)     # = 0.002
-THEORY_VAR_FIN = BETA_FIN**2 / ((ALPHA_FIN - 1)**2 * (ALPHA_FIN - 2))
+THEORY_MEAN_FIN = BETA_FIN / (ALPHA_FIN - 1)  # = 0.002
+THEORY_VAR_FIN = BETA_FIN**2 / ((ALPHA_FIN - 1) ** 2 * (ALPHA_FIN - 2))
 
 # ---------------------------------------------------------------------------
 # Shared bootstrap kwargs
@@ -158,9 +158,7 @@ class TestInvGammaTheoreticalStatistics:
         ks_stat, p_value = scipy_stats.kstest(
             s, lambda x: scipy_stats.invgamma.cdf(x, a=ALPHA, scale=BETA)
         )
-        assert p_value > 0.01, (
-            f"KS test rejected: p={p_value:.4f}, stat={ks_stat:.4f}"
-        )
+        assert p_value > 0.01, f"KS test rejected: p={p_value:.4f}, stat={ks_stat:.4f}"
 
     def test_mode_parameterisation_cdf_matches_scipy(self):
         """Mode-parameterised sample_invgamma also passes KS test vs scipy."""
@@ -183,9 +181,9 @@ class TestInvGammaTheoreticalStatistics:
         s1 = rr.sample_invgamma(50_000, alpha=ALPHA, beta=BETA, seed=7)
         s2 = rr.sample_invgamma(50_000, alpha=ALPHA, beta=BETA * 2, seed=7)
         for q in [0.10, 0.25, 0.50, 0.75, 0.90]:
-            assert np.quantile(s2, q) == pytest.approx(np.quantile(s1, q) * 2, rel=0.03), (
-                f"Scale equivariance failed at q={q}"
-            )
+            assert np.quantile(s2, q) == pytest.approx(
+                np.quantile(s1, q) * 2, rel=0.03
+            ), f"Scale equivariance failed at q={q}"
 
     def test_higher_alpha_lighter_tail(self):
         """Higher alpha → lighter upper tail (lower 95th-percentile / median ratio)."""
@@ -269,7 +267,8 @@ class TestInvGammaBootstrapKSamples:
         k_beta = self._get_k_samples(n_bs=n)
         # Build mode-parameterised kwargs; strip n_bs so we can set it explicitly below
         kwargs_mode = {
-            key: val for key, val in self._KWARGS.items()
+            key: val
+            for key, val in self._KWARGS.items()
             if key not in ("k_invgamma_beta", "n_bs")
         }
         kwargs_mode["k_invgamma_mode"] = THEORY_MODE
@@ -359,14 +358,18 @@ class TestPythonGoInvGammaAgreement:
         kwargs_mode = {k: v for k, v in self._KWARGS.items() if k != "k_invgamma_beta"}
         kwargs_mode["k_invgamma_mode"] = THEORY_MODE
 
-        go_beta  = _rdests(rr.risk_days_bs(**self._KWARGS, use_go=True))
-        go_mode  = _rdests(rr.risk_days_bs(**kwargs_mode,    use_go=True))
-        py_beta  = _rdests(rr.risk_days_bs(**self._KWARGS, use_go=False))
-        py_mode  = _rdests(rr.risk_days_bs(**kwargs_mode,    use_go=False))
+        go_beta = _rdests(rr.risk_days_bs(**self._KWARGS, use_go=True))
+        go_mode = _rdests(rr.risk_days_bs(**kwargs_mode, use_go=True))
+        py_beta = _rdests(rr.risk_days_bs(**self._KWARGS, use_go=False))
+        py_mode = _rdests(rr.risk_days_bs(**kwargs_mode, use_go=False))
 
         # All four medians should be mutually consistent within 15%
         ref = np.median(go_beta)
-        for label, arr in [("go_mode", go_mode), ("py_beta", py_beta), ("py_mode", py_mode)]:
+        for label, arr in [
+            ("go_mode", go_mode),
+            ("py_beta", py_beta),
+            ("py_mode", py_mode),
+        ]:
             assert np.median(arr) == pytest.approx(ref, rel=0.15), (
                 f"{label} median differs from go_beta by more than 15%"
             )
@@ -431,9 +434,7 @@ class TestInvGammaGoStatistics:
         # Both should give statistically similar distributions; use generous tolerance
         # because the two runs use the same seed but resolve to the same beta anyway.
         ks_stat, p_value = scipy_stats.ks_2samp(r_beta, r_mode)
-        assert p_value > 0.01, (
-            f"Go mode vs beta parameterisation: KS p={p_value:.4f}"
-        )
+        assert p_value > 0.01, f"Go mode vs beta parameterisation: KS p={p_value:.4f}"
 
     def test_go_output_median_in_plausible_range(self):
         """Go output median should be in a physically plausible range (0.01 – 30 days)."""
@@ -451,8 +452,11 @@ class TestInvGammaGoStatistics:
         # because this constructs a pre-sampled posterior).
         k_posterior = rr.sample_invgamma(self._N, alpha=ALPHA, beta=BETA, seed=42)
         result_py = rr.risk_days_bs(
-            **{k: v for k, v in self._KWARGS.items()
-               if k not in ("k_invgamma_alpha", "k_invgamma_beta", "use_go")},
+            **{
+                k: v
+                for k, v in self._KWARGS.items()
+                if k not in ("k_invgamma_alpha", "k_invgamma_beta", "use_go")
+            },
             k_posterior_sample=k_posterior,
             use_go=True,  # Still use Go backend, just with posterior sample
         )

@@ -1,5 +1,5 @@
-# Residual HIV Transfusion Transmission Risk Estimation Tool
-# Copyright (C) 2025  Vitalant and Eduard Grebe Consulting
+# Residual HIV Transfusion Transmission Risk Estimator
+# Copyright (C) 2025-2026 Vitalant and Eduard Grebe Consulting
 # Author: Eduard Grebe <egrebe@vitalant.org> <eduard@grebe.consulting>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -60,15 +60,15 @@ TEST_THREADS = max(1, rr.get_cpu_core_count() - 1)
 # ---------------------------------------------------------------------------
 
 W = 0.90
-MU1, SIGMA1 = -7.2403, 0.3241   # human component (log-scale)
-MU2, SIGMA2 = -3.7423, 0.5258   # animal component (log-scale)
+MU1, SIGMA1 = -7.2403, 0.3241  # human component (log-scale)
+MU2, SIGMA2 = -3.7423, 0.5258  # animal component (log-scale)
 
 # Analytic mean: w * exp(mu1 + sigma1²/2) + (1-w) * exp(mu2 + sigma2²/2)
 THEORY_MEAN = W * np.exp(MU1 + SIGMA1**2 / 2) + (1 - W) * np.exp(MU2 + SIGMA2**2 / 2)
 
 # Component medians: exp(mu_i)
-COMP1_MEDIAN = np.exp(MU1)   # ≈ 0.000715
-COMP2_MEDIAN = np.exp(MU2)   # ≈ 0.0237
+COMP1_MEDIAN = np.exp(MU1)  # ≈ 0.000715
+COMP2_MEDIAN = np.exp(MU2)  # ≈ 0.0237
 
 # Approximate mixture mode ≈ 0.000649 (from companion analysis)
 APPROX_MIXTURE_MODE = 0.000649
@@ -189,9 +189,7 @@ class TestLnMixTheoreticalStatistics:
         """KS test: sample_lnmix samples are consistent with mixture CDF."""
         s = rr.sample_lnmix(10_000, W, MU1, SIGMA1, MU2, SIGMA2, seed=99)
         ks_stat, p_value = scipy_stats.kstest(s, _mixture_cdf)
-        assert p_value > 0.01, (
-            f"KS test rejected: p={p_value:.4f}, stat={ks_stat:.4f}"
-        )
+        assert p_value > 0.01, f"KS test rejected: p={p_value:.4f}, stat={ks_stat:.4f}"
 
     def test_quantiles_match_mixture_cdf(self):
         """Empirical quantiles match those obtained by numerical inversion of mixture CDF."""
@@ -199,6 +197,7 @@ class TestLnMixTheoreticalStatistics:
         for prob in [0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95]:
             # Numerical mixture quantile via scipy's ppf-equivalent
             from scipy.optimize import brentq
+
             expected = brentq(lambda x: _mixture_cdf(x) - prob, 1e-10, 1.0)
             got = np.quantile(s, prob)
             assert got == pytest.approx(expected, rel=0.08), (
@@ -391,9 +390,19 @@ class TestLnMixGoStatistics:
         """
         k_posterior = rr.sample_lnmix(self._N, W, MU1, SIGMA1, MU2, SIGMA2, seed=42)
         result_posterior = rr.risk_days_bs(
-            **{k: v for k, v in self._KWARGS.items()
-               if k not in ("k_lnmix_w", "k_lnmix_mu1", "k_lnmix_sigma1",
-                            "k_lnmix_mu2", "k_lnmix_sigma2", "use_go")},
+            **{
+                k: v
+                for k, v in self._KWARGS.items()
+                if k
+                not in (
+                    "k_lnmix_w",
+                    "k_lnmix_mu1",
+                    "k_lnmix_sigma1",
+                    "k_lnmix_mu2",
+                    "k_lnmix_sigma2",
+                    "use_go",
+                )
+            },
             k_posterior_sample=k_posterior,
             use_go=True,
         )
@@ -425,9 +434,20 @@ class TestLnMixGoStatistics:
         result_lnmix = rr.risk_days_bs(**self._KWARGS)
         alpha, beta = 2.0, 0.002019
         result_invgamma = rr.risk_days_bs(
-            **{k: v for k, v in self._KWARGS.items()
-               if k not in ("k_lnmix_w", "k_lnmix_mu1", "k_lnmix_sigma1",
-                            "k_lnmix_mu2", "k_lnmix_sigma2", "use_go", "k")},
+            **{
+                k: v
+                for k, v in self._KWARGS.items()
+                if k
+                not in (
+                    "k_lnmix_w",
+                    "k_lnmix_mu1",
+                    "k_lnmix_sigma1",
+                    "k_lnmix_mu2",
+                    "k_lnmix_sigma2",
+                    "use_go",
+                    "k",
+                )
+            },
             k=beta / (alpha + 1),  # InvGamma mode
             k_invgamma_alpha=alpha,
             k_invgamma_beta=beta,
