@@ -526,18 +526,17 @@ residualriskapp/
 
 ## License and usage terms
 
-Source code and text copyright © 2025–2026 Vitalant, with components © Eduard Grebe Consulting. All code is released under the GNU Affero General Public License v3.0 (AGPL).
-Author: Eduard Grebe <egrebe@vitalant.org> <eduard@grebe.consulting>
+All model and user interface source code and text copyright (c) 2025-2026 Vitalant, with components (c) Eduard Grebe Consulting and released under the AGPL (v3) license, with the exception of the lookback model core model code, which is licensed under the GPL (v3) and [derived from the original implementation](https://github.com/SACEMA/infection-dating-tool) by Alex Welte, Eduard Grebe and others. 
 
-You are free to use, copy and host instances of the app, for both noncommercial and commercial applications, as long as the creators are credited and the terms of the AGPL are complied with.
+You are free to use, copy and host instances of the app, for noncommercial and commercial applications, as long as the creators are credited, and the terms of the AGPL and GPL licenses are complied with.
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
-This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+This program is free software: you can redistribute it and/or modify it under the terms of the applicable licenses.
 
 This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
 
-You should have received a copy of the GNU Affero General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
+You should have received a copy of the GNU Affero General Public License and the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 ## Author
 

@@ -4,13 +4,14 @@
 
 The model, Python package and web application were designed and developed by Eduard Grebe (Vitalant Research Institute) (<egrebe@vitalant.org>).
 
-Additional assistance by:
+Additional contributors:
 
-* Brian Custer, Vitalant Research Institute (<bcuster@vitalant.org>) – Conceptualization, supervision, oversight, guidance and financial support
-* Vivian I. Avelino-Silva: Conceptualization
+* Brian Custer, Vitalant Research Institute (<bcuster@vitalant.org>) – Conceptualisation, supervision, oversight, guidance and financial support
+* Vivian I. Avelino-Silva: Conceptualisation
 * Marjorie D. Bravo: Collaboration and data curation
-* Michael P. Busch: Conceptualization and guidance
+* Michael P. Busch: Conceptualisation and guidance
 * Artur Belov, U.S. Food and Drug Administration (<artur.belov@fda.hhs.gov>) – Infectivity model development and `k` parameter posterior distributions – human and animal data
+* Alex Welte: Original conceptualisation of the lookback model.
 
 ## References
 
@@ -36,9 +37,9 @@ Development of this tool was primarily sponsored by [Vitalant Research Institute
 
 ## Usage terms and license
 
-Source code and text copyright (c) 2025-2026 Vitalant, with components (c) Eduard Grebe Consulting. All code released under the AGPL. 
+All model and user interface source code and text copyright (c) 2025-2026 Vitalant, with components (c) Eduard Grebe Consulting and released under the AGPL (v3) license, with the exception of the lookback model core model code, which is licensed under the GPL (v3) and [derived from the original implementation](https://github.com/SACEMA/infection-dating-tool) by Alex Welte, Eduard Grebe and others. 
 
-You are free to use, copy and host instances of the app, for noncommercial and commercial applications, as long as the creators are credited, and the terms of the AGPL are complied with.
+You are free to use, copy and host instances of the app, for noncommercial and commercial applications, as long as the creators are credited, and the terms of the AGPL and GPL licenses are complied with.
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 

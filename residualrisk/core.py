@@ -7,6 +7,9 @@
 # by the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
+# An identified component of this file is licensed under the GNU General
+# Public License as published by the Free Software Foundation, version 3.
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -1049,6 +1052,12 @@ def risk_days_bs(
     return _append_backend(_result, "python")
 
 
+# BEGIN SEPARATELY LICENSED CODE
+# The function iwp_from_lookback_data() is copyright Stellenbosch University,
+# Vitalant, and individual contributors, and licensed under the GPLv3.
+# See https://github.com/SACEMA/infection-dating-tool for credits.
+
+
 def iwp_from_lookback_data(
     n_transmissions,
     intervals,
@@ -1133,6 +1142,11 @@ def iwp_from_lookback_data(
     )
 
     return iwp_pe, (iwp_ci_lb, iwp_ci_ub), iwp_samples
+
+
+# END SEPARATELY LICENSED CODE
+# The copyright and license notice at the beginning of this file applies
+# to all code below.
 
 
 def residual_risk_rd(
