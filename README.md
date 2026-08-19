@@ -4,6 +4,14 @@ A simulation tool for estimating the residual risk of HIV transmission through b
 * during the pre-NAT window period, or
 * as a result of PrEP breakthrough infection
 
+**The [Github repository](https://github.com/eduardgrebe/residualriskapp) is a mirror. The canonical development repository is on [Codeberg](https://codeberg.org/eduardgrebe/residualriskapp),**
+
+* Pull requests from forks and issues on Github are not monitored. Please [file issues](https://codeberg.org/eduardgrebe/residualriskapp/issues) or contribute on Codeberg.
+
+* [Python library releases](https://codeberg.org/eduardgrebe/residualriskapp/releases) can also be found on Codeberg.
+
+To obtain access to the private beta online webtool, please [email the maintainer](mailto:egrebe@vitalant.org).
+
 ## Overview
 
 A simulation tool for estimating the residual risk of HIV transmission through blood transfusion during the pre-NAT window period (or due to PrEP breakthrough infection). Accounts for viral kinetics during early infection, NAT sensitivity, pooling strategy, and infectivity using the Belov et al. (2023) model. Provides a Streamlit-based web interface, a Python API and a high-performance Go implementation of the core simulation.
