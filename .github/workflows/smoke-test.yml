@@ -5,6 +5,8 @@
 # then each OS extracts its native binary and runs --version + a small computation.
 
 name: bundled-binary-smoke-test
+permissions:
+  contents: read
 # Tags only (+ manual dispatch): the cross-OS binary check only matters at release
 # time, and GitHub's macOS runners are concurrency-limited — running it on every
 # main push just backs the queue up (macos-latest + macos-13 + windows per run) for
