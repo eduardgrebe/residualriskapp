@@ -88,7 +88,7 @@ WORKDIR ${APP_HOME}
 COPY --chown=appuser:appuser pyproject.toml uv.lock README.md ./
 
 # Install Python dependencies only (skip the project itself — source not here yet)
-RUN uv sync --frozen --no-install-project
+RUN uv sync --frozen --no-install-project --no-dev
 
 # Copy compiled Go binary from builder stage
 COPY --from=go-builder --chown=appuser:appuser /build/riskdays_go ./go/bin/riskdays_go
@@ -113,7 +113,7 @@ COPY --chown=appuser:appuser .streamlit/ ./.streamlit/
 COPY --chown=appuser:appuser hatch_build.py ./
 
 # Install the residualrisk package now that source is present
-RUN uv sync --frozen
+RUN uv sync --frozen --no-dev
 
 # Switch to non-root user
 USER appuser
