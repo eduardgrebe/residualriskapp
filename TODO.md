@@ -653,6 +653,17 @@ document is preferred. **Awaiting EG review.**
       `AGENTS.md` → "Distribution". The job failed *before* the publish step, so nothing reached
       the registry or Releases. Re-running the b7 job reuses the workflow at the tagged commit
       (still `small`), so the fix ships with the next tag.
+- [x] **`requires-python` un-pinned from `==3.14.10` to `>=3.14,<3.15`.** An exact-patch pin is
+      written into the published wheel's `Requires-Python` metadata, so pip would refuse to
+      install it on any other 3.14.x (e.g. 3.14.9 or 3.14.11). Re-locked: `uv.lock` changes only its
+      `requires-python` line (`==3.14.*`, uv's form of the same range), with no package versions
+      moved. Verified with a local `uv build`: the wheel says `Requires-Python: <3.15,>=3.14`, all
+      six binaries are bundled, and `run_tests.sh fast` is green. The same suite also passes on
+      **3.14.0** and **3.14.7** (380 passed in each), so nothing needs a later patch. A
+      `>=3.14.10` floor was considered for security and rejected: interpreter patching belongs to
+      the deployment (the Docker image's base `python:3.14-slim` picks up the latest patch on each
+      build). Distro Pythons backport security fixes without changing the version number, so a
+      floor would block patched interpreters.
 
 ### main → feature merge: canned NAT-assay LoD API + docs tab (2026-07-01, merge commit `bc70bad`)
 
