@@ -4,11 +4,15 @@
 #
 # Runs on Codeberg's HOSTED runners — no self-hosted instance needed: unlike the
 # Docker-image build, this needs only Go + Python (no Docker daemon). The hosted
-# runners are `codeberg-tiny|small|medium` (1/2/4 CPU, 2/4/8 GB, 2/5/10-min caps);
-# this uses `codeberg-small` — the cold six-target cross-compile measures ~20s on
-# 2 cores, so with setup-go + uv + publish the job lands well inside small's 5-min
-# cap (tiny's 2 min is too tight for the fixed setup overhead). (The Docker image is
-# a separate, deferred pipeline.)
+# runners are `codeberg-tiny|small|medium` (1/2/4 CPU, 2/4/8 GB, 2/5/10-min caps).
+# The cap is enforced by the runner (job killed with "context deadline exceeded");
+# a workflow `timeout-minutes` cannot raise it. This uses `codeberg-medium`: the
+# v1.1.0b7 release job hit small's 5-min cap mid-compile. The cold six-target
+# cross-compile is ~25s on 2 Apple-silicon cores locally, but the shared hosted
+# runner is far slower, and setup-go + uv + a CPython download add fixed overhead
+# before the build starts. Medium runners are scarcer, so the job may queue longer
+# before starting — acceptable for a tag-triggered release. (The Docker image is a
+# separate, deferred pipeline.)
 #
 # Setup required on the Codeberg repo (Settings → Actions):
 #   * The repo must be PUBLIC — Codeberg's hosted runners only serve public,
@@ -27,7 +31,7 @@ on:
 
 jobs:
   build-and-publish:
-    runs-on: codeberg-small
+    runs-on: codeberg-medium
     steps:
       - uses: https://code.forgejo.org/actions/checkout@v4
 

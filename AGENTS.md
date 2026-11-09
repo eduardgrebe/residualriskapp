@@ -441,12 +441,15 @@ The `residualrisk` wheel **bundles the pre-compiled Go accelerator for every pla
   Requires the repo be **public** (Codeberg's hosted runners only serve public,
   free/libre-licensed projects — AGPL qualifies; a private repo's job stays queued as "no matching
   online runner"), Forgejo Actions enabled, and a repo secret **`PACKAGE_TOKEN`** (Forgejo token,
-  `write:package` scope). `runs-on` is **`codeberg-small`** — the hosted tiers are
-  `codeberg-tiny|small|medium` (1/2/4 CPU, 2/5/10-min caps). The cold six-target cross-compile
-  measures ~20s on 2 cores, so with setup-go + uv + publish the job fits well inside small's 5-min
-  cap (tiny's 2-min cap is too tight for the fixed setup overhead; `small` also schedules faster than
-  the scarcer `medium` runners). (Self-hosting a runner is the alternative if the repo must stay
-  private — set `runs-on` to its label.)
+  `write:package` scope). `runs-on` is **`codeberg-medium`** — the hosted tiers are
+  `codeberg-tiny|small|medium` (1/2/4 CPU, 2/5/10-min caps). The cap is a **runner-enforced hard
+  limit** (the job dies with `context deadline exceeded`); a workflow `timeout-minutes` cannot raise
+  it, so the only lever is the tier. It was `codeberg-small` until the **v1.1.0b7** release job hit
+  small's 5-min cap mid-compile: the cold six-target cross-compile is ~25s on 2 Apple-silicon cores
+  locally, but the shared hosted runner is far slower, and setup-go + uv + a CPython download add
+  fixed overhead before the build. Trade-off: `medium` runners are scarcer, so the job may queue
+  longer before it starts — acceptable for a tag-triggered release. (Self-hosting a runner is the
+  alternative if the repo must stay private — set `runs-on` to its label.)
 - **Installing** (see `README.md` for pip / uv / `pyproject.toml`): use `--extra-index-url`, **not**
   `--index-url`, so dependencies still resolve from PyPI — e.g. `pip install --extra-index-url
   https://codeberg.org/api/packages/eduardgrebe/pypi/simple/ residualrisk`.

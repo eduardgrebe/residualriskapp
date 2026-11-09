@@ -644,6 +644,16 @@ document is preferred. **Awaiting EG review.**
 
 ## Completed
 
+### Codeberg release job: `codeberg-small` → `codeberg-medium` (2026-11-09)
+
+- [x] **v1.1.0b7 package build timed out on Codeberg.** The `release.yml` job was killed
+      mid-cross-compile (`context deadline exceeded`) by `codeberg-small`'s runner-enforced
+      5-min cap — not configurable via `timeout-minutes`. Switched `runs-on` to
+      **`codeberg-medium`** (4 CPU, 10-min cap); rationale updated in the workflow header and
+      `AGENTS.md` → "Distribution". The job failed *before* the publish step, so nothing reached
+      the registry or Releases. Re-running the b7 job reuses the workflow at the tagged commit
+      (still `small`), so the fix ships with the next tag.
+
 ### main → feature merge: canned NAT-assay LoD API + docs tab (2026-07-01, merge commit `bc70bad`)
 
 - [x] **Merged `main` into `feature_prep_model`.** Brought in the canned-NAT-assay
