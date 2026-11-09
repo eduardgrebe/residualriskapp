@@ -1,6 +1,6 @@
 version = 1
 revision = 5
-requires-python = "==3.14.7"
+requires-python = "==3.14.10"
 resolution-markers = [
     "sys_platform == 'win32'",
     "sys_platform == 'emscripten'",
@@ -8,7 +8,7 @@ resolution-markers = [
 ]
 
 [manifest]
-constraints = [{ name = "gitpython", specifier = ">=3.1.59" }]
+constraints = [{ name = "gitpython", specifier = ">=3.2.1" }]
 
 [[package]]
 name = "altair"
@@ -1037,20 +1037,20 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "numpy", specifier = ">=2.5.1" },
-    { name = "plotly", specifier = ">=6.9.0" },
-    { name = "polars", specifier = ">=1.43.0" },
-    { name = "scipy", specifier = ">=1.18.0" },
-    { name = "streamlit", specifier = ">=1.59.2" },
-    { name = "watchdog", specifier = ">=6.0.0" },
+    { name = "numpy", specifier = ">=2.5.4" },
+    { name = "plotly", specifier = ">=7.1.0" },
+    { name = "polars", specifier = ">=2.1.0" },
+    { name = "scipy", specifier = ">=1.18.1" },
+    { name = "streamlit", specifier = ">=1.67.0" },
+    { name = "watchdog", specifier = ">=7.1.0" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "ipykernel", specifier = ">=7.2.0" },
-    { name = "matplotlib", specifier = ">=3.11.1" },
-    { name = "pytest", specifier = ">=9.1.1" },
-    { name = "ruff", specifier = ">=0.15.22" },
+    { name = "ipykernel", specifier = ">=7.4.0" },
+    { name = "matplotlib", specifier = ">=3.11.2" },
+    { name = "pytest", specifier = ">=9.2.0" },
+    { name = "ruff", specifier = ">=0.17.4" },
 ]
 
 [[package]]
