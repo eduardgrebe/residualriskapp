@@ -10,7 +10,9 @@ A simulation tool for estimating the residual risk of HIV transmission through b
 
 * [Python library releases](https://codeberg.org/eduardgrebe/residualriskapp/releases) can also be found on Codeberg.
 
-To obtain access to the private beta online webtool, please [email the maintainer](mailto:egrebe@vitalant.org).
+A public beta of a hosted online webtool is available at [residualrisk.org](https://residualrisk.org).
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24111875.svg)](https://doi.org/10.5281/zenodo.24111875)
 
 ## Overview
 
@@ -92,7 +94,7 @@ back to the pure-Python engine.
 
 > **Currently pre-release:** only pre-release builds are on the registry so far. The simplest and
 > most portable approach is to **name a version in the requirement** — e.g.
-> `residualrisk==1.1.0b4` — which opts that one package into pre-releases automatically, with no
+> `residualrisk==1.1.0b8` — which opts that one package into pre-releases automatically, with no
 > flag, on both pip and uv. A *bare* `residualrisk` is not equivalent, and the two tools disagree
 > about it: **uv** resolves it to the latest beta (pre-releases are permitted when nothing else can
 > satisfy the requirement), while **pip** refuses unless you add `--pre`. See
@@ -117,7 +119,7 @@ index, and pin `residualrisk` to it (everything else still resolves from PyPI):
 
 ```toml
 [project]
-dependencies = ["residualrisk==1.1.0b4"]
+dependencies = ["residualrisk==1.1.0b8"]
 
 [[tool.uv.index]]
 name = "codeberg"
@@ -127,7 +129,7 @@ url = "https://codeberg.org/api/packages/eduardgrebe/pypi/simple/"
 residualrisk = { index = "codeberg" }
 ```
 
-Then `uv sync` (or `uv add "residualrisk==1.1.0b4"`) resolves it from Codeberg. If the registry is
+Then `uv sync` (or `uv add "residualrisk==1.1.0b8"`) resolves it from Codeberg. If the registry is
 ever made private, supply a Codeberg token via the index's auth (uv `UV_INDEX_CODEBERG_USERNAME` /
 `UV_INDEX_CODEBERG_PASSWORD` env vars, or a `~/.netrc` entry for `codeberg.org`).
 
@@ -140,13 +142,13 @@ that needs no `--pre` / `--prerelease=allow`:
 
 | Requirement | Resolves to | Use when |
 |---|---|---|
-| `residualrisk==1.1.0b4` | exactly `1.1.0b4` | An analysis you will re-run and must reproduce. **Recommended.** |
-| `residualrisk>=1.1.0b4` | `1.1.0b4` or later, including the eventual stable `1.1.0` and beyond | You want fixes automatically and accept API changes across feature lines. |
-| `residualrisk>=1.1.0b4,<1.2` | later `1.1.x` releases only | You want fixes but not the next feature line. |
+| `residualrisk==1.1.0b8` | exactly `1.1.0b8` | An analysis you will re-run and must reproduce. **Recommended.** |
+| `residualrisk>=1.1.0b8` | `1.1.0b8` or later, including the eventual stable `1.1.0` and beyond | You want fixes automatically and accept API changes across feature lines. |
+| `residualrisk>=1.1.0b8,<1.2` | later `1.1.x` releases only | You want fixes but not the next feature line. |
 | `residualrisk` (bare) | **tool-dependent — avoid** (see below) | Only once a stable `1.1.0` is published. |
 
 All three version-bearing forms work unchanged on either tool and need no flag —
-`pip install "residualrisk==1.1.0b4" --extra-index-url …`, `uv add "residualrisk>=1.1.0b4"`, or the
+`pip install "residualrisk==1.1.0b8" --extra-index-url …`, `uv add "residualrisk>=1.1.0b8"`, or the
 `dependencies` list above. The pre-release opt-in is *per package*: pinning `residualrisk` to a beta
 does not let pre-release numpy or scipy in.
 
@@ -407,7 +409,7 @@ Install the `residualrisk` Python package in a virtual environment if not instal
 
 ```bash
 uv venv
-uv pip install --extra-index-url https://codeberg.org/api/packages/eduardgrebe/pypi/simple/ "residualrisk==1.1.0b4"
+uv pip install --extra-index-url https://codeberg.org/api/packages/eduardgrebe/pypi/simple/ "residualrisk==1.1.0b8"
 ```
 
 Launch R and install the `reticulate` package if not installed:
@@ -575,6 +577,7 @@ BibTeX:
   year         = {2026},
   version      = {1.1.0},
   url          = {https://codeberg.org/eduardgrebe/residualriskapp},
+  doi          = {10.5281/zenodo.24111875},
   organization = {Vitalant Research Institute},
   license      = {AGPL-3.0-or-later}
 }

@@ -16,7 +16,7 @@ project moved straight to `1.1.0`. So `1.1.0` does **not** imply a public `1.0.0
 ## [Unreleased] — 1.1.0 (pre-release)
 
 The PrEP-breakthrough model, mainlined onto `main` (2026-07). Working toward the first stable
-`1.1.0`; currently at beta pre-release `1.1.0b5`. Highlights:
+`1.1.0`; currently at beta pre-release `1.1.0b8`. Highlights:
 
 - Oral- and injectable-PrEP breakthrough-infection RDE components, with per-component and
   additive total residual risk.
@@ -74,5 +74,44 @@ The PrEP-breakthrough model, mainlined onto `main` (2026-07). Working toward the
     surfaced at release time.
 
 - **Beta 5 (`1.1.0b5`)** — **Dependency bump release.** Chore release with updated dependencies to ensure final release will use current versions of all packages.
+
+- **Beta 6 (`1.1.0b6`)** — **app defaults, licensing and maintenance.** No change to the model
+  or to the library's calculations.
+  - The reported RDE point estimate now defaults to the bootstrap **median** (the mode since
+    beta 2). Like the mode, the median always lies within the credible interval. Because the RDE
+    distribution is typically right-skewed, the median tends to be the more conservative of the
+    two. UI-only: the library's `point_estimate` default is unchanged.
+  - The app no longer offers a choice of simulation engine: it always uses the Go engine. Python
+    remains only as the automatic fallback when the Go binary cannot run, and the app then warns
+    that this is not recommended for production use.
+  - Rewritten help text on every parameter input. The *k*-distribution menu is reordered; its
+    default (Inverse Gamma) is unchanged.
+  - The hardcoded modes of the *k* posteriors, used only when the Go binary is unavailable, now
+    match the Go KDE estimates the app computes at start-up (they differed by about 1 part in a
+    million).
+  - **Licensing:** the lookback-model core (`iwp_from_lookback_data()`) is now correctly licensed
+    under the **GPL v3**. It derives from the original
+    [infection-dating-tool](https://github.com/SACEMA/infection-dating-tool) by Alex Welte,
+    Eduard Grebe and others. The GPL text ships as `LICENSE-GPLv3`, in the wheel and the source
+    package. Everything else remains under the AGPL v3. Copyright and licence headers are updated
+    across the source files, and the credits now include Alex Welte.
+  - Maintenance: GitPython (pulled in by Streamlit) is held at a patched version (`>=3.1.59`); the
+    GitHub workflows declare explicit, minimal `permissions`; GitHub Actions versions are bumped;
+    and the README explains the Codeberg and GitHub repositories.
+
+- **Beta 7 (`1.1.0b7`)** — **dependency upgrade release.** Minimum versions raised to Streamlit
+  1.67, Polars 2.1 (new major version), NumPy 2.5.4, SciPy 1.18.1, Plotly 7.1 (new major
+  version) and watchdog 7.1; the GitPython floor rises to 3.2.1. Also fixes the cross-OS
+  smoke-test workflow, which a duplicate `permissions` key had made invalid. **This release was
+  not published to the Codeberg package registry:** its release job timed out on Codeberg's
+  hosted runner before reaching the publish step. It also required exactly Python 3.14.10. Use
+  `1.1.0b8` instead.
+
+- **Beta 8 (`1.1.0b8`)** — **packaging fix; replaces beta 7.** The package now installs on any
+  Python **3.14.x** (`requires-python = ">=3.14,<3.15"`). Beta 7 required exactly 3.14.10, and pip
+  enforces that from the wheel's metadata. The test suite passes on 3.14.0, 3.14.7 and 3.14.10.
+  The Codeberg release job now runs on a larger hosted runner (`codeberg-medium`, 10-minute
+  limit), since beta 7's package build exceeded the smaller runner's 5-minute limit. No model or
+  app changes since beta 7.
 
 _The detailed record lives in the git tag history (`v1.1.0a1` …) and `TODO.md`._
